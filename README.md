@@ -1,5 +1,7 @@
 # Tollgate Captive Portal
 
+![](tollgate-captive-portal.png)
+
 A captive portal website for [Tollgate](https://tollgate.me) with a light moving background. This portal allows users to paste a Cashu token to gain internet access.
 
 ## Features
