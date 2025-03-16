@@ -86,9 +86,9 @@ function App() {
   // Get the base URL dynamically
   const getTollgateBaseUrl = () => {
     // Get the current host (without port)
-    // const currentHost = window.location.hostname;
+    const currentHost = window.location.hostname;
 
-    const currentHost = "192.168.8.1";
+    // const currentHost = "192.168.8.1";
     // Always use port 2121 as specified in the TollGate spec
     return `http://${currentHost}:2121`;
   };

@@ -62,4 +62,4 @@ To configure the Nostr relay address and other settings, modify the relevant var
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the GPLv3 License. 
