@@ -68,6 +68,28 @@ const formatDataSize = (kibiBytes) => {
   }
 };
 
+// Helper function to format time in seconds to appropriate units
+const formatTimeInSeconds = (seconds) => {
+  if (seconds < 60) {
+    return {
+      value: Math.round(seconds),
+      unit: seconds === 1 ? 'second' : 'seconds'
+    };
+  } else if (seconds < 3600) {
+    const minutes = seconds / 60;
+    return {
+      value: minutes.toFixed(1),
+      unit: minutes === 1 ? 'minute' : 'minutes'
+    };
+  } else {
+    const hours = seconds / 3600;
+    return {
+      value: hours.toFixed(2),
+      unit: hours === 1 ? 'hour' : 'hours'
+    };
+  }
+};
+
 function App() {
   const [token, setToken] = useState('');
   const [tokenValue, setTokenValue] = useState(null);
@@ -82,13 +104,13 @@ function App() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [showCloseButton, setShowCloseButton] = useState(false);
   const [closeButtonClicked, setCloseButtonClicked] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   // Get the base URL dynamically
   const getTollgateBaseUrl = () => {
     // Get the current host (without port)
     const currentHost = window.location.hostname;
-
-    // const currentHost = "192.168.8.1";
+    // const currentHost = "192.168.1.1";
     // Always use port 2121 as specified in the TollGate spec
     return `http://${currentHost}:2121`;
   };
@@ -197,23 +219,42 @@ function App() {
     };
   }, [error, tollgateDetails]);
 
+  // Add an effect to set viewport meta tag for better mobile handling
+  useEffect(() => {
+    // Create or update viewport meta tag to prevent automatic zooming on inputs
+    let viewportMeta = document.querySelector('meta[name="viewport"]');
+    if (!viewportMeta) {
+      viewportMeta = document.createElement('meta');
+      viewportMeta.name = 'viewport';
+      document.head.appendChild(viewportMeta);
+    }
+    viewportMeta.content = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no';
+    
+    return () => {
+      // Restore default viewport when component unmounts
+      if (viewportMeta) {
+        viewportMeta.content = 'width=device-width, initial-scale=1';
+      }
+    };
+  }, []);
+
   // Helper function to get pricing info
   const getPricingInfo = () => {
     if (!tollgateDetails || !tollgateDetails.tags) return null;
     
-    const allocationType = tollgateDetails.tags.find(tag => tag[0] === 'allocation_type');
-    const allocationPer1024 = tollgateDetails.tags.find(tag => tag[0] === 'allocation_per_1024');
-    const mints = tollgateDetails.tags.filter(tag => tag[0] === 'mint');
+    const metric = tollgateDetails.tags.find(tag => tag[0] === 'metric');
+    const stepSize = tollgateDetails.tags.find(tag => tag[0] === 'step_size');
+    const pricePerStep = tollgateDetails.tags.find(tag => tag[0] === 'price_per_step');
+    const mints = tollgateDetails.tags.filter(tag => tag[0] === 'mint').map(mint => mint[1]);
     
-    if (!allocationType || !allocationPer1024) return null;
-    
-    // Units are generally sats according to the mints
-    const unit = mints[0] && mints[0][2] ? mints[0][2] : 'sat';
+    if (!metric || !stepSize || !pricePerStep || !mints) return null;
     
     return {
-      type: allocationType[1],
-      allocationPer1024: allocationPer1024[1],
-      unit
+      metric: metric[1],
+      stepSize: Number(stepSize[1]),
+      price: Number(pricePerStep[1]),
+      unit: pricePerStep[2],
+      mints: mints
     };
   };
   
@@ -222,17 +263,26 @@ function App() {
     const pricing = getPricingInfo();
     if (!pricing) return 'Pricing information not available';
     
-    // Calculate rate per sat for more intuitive display
-    const ratePerSat = parseFloat(pricing.allocationPer1024) / 1024;
+    // Calculate rate based on step_size and price
+    const stepSizeValue = parseFloat(pricing.stepSize);
+    const priceValue = parseFloat(pricing.price);
     
-    if (pricing.type.toLowerCase() === 'min') {
-      return `${ratePerSat.toFixed(1)} minutes per sat`;
-    } else if (pricing.type.toLowerCase() === 'kib') {
+    if (pricing.metric.toLowerCase() === 'milliseconds') {
+      // Convert milliseconds to minutes for more user-friendly display
+      const minutesPerStep = stepSizeValue / 60000;
+      if (minutesPerStep < 1) {
+        const secondsPerStep = stepSizeValue / 1000;
+        return `${priceValue} sats per ${secondsPerStep.toFixed(1)} seconds`;
+      } else if (minutesPerStep < 60) {
+        return `${priceValue} sats per ${minutesPerStep.toFixed(1)} minute${minutesPerStep === 1 ? '' : 's'}`;
+      } else {
+        const hoursPerStep = minutesPerStep / 60;
+        return `${priceValue} sats per ${hoursPerStep.toFixed(1)} hour${hoursPerStep === 1 ? '' : 's'}`;
+      }
+    } else if (pricing.metric.toLowerCase() === 'bytes') {
       // For data, format to the most appropriate unit
-      const formattedSize = formatDataSize(ratePerSat);
-      return `${formattedSize.value} ${formattedSize.unit} per sat`;
-    } else {
-      return `${ratePerSat.toFixed(1)} ${pricing.type} per sat`;
+      const formattedSize = formatDataSize(stepSizeValue);
+      return `${formattedSize.value} ${formattedSize.unit} for ${priceValue} sats`;
     }
   };
 
@@ -241,40 +291,46 @@ function App() {
     if (!tokenValue || !tokenValue.hasProofs || !tokenValue.amount || !tollgateDetails) {
       return null;
     }
-    
-    const allocationType = tollgateDetails.tags.find(tag => tag[0] === 'allocation_type');
-    const allocationPer1024 = tollgateDetails.tags.find(tag => tag[0] === 'allocation_per_1024');
-    
-    if (!allocationType || !allocationPer1024) {
+
+    const pricing = getPricingInfo();
+
+    if (!pricing) {
       return null;
     }
     
-    const type = allocationType[1].toLowerCase(); // 'min' or 'kib'
-    const rate = parseFloat(allocationPer1024[1]);
-    
-    // Calculate total allocation: (token_amount / 1024) * allocation_per_1024
-    const totalAllocation = (tokenValue.amount / 1024) * rate;
-    
-    if (type === 'min') {
-      return {
-        amount: Math.round(totalAllocation), // Round to whole number for display
-        type: 'minutes',
-        rawType: type
-      };
-    } else if (type === 'kib') {
+    // Calculate total allocation: (token_amount / price) * step_size
+    const totalSteps = tokenValue.amount / pricing.price;
+    const totalAllocation = totalSteps * pricing.stepSize;
+ 
+    if (pricing.metric === 'milliseconds') {
+      // Convert milliseconds to minutes or seconds for display
+      if (totalAllocation < 60000) {
+        // If less than a minute, show in seconds
+        const seconds = totalAllocation / 1000;
+        return {
+          amount: seconds.toFixed(1),
+          metric: seconds === 1 ? 'second' : 'seconds',
+          rawMetric: pricing.metric,
+          rawAmount: Math.round(totalAllocation) // Keep the raw amount in ms for calculations
+        };
+      } else {
+        // If more than a minute, show in minutes
+        const minutes = totalAllocation / 60000;
+        return {
+          amount: minutes.toFixed(1),
+          metric: minutes === 1 ? 'minute' : 'minutes',
+          rawMetric: pricing.metric,
+          rawAmount: Math.round(totalAllocation) // Keep the raw amount in ms for calculations
+        };
+      }
+    } else if (pricing.metric === 'bytes') {
       // For data, format to the most appropriate unit
       const formattedData = formatDataSize(Math.round(totalAllocation));
       return {
         amount: formattedData.value,
         type: formattedData.unit,
-        rawType: type,
+        rawMetric: pricing.metric,
         rawAmount: Math.round(totalAllocation) // Keep the raw amount in KiB for calculations
-      };
-    } else {
-      return {
-        amount: Math.round(totalAllocation),
-        type: type,
-        rawType: type
       };
     }
   };
@@ -451,7 +507,7 @@ function App() {
   return (
     <div className="App">
       <Background />
-      <Container>
+      <Container $isInputFocused={isInputFocused}>
         <LogoContainer>
           <LogoTextImage src={logoWhite} alt="TollGate Logo" />
         </LogoContainer>
@@ -508,12 +564,33 @@ function App() {
               
               <InputGroup>
                 <Label htmlFor="token">Cashu Token</Label>
-                <TokenInput 
-                  id="token"
-                  value={token}
-                  onChange={handleTokenChange}
-                  placeholder="Paste your Cashu token here"
-                />
+                <InputWithButton>
+                  <TokenInput 
+                    id="token"
+                    value={token}
+                    onChange={handleTokenChange}
+                    placeholder="Paste your Cashu token here"
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => setIsInputFocused(false)}
+                  />
+                  <PasteButton 
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) {
+                          setToken(text);
+                          handleTokenChange({ target: { value: text } });
+                        }
+                      } catch (err) {
+                        console.error('Failed to read clipboard:', err);
+                        setTokenError('Could not access clipboard. Please paste manually.');
+                      }
+                    }}
+                    title="Paste from clipboard"
+                  >
+                    Paste
+                  </PasteButton>
+                </InputWithButton>
               </InputGroup>
               
               {tokenValue && (
@@ -527,6 +604,19 @@ function App() {
                       <Amount>{tokenValue.amount} sats</Amount>
                     )}
                   </ValueRow>
+                  
+                  {tokenValue.hasProofs && tollgateDetails && (
+                    <PurchaseSummaryInline $valid={true}>
+                      {(() => {
+                        const allocation = calculatePurchasedAllocation();
+                        if (!allocation) return null;
+                        
+                        return (
+                          <>You'll get <strong>{allocation.amount} {allocation.metric}</strong> of internet access</>
+                        );
+                      })()}
+                    </PurchaseSummaryInline>
+                  )}
                 </TokenValueDisplay>
               )}
               
@@ -540,19 +630,6 @@ function App() {
                 </TokenValueDisplay>
               )}
               
-              {tokenValue && tokenValue.hasProofs && tollgateDetails && (
-                <PurchaseSummary>
-                  {(() => {
-                    const allocation = calculatePurchasedAllocation();
-                    if (!allocation) return null;
-                    
-                    return (
-                      <>You'll get <strong>{allocation.amount} {allocation.type}</strong> of internet access</>
-                    );
-                  })()}
-                </PurchaseSummary>
-              )}
-              
               <Button 
                 onClick={handleSendToken}
                 disabled={!tokenValue}
@@ -562,11 +639,14 @@ function App() {
                   if (!allocation) return "Purchase Internet Access";
                   
                   // For minutes, use "minute" or "minutes" based on quantity
-                  if (allocation.rawType === 'min') {
+                  if (allocation.rawMetric === 'min') {
                     const unit = allocation.amount === 1 ? 'minute' : 'minutes';
                     return `Purchase ${allocation.amount} ${unit}`;
+                  } else if (allocation.rawMetric === 'sec') {
+                    // We've already formatted seconds into appropriate units in calculatePurchasedAllocation
+                    return `Purchase ${allocation.amount} ${allocation.metric}`;
                   } else {
-                    return `Purchase ${allocation.amount} ${allocation.type}`;
+                    return `Purchase ${allocation.amount} ${allocation.metric}`;
                   }
                 })()}
               </Button>
@@ -603,18 +683,39 @@ const Container = styled.div`
   min-height: 100vh;
   position: relative;
   z-index: 1;
-  padding: 20px;
+  padding: 15px;
+  overflow-y: auto;
+  
+  @media (max-width: 768px) {
+    padding: 10px;
+    justify-content: ${props => props.$isInputFocused ? 'flex-start' : 'center'};
+    height: ${props => props.$isInputFocused ? 'auto' : '100vh'};
+    
+    /* When input is focused (keyboard is visible), adjust layout */
+    ${props => props.$isInputFocused && `
+      min-height: auto;
+      height: auto;
+    `}
+  }
 `;
 
 const LogoContainer = styled.div`
   display: flex;
   justify-content: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 15px;
+  }
 `;
 
 const LogoTextImage = styled.img`
   height: 50px;
   filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));
+  
+  @media (max-width: 768px) {
+    height: 40px;
+  }
 `;
 
 const Logo = styled.h1`  color: white;
@@ -626,45 +727,74 @@ const Logo = styled.h1`  color: white;
 const Card = styled.div`
   background: rgba(255, 255, 255, 0.9);
   border-radius: 12px;
-  padding: 30px;
+  padding: 25px;
   width: 100%;
   max-width: 500px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  
+  @media (max-width: 768px) {
+    padding: 15px;
+    border-radius: 10px;
+  }
 `;
 
 const CardHeader = styled.div`
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   
   h2 {
     color: #333;
     margin-top: 0;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     font-size: 24px;
+    
+    @media (max-width: 768px) {
+      font-size: 20px;
+      margin-bottom: 6px;
+    }
   }
   
   p {
     color: #666;
     margin-bottom: 0;
+    
+    @media (max-width: 768px) {
+      font-size: 14px;
+    }
   }
 `;
 
 const InputGroup = styled.div`
-  margin-bottom: 20px;
+  margin-bottom: 15px;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 12px;
+  }
 `;
 
 const Label = styled.label`
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   font-weight: 600;
   color: #444;
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+`;
+
+const InputWithButton = styled.div`
+  display: flex;
+  align-items: stretch;
+  width: 100%;
 `;
 
 const TokenInput = styled.input`
-  width: 100%;
+  flex: 1;
   padding: 12px;
   border: 1px solid #ddd;
-  border-radius: 6px;
+  border-radius: 6px 0 0 6px;
   font-size: 16px;
   box-sizing: border-box;
   
@@ -672,6 +802,34 @@ const TokenInput = styled.input`
     outline: none;
     border-color: #4f46e5;
     box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  }
+`;
+
+const PasteButton = styled.button`
+  background-color: #f7b44c;
+  color: #1a1f38;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  padding: 0 15px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  
+  span {
+    font-size: 18px;
+  }
+  
+  &:hover {
+    background-color: #e9a53d;
+  }
+  
+  &:active {
+    background-color: #d99b35;
   }
 `;
 
@@ -686,6 +844,12 @@ const Button = styled.button`
   cursor: pointer;
   width: 100%;
   transition: background-color 0.2s;
+  
+  @media (max-width: 768px) {
+    padding: 12px 16px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
   
   &:hover {
     background-color: #e9a53d;
@@ -703,16 +867,31 @@ const TokenValueDisplay = styled.div`
   border: 1px solid ${props => props.$valid ? '#bae6fd' : '#fecaca'};
   border-radius: 6px;
   padding: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
   
   h4 {
     margin: 0;
     color: ${props => props.$valid ? '#0369a1' : '#dc2626'};
+    
+    @media (max-width: 768px) {
+      font-size: 14px;
+    }
   }
   
   p {
-    margin: 10px 0 0 0;
+    margin: 8px 0 0 0;
     color: #666;
+    
+    @media (max-width: 768px) {
+      font-size: 13px;
+      margin-top: 5px;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    padding: 8px;
+    margin-bottom: 12px;
+    border-radius: 5px;
   }
 `;
 
@@ -731,6 +910,10 @@ const Amount = styled.span`
   font-weight: 600;
   color: #0369a1;
   font-size: 16px;
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
 `;
 
 const ValueHeader = styled.div`
@@ -749,6 +932,13 @@ const CheckIcon = styled.div`
   border-radius: 50%;
   margin-right: 8px;
   font-size: 14px;
+  
+  @media (max-width: 768px) {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    margin-right: 6px;
+  }
 `;
 
 const ErrorIcon = styled.div`
@@ -762,6 +952,13 @@ const ErrorIcon = styled.div`
   border-radius: 50%;
   margin-right: 8px;
   font-size: 14px;
+  
+  @media (max-width: 768px) {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    margin-right: 6px;
+  }
 `;
 
 const ValueDetails = styled.div`
@@ -818,6 +1015,14 @@ const Footer = styled.div`
   
   strong {
     color: white;
+  }
+  
+  @media (max-width: 768px) {
+    margin-top: 15px;
+    
+    p {
+      font-size: 12px;
+    }
   }
 `;
 
@@ -883,6 +1088,11 @@ const PurchaseSummary = styled.div`
   strong {
     color: #0369a1;
   }
+  
+  @media (max-width: 768px) {
+    margin: 10px 0;
+    font-size: 14px;
+  }
 `;
 
 // New styled component for device info
@@ -891,6 +1101,11 @@ const DeviceInfo = styled.div`
   margin-top: 10px;
   font-size: 12px;
   color: #666;
+  
+  @media (max-width: 768px) {
+    font-size: 11px;
+    margin-top: 8px;
+  }
 `;
 
 const SuccessContainer = styled.div`
@@ -898,8 +1113,7 @@ const SuccessContainer = styled.div`
   padding: 20px 0;
 `;
 
-const SuccessCheckmark = styled.div`
-  width: 80px;
+const SuccessCheckmark = styled.div`  width: 80px;
   height: 80px;
   position: relative;
   margin: 20px auto 30px;
@@ -1073,4 +1287,24 @@ const CloseFailureMessage = styled.div`
   border: 1px solid #fecaca;
 `;
 
+const PurchaseSummaryInline = styled.div`
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid ${props => props.$valid ? '#bae6fd' : '#fecaca'};
+  font-size: 14px;
+  color: #4b5563;
+  text-align: center;
+  
+  strong {
+    color: #0369a1;
+  }
+  
+  @media (max-width: 768px) {
+    font-size: 13px;
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+`;
+
 export default App; 
+
