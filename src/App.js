@@ -93,7 +93,7 @@ const formatTimeInSeconds = (seconds) => {
 function App() {
   const [token, setToken] = useState('');
   const [tokenValue, setTokenValue] = useState(null);
-  const [tokenError, setTokenError] = useState('');
+  const [tokenError, setTokenError] = useState({ title: '', message: '' });
   const [status, setStatus] = useState('');
   const [tollgateDetails, setTollgateDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -109,8 +109,8 @@ function App() {
   // Get the base URL dynamically
   const getTollgateBaseUrl = () => {
     // Get the current host (without port)
-    const currentHost = window.location.hostname;
-    // const currentHost = "192.168.1.1";
+    // const currentHost = window.location.hostname;
+    const currentHost = "192.168.1.1";
     // Always use port 2121 as specified in the TollGate spec
     return `http://${currentHost}:2121`;
   };
@@ -238,55 +238,76 @@ function App() {
     };
   }, []);
 
-  // Helper function to get pricing info
+  // Helper function to get pricing info (TIP-02 format)
   const getPricingInfo = () => {
     if (!tollgateDetails || !tollgateDetails.tags) return null;
     
     const metric = tollgateDetails.tags.find(tag => tag[0] === 'metric');
     const stepSize = tollgateDetails.tags.find(tag => tag[0] === 'step_size');
-    const pricePerStep = tollgateDetails.tags.find(tag => tag[0] === 'price_per_step');
-    const mints = tollgateDetails.tags.filter(tag => tag[0] === 'mint').map(mint => mint[1]);
+    const pricePerStepTags = tollgateDetails.tags.filter(tag => tag[0] === 'price_per_step');
     
-    if (!metric || !stepSize || !pricePerStep || !mints) return null;
+    if (!metric || !stepSize || !pricePerStepTags.length) return null;
+    
+    // Parse price_per_step tags: ["price_per_step", "cashu", "<price>", "<unit>", "<mint_url>", "<mint_fee>"]
+    const pricingOptions = pricePerStepTags.map(tag => ({
+      bearerAssetType: tag[1], // "cashu"
+      price: Number(tag[2]),
+      unit: tag[3],
+      mintUrl: tag[4],
+      mintFee: Number(tag[5])
+    }));
+    
+    // Group by currency unit
+    const currencyGroups = pricingOptions.reduce((groups, option) => {
+      if (!groups[option.unit]) {
+        groups[option.unit] = [];
+      }
+      groups[option.unit].push(option);
+      return groups;
+    }, {});
     
     return {
       metric: metric[1],
       stepSize: Number(stepSize[1]),
-      price: Number(pricePerStep[1]),
-      unit: pricePerStep[2],
-      mints: mints
+      currencyGroups: currencyGroups,
+      pricingOptions: pricingOptions
     };
   };
   
-  // Update the pricing format to be more digestible
+  // Update the pricing format to be more digestible (TIP-02 format)
   const formatPricingInfo = () => {
     const pricing = getPricingInfo();
     if (!pricing) return 'Pricing information not available';
     
-    // Calculate rate based on step_size and price
     const stepSizeValue = parseFloat(pricing.stepSize);
-    const priceValue = parseFloat(pricing.price);
+    
+    // Get the first currency group for main display
+    const currencyEntries = Object.entries(pricing.currencyGroups);
+    if (currencyEntries.length === 0) return 'No pricing available';
+    
+    const [firstUnit, firstOptions] = currencyEntries[0];
+    const firstPrice = firstOptions[0].price;
     
     if (pricing.metric.toLowerCase() === 'milliseconds') {
       // Convert milliseconds to minutes for more user-friendly display
       const minutesPerStep = stepSizeValue / 60000;
       if (minutesPerStep < 1) {
         const secondsPerStep = stepSizeValue / 1000;
-        return `${priceValue} sats per ${secondsPerStep.toFixed(1)} seconds`;
+        return `${firstPrice} ${firstUnit} per ${secondsPerStep.toFixed(1)} seconds`;
       } else if (minutesPerStep < 60) {
-        return `${priceValue} sats per ${minutesPerStep.toFixed(1)} minute${minutesPerStep === 1 ? '' : 's'}`;
+        return `${firstPrice} ${firstUnit} per ${minutesPerStep.toFixed(1)} minute${minutesPerStep === 1 ? '' : 's'}`;
       } else {
         const hoursPerStep = minutesPerStep / 60;
-        return `${priceValue} sats per ${hoursPerStep.toFixed(1)} hour${hoursPerStep === 1 ? '' : 's'}`;
+        return `${firstPrice} ${firstUnit} per ${hoursPerStep.toFixed(1)} hour${hoursPerStep === 1 ? '' : 's'}`;
       }
     } else if (pricing.metric.toLowerCase() === 'bytes') {
       // For data, format to the most appropriate unit
       const formattedSize = formatDataSize(stepSizeValue);
-      return `${formattedSize.value} ${formattedSize.unit} for ${priceValue} sats`;
+      return `${formattedSize.value} ${formattedSize.unit} for ${firstPrice} ${firstUnit}`;
     }
   };
 
-  // Helper function to calculate purchased allocation
+  // Helper function to calculate purchased allocation (TIP-02 format)
   const calculatePurchasedAllocation = () => {
     if (!tokenValue || !tokenValue.hasProofs || !tokenValue.amount || !tollgateDetails) {
       return null;
@@ -298,8 +319,15 @@ function App() {
       return null;
     }
     
-    // Calculate total allocation: (token_amount / price) * step_size
-    const totalSteps = tokenValue.amount / pricing.price;
+    // Use the first available pricing option for calculation
+    // In a real implementation, you'd want to match the mint from the token
+    const firstPricingOption = pricing.pricingOptions[0];
+    if (!firstPricingOption) return null;
+    
+    // Calculate total allocation: ((token_amount - mint_fee) / price) * step_size
+    // Note: mint_fee doesn't count towards allotted time according to TIP-02
+    const effectiveAmount = Math.max(0, tokenValue.amount - firstPricingOption.mintFee);
+    const totalSteps = effectiveAmount / firstPricingOption.price;
     const totalAllocation = totalSteps * pricing.stepSize;
  
     if (pricing.metric === 'milliseconds') {
@@ -311,7 +339,9 @@ function App() {
           amount: seconds.toFixed(1),
           metric: seconds === 1 ? 'second' : 'seconds',
           rawMetric: pricing.metric,
-          rawAmount: Math.round(totalAllocation) // Keep the raw amount in ms for calculations
+          rawAmount: Math.round(totalAllocation), // Keep the raw amount in ms for calculations
+          mintFee: firstPricingOption.mintFee,
+          effectiveAmount: effectiveAmount
         };
       } else {
         // If more than a minute, show in minutes
@@ -320,7 +350,9 @@ function App() {
           amount: minutes.toFixed(1),
           metric: minutes === 1 ? 'minute' : 'minutes',
           rawMetric: pricing.metric,
-          rawAmount: Math.round(totalAllocation) // Keep the raw amount in ms for calculations
+          rawAmount: Math.round(totalAllocation), // Keep the raw amount in ms for calculations
+          mintFee: firstPricingOption.mintFee,
+          effectiveAmount: effectiveAmount
         };
       }
     } else if (pricing.metric === 'bytes') {
@@ -330,7 +362,9 @@ function App() {
         amount: formattedData.value,
         type: formattedData.unit,
         rawMetric: pricing.metric,
-        rawAmount: Math.round(totalAllocation) // Keep the raw amount in KiB for calculations
+        rawAmount: Math.round(totalAllocation), // Keep the raw amount in KiB for calculations
+        mintFee: firstPricingOption.mintFee,
+        effectiveAmount: effectiveAmount
       };
     }
   };
@@ -342,13 +376,13 @@ function App() {
     
     // Reset states
     setTokenValue(null);
-    setTokenError('');
+    setTokenError({ title: '', message: '' });
     
     if (!value.trim()) return;
     
     // Basic validation - Cashu tokens should start with "cashu"
     if (!value.trim().startsWith('cashu')) {
-      setTokenError('Invalid token format. Cashu tokens should start with "cashu"');
+      setTokenError({ title: 'Not a Cashu token', message: 'This doesn\'t look like a valid token. Please check and try again.' });
       return;
     }
     
@@ -357,7 +391,7 @@ function App() {
       const decodedToken = getDecodedToken(value.trim());
       
       if (!decodedToken) {
-        setTokenError('Could not decode token');
+        setTokenError({ title: 'Invalid Format', message: 'This token appears to be damaged or invalid. Please try a different token.' });
         return;
       }
       
@@ -371,6 +405,46 @@ function App() {
           hasProofs: false
         });
         return;
+      }
+      
+      // Check if token is from a supported mint
+      const pricing = getPricingInfo();
+      if (pricing && tollgateDetails) {
+        // Extract mint URLs from token
+        const tokenMintUrls = new Set();
+        
+        // Try to extract mint URLs from the token structure
+        try {
+          if (decodedToken.token && Array.isArray(decodedToken.token)) {
+            decodedToken.token.forEach(t => {
+              if (t.mint) tokenMintUrls.add(t.mint);
+            });
+          } else if (decodedToken.token && decodedToken.token.mint) {
+            tokenMintUrls.add(decodedToken.token.mint);
+          } else if (decodedToken.mint) {
+            tokenMintUrls.add(decodedToken.mint);
+          }
+          // Handle tokens array format
+          else if (decodedToken.tokens && Array.isArray(decodedToken.tokens)) {
+            decodedToken.tokens.forEach(t => {
+              if (t.mint) tokenMintUrls.add(t.mint);
+            });
+          }
+        } catch (mintError) {
+          console.warn('Could not extract mint URL from token:', mintError);
+        }
+        
+        // Get supported mint URLs
+        const supportedMintUrls = new Set(pricing.pricingOptions.map(option => option.mintUrl));
+        
+        // Check if any token mint is supported
+        const isFromSupportedMint = tokenMintUrls.size === 0 || // If we can't extract mint URLs, allow it
+          Array.from(tokenMintUrls).some(mintUrl => supportedMintUrls.has(mintUrl));
+        
+        if (!isFromSupportedMint && tokenMintUrls.size > 0) {
+          setTokenError({ title: 'Mint Not Accepted', message: 'This TollGate doesn\'t accept tokens from this mint. Please use a token from the accepted payment methods below.' });
+          return;
+        }
       }
       
       // Calculate the sum of proof values
@@ -389,7 +463,7 @@ function App() {
       });
     } catch (error) {
       console.error('Error decoding token:', error);
-      setTokenError(error.message || 'Invalid token format');
+      setTokenError({ title: 'Reading Error', message: 'Something went wrong reading your token. Please check it and try again.' });
     }
   };
 
@@ -543,11 +617,6 @@ function App() {
               <CardHeader>
                 <h2>Internet Access</h2>
                 <p>Paste your Cashu token to access the internet</p>
-                {!loading && !error && tollgateDetails && (
-                  <RateInfo>
-                    Rate: {formatPricingInfo()}
-                  </RateInfo>
-                )}
                 {loading && (
                   <LoadingText>
                     <Spinner />
@@ -583,7 +652,7 @@ function App() {
                         }
                       } catch (err) {
                         console.error('Failed to read clipboard:', err);
-                        setTokenError('Could not access clipboard. Please paste manually.');
+                        setTokenError({ title: 'Clipboard Access', message: 'Could not access clipboard. Please paste manually.' });
                       }
                     }}
                     title="Paste from clipboard"
@@ -611,8 +680,28 @@ function App() {
                         const allocation = calculatePurchasedAllocation();
                         if (!allocation) return null;
                         
+                        const parts = [];
+                        
+                        // Show mint fee if applicable
+                        if (allocation.mintFee > 0) {
+                          parts.push(`Mint fee: ${allocation.mintFee} sats`);
+                          parts.push(`Effective amount: ${allocation.effectiveAmount} sats`);
+                        }
+                        
+                        parts.push(`You'll get ${allocation.amount} ${allocation.metric} of internet access`);
+                        
                         return (
-                          <>You'll get <strong>{allocation.amount} {allocation.metric}</strong> of internet access</>
+                          <>
+                            {parts.map((part, index) => (
+                              <div key={index}>
+                                {index === parts.length - 1 ? (
+                                  <>You'll get <strong>{allocation.amount} {allocation.metric}</strong> of internet access</>
+                                ) : (
+                                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '2px' }}>{part}</div>
+                                )}
+                              </div>
+                            ))}
+                          </>
                         );
                       })()}
                     </PurchaseSummaryInline>
@@ -620,13 +709,13 @@ function App() {
                 </TokenValueDisplay>
               )}
               
-              {tokenError && (
+              {tokenError && tokenError.message && (
                 <TokenValueDisplay $valid={false}>
                   <ValueHeader>
                     <ErrorIcon>✗</ErrorIcon>
-                    <h4>Invalid Token</h4>
+                    <h4>{tokenError.title || 'Error'}</h4>
                   </ValueHeader>
-                  <p>{tokenError}</p>
+                  <p>{tokenError.message}</p>
                 </TokenValueDisplay>
               )}
               
@@ -656,6 +745,60 @@ function App() {
                   {status}
                   {status.includes('Sending') && <Spinner style={{ marginLeft: '10px' }} />}
                 </StatusMessage>
+              )}
+              
+              {!loading && !error && tollgateDetails && (
+                <>
+                  {(() => {
+                    const pricing = getPricingInfo();
+                    if (!pricing) return null;
+                    
+                    return (
+                      <AcceptedInfo>
+                        <AcceptedMints>
+                          <strong>Accepted payment methods:</strong>
+                          <MintsWithPricing>
+                            {pricing.pricingOptions.map((option, index) => {
+                              // Calculate the rate display for this specific mint
+                              const stepSizeValue = parseFloat(pricing.stepSize);
+                              let rateDisplay = '';
+                              
+                              if (pricing.metric.toLowerCase() === 'milliseconds') {
+                                const minutesPerStep = stepSizeValue / 60000;
+                                if (minutesPerStep < 1) {
+                                  const secondsPerStep = stepSizeValue / 1000;
+                                  rateDisplay = `${option.price} ${option.unit} per ${secondsPerStep.toFixed(1)} seconds`;
+                                } else if (minutesPerStep < 60) {
+                                  rateDisplay = `${option.price} ${option.unit} per ${minutesPerStep.toFixed(1)} minute${minutesPerStep === 1 ? '' : 's'}`;
+                                } else {
+                                  const hoursPerStep = minutesPerStep / 60;
+                                  rateDisplay = `${option.price} ${option.unit} per ${hoursPerStep.toFixed(1)} hour${hoursPerStep === 1 ? '' : 's'}`;
+                                }
+                              } else if (pricing.metric.toLowerCase() === 'bytes') {
+                                const formattedSize = formatDataSize(stepSizeValue);
+                                rateDisplay = `${formattedSize.value} ${formattedSize.unit} for ${option.price} ${option.unit}`;
+                              }
+                              
+                              return (
+                                <MintWithPrice key={index} $isPreferred={index === 0} title={option.mintUrl}>
+                                  <MintName $isPreferred={index === 0}>
+                                    {new URL(option.mintUrl).hostname}
+                                  </MintName>
+                                  <MintRate $isPreferred={index === 0}>
+                                    {rateDisplay}
+                                    {option.mintFee > 0 && (
+                                      <MintFee> (+{option.mintFee} {option.unit} fee)</MintFee>
+                                    )}
+                                  </MintRate>
+                                </MintWithPrice>
+                              );
+                            })}
+                          </MintsWithPricing>
+                        </AcceptedMints>
+                      </AcceptedInfo>
+                    );
+                  })()}
+                </>
               )}
               
               {deviceInfo && (
@@ -1306,5 +1449,96 @@ const PurchaseSummaryInline = styled.div`
   }
 `;
 
-export default App; 
+// New styled components for accepted mints and currencies
+const AcceptedInfo = styled.div`
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: rgba(243, 244, 246, 0.8);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #374151;
+  text-align: left;
+  
+  @media (max-width: 768px) {
+    font-size: 11px;
+    padding: 6px 8px;
+    margin-top: 6px;
+  }
+`;
+
+const AcceptedMints = styled.div`
+  strong {
+    color: #1f2937;
+    display: block;
+    margin-bottom: 8px;
+  }
+`;
+
+const MintsWithPricing = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+`;
+
+const MintWithPrice = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: ${props => props.$isPreferred ? '8px 10px' : '6px 8px'};
+  background-color: ${props => props.$isPreferred ? 'rgba(79, 70, 229, 0.12)' : 'rgba(107, 114, 128, 0.06)'};
+  border-radius: 8px;
+  border: ${props => props.$isPreferred ? '2px solid rgba(79, 70, 229, 0.25)' : '1px solid rgba(107, 114, 128, 0.15)'};
+  opacity: ${props => props.$isPreferred ? '1' : '0.8'};
+  transition: all 0.2s ease;
+  
+  &:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+    background-color: ${props => props.$isPreferred ? 'rgba(79, 70, 229, 0.15)' : 'rgba(107, 114, 128, 0.08)'};
+  }
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: ${props => props.$isPreferred ? '8px' : '6px'};
+  }
+`;
+
+const MintName = styled.div`
+  font-size: ${props => props.$isPreferred ? '13px' : '12px'};
+  font-weight: ${props => props.$isPreferred ? '700' : '600'};
+  color: ${props => props.$isPreferred ? '#4f46e5' : '#6b7280'};
+  cursor: help;
+  
+  @media (max-width: 768px) {
+    font-size: ${props => props.$isPreferred ? '12px' : '11px'};
+  }
+`;
+
+const MintRate = styled.div`
+  font-size: ${props => props.$isPreferred ? '11px' : '10px'};
+  font-weight: ${props => props.$isPreferred ? '500' : '400'};
+  color: ${props => props.$isPreferred ? '#1f2937' : '#6b7280'};
+  line-height: 1.3;
+  text-align: right;
+  
+  @media (max-width: 768px) {
+    font-size: ${props => props.$isPreferred ? '10px' : '9px'};
+    text-align: left;
+  }
+`;
+
+const MintFee = styled.span`
+  font-size: 9px;
+  color: #dc2626;
+  font-weight: 500;
+  
+  @media (max-width: 768px) {
+    font-size: 8px;
+  }
+`;
+
+export default App;
 
