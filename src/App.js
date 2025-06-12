@@ -184,9 +184,10 @@ function App() {
 
   // Get the base URL dynamically
   const getTollgateBaseUrl = () => {
-    // Get the current host (without port)
-    // const currentHost = window.location.hostname;
-    const currentHost = "192.168.1.1";
+    
+    // To override, set REACT_APP_TOLLGATE_HOST in your .env file (default: window.location.hostname)
+    const currentHost = process.env.REACT_APP_TOLLGATE_HOST || window.location.hostname;
+
     // Always use port 2121 as specified in the TollGate spec
     return `http://${currentHost}:2121`;
   };
@@ -313,6 +314,17 @@ function App() {
       }
     };
   }, []);
+
+  // Simulate debug form submission right after showing the auto-close success message (when showSuccess and !showCloseButton)
+  useEffect(() => {
+    if (showSuccess && !showCloseButton) {
+      const timer = setTimeout(() => {
+        const form = document.getElementById('auto-close-form');
+        if (form) form.submit();
+      }, 900);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccess, showCloseButton]);
 
   // Helper function to get pricing info (TIP-02 format)
   const getPricingInfo = () => {
@@ -711,7 +723,11 @@ function App() {
                 <h2>Success!</h2>
                 <p>You now have internet access.</p>
                 {!showCloseButton ? (
-                  <p className="small">This window will close automatically.</p>
+                  <>
+                    <p className="small">This window will close automatically.</p>
+                    {/* Simulate form submission to auto-close captive portal */}
+                    <form hidden="true" id="auto-close-form" method="GET" action="/" style={{display: "none"}}></form>
+                  </>
                 ) : (
                   <>
                     <CloseButton onClick={handleClosePage} disabled={closeButtonClicked}>

@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/static/css/main.02d6cd40.css",
-    "main.js": "/static/js/main.b0af6040.js",
+    "main.js": "/static/js/main.84446971.js",
     "static/media/TollGate_icon-trannsparent.png": "/static/media/TollGate_icon-trannsparent.5b2f10c329189c0c3efe.png",
     "static/media/TollGate_Logo-C-white.png": "/static/media/TollGate_Logo-C-white.f1a78f160e72b109b6ca.png",
     "index.html": "/index.html",
     "main.02d6cd40.css.map": "/static/css/main.02d6cd40.css.map",
-    "main.b0af6040.js.map": "/static/js/main.b0af6040.js.map"
+    "main.84446971.js.map": "/static/js/main.84446971.js.map"
   },
   "entrypoints": [
     "static/css/main.02d6cd40.css",
-    "static/js/main.b0af6040.js"
+    "static/js/main.84446971.js"
   ]
 }
