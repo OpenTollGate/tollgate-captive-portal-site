@@ -12,6 +12,82 @@ import iconTransparent from './assets/logo/TollGate_icon-trannsparent.png';
 // Utility function to get current timestamp for Nostr
 const nostrNow = () => Math.floor(Date.now() / 1000);
 
+// Function to parse and handle Notice events (kind 21023)
+const parseNoticeEvent = (eventData) => {
+  try {
+    // Validate it's a Notice event
+    if (!eventData || eventData.kind !== 21023) {
+      return null;
+    }
+
+    // Extract required tags
+    const tags = eventData.tags || [];
+    const levelTag = tags.find(tag => tag[0] === 'level');
+    const codeTag = tags.find(tag => tag[0] === 'code');
+    
+    if (!levelTag || !codeTag) {
+      console.warn('Notice event missing required level or code tags');
+      return null;
+    }
+
+    const level = levelTag[1];
+    const code = codeTag[1];
+    const content = eventData.content || '';
+
+    // Validate level
+    const validLevels = ['error', 'warning', 'info', 'debug'];
+    if (!validLevels.includes(level)) {
+      console.warn(`Invalid notice level: ${level}`);
+      return null;
+    }
+
+    return {
+      level,
+      code,
+      content,
+      pubkey: eventData.pubkey,
+      created_at: eventData.created_at
+    };
+  } catch (error) {
+    console.error('Error parsing Notice event:', error);
+    return null;
+  }
+};
+
+// Function to handle Notice events and return user-friendly error messages
+const handleNoticeEvent = (noticeEvent) => {
+  if (!noticeEvent) {
+    return 'An unknown error occurred. Please try again.';
+  }
+
+  const { level, code, content } = noticeEvent;
+  
+  // Log the notice event for debugging
+  console.log(`Notice Event [${level.toUpperCase()}] ${code}:`, content);
+
+  // Return user-friendly messages based on error codes
+  switch (code) {
+    case 'session-error':
+      return 'Session error occurred. Please refresh the page and try again.';
+    case 'upstream-error-not-connected':
+      return 'TollGate is currently offline. Please try again later.';
+    case 'payment-error-mint-not-accepted':
+      return 'Payment error: This mint is not accepted by this TollGate.';
+    case 'payment-error-token-spent':
+      return 'Payment error: This cashu token has already been used.';
+    case 'payment-error-insufficient-amount':
+      return 'Payment error: Token amount is insufficient for access.';
+    case 'payment-error-invalid-token':
+      return 'Payment error: Token format is invalid or corrupted.';
+    default:
+      // For unknown error codes, use the content if available, otherwise generic message
+      if (content && content.trim()) {
+        return content
+      }
+      return 'An error occurred while processing your payment. Please try again.';
+  }
+};
+
 // Safely extract proofs from a decoded token
 const extractProofsFromToken = (decodedToken) => {
   const proofs = [];
@@ -548,11 +624,50 @@ function App() {
       });
       
       if (!response.ok) {
-        if (response.status === 402) {
-          throw new Error('Payment required. Your token was not accepted.');
-        } else {
-          throw new Error(`Server error: ${response.status}`);
+        let errorMessage = 'An error occurred while processing your payment.';
+        
+        try {
+          // Try to parse the response as a Notice event
+          const responseText = await response.text();
+          let noticeEvent = null;
+          
+          try {
+            // First try parsing as JSON (Notice event)
+            const responseData = JSON.parse(responseText);
+            noticeEvent = parseNoticeEvent(responseData);
+          } catch (jsonError) {
+            // If JSON parsing fails, log and continue with generic error
+            console.log('Response is not valid JSON, using generic error handling');
+          }
+          
+          if (noticeEvent) {
+            // We successfully parsed a Notice event
+            errorMessage = handleNoticeEvent(noticeEvent);
+            console.log('Handled Notice event:', noticeEvent);
+          } else {
+            // No valid Notice event found, use status-specific messages
+            if (response.status === 402) {
+              errorMessage = 'Payment required. Your token was not accepted.';
+            } else if (response.status === 400) {
+              errorMessage = 'Bad request. Please check your token and try again.';
+            } else if (response.status === 500) {
+              errorMessage = 'Server error. Please try again later.';
+            } else {
+              errorMessage = `Server error (${response.status}). Please try again.`;
+            }
+            
+            // Log the raw response for debugging
+            console.error(`Server returned ${response.status}:`, responseText);
+          }
+        } catch (parseError) {
+          // If we can't even read the response, use a generic error
+          console.error('Error reading server response:', parseError);
+          errorMessage = response.status === 402
+            ? 'Payment required. Your token was not accepted.'
+            : `Server error (${response.status}). Please try again.`;
         }
+        
+        throw new Error(errorMessage);
       }
       
       // Success!
@@ -574,7 +689,7 @@ function App() {
       
     } catch (error) {
       console.error('Error sending token:', error);
-      setStatus(`Error: ${error.message}`);
+      setStatus(error.message);
     }
   };
 
@@ -741,7 +856,7 @@ function App() {
               </Button>
               
               {status && !showSuccess && (
-                <StatusMessage>
+                <StatusMessage isError={status.toLowerCase().includes('error')}>
                   {status}
                   {status.includes('Sending') && <Spinner style={{ marginLeft: '10px' }} />}
                 </StatusMessage>
@@ -1137,8 +1252,9 @@ const StatusMessage = styled.div`
   margin-top: 20px;
   padding: 10px;
   border-radius: 6px;
-  background-color: #f3f4f6;
-  color: #4f46e5;
+  background-color: ${props => props.isError ? '#fef2f2' : '#f3f4f6'};
+  color: ${props => props.isError ? '#dc2626' : '#4f46e5'};
+  border: ${props => props.isError ? '1px solid #fecaca' : 'none'};
   font-weight: 500;
   text-align: center;
   display: flex;
