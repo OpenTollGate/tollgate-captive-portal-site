@@ -850,9 +850,13 @@ function App() {
                 </TokenValueDisplay>
               )}
               
-              <Button 
-                onClick={handleSendToken}
+              <Button
                 disabled={!tokenValue}
+                // Using onPointerDown instead of submit to allow submitting with (mobile) virtual keyboard visible.
+                onPointerDown={e => {
+                  e.preventDefault();
+                  handleSendToken()
+                }}
               >
                 {(() => {
                   const allocation = calculatePurchasedAllocation();
