@@ -852,7 +852,7 @@ function App() {
               
               <Button
                 disabled={!tokenValue}
-                // Using onPointerDown instead of submit to allow submitting with (mobile) virtual keyboard visible.
+                // Using onPointerDown instead of submit to allow button press with virtual keyboard visible.
                 onPointerDown={e => {
                   e.preventDefault();
                   handleSendToken()
