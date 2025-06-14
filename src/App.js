@@ -412,10 +412,8 @@ function App() {
     const firstPricingOption = pricing.pricingOptions[0];
     if (!firstPricingOption) return null;
     
-    // Calculate total allocation: ((token_amount - mint_fee) / price) * step_size
-    // Note: mint_fee doesn't count towards allotted time according to TIP-02
-    const effectiveAmount = Math.max(0, tokenValue.amount - firstPricingOption.mintFee);
-    const totalSteps = effectiveAmount / firstPricingOption.price;
+    // Calculate total allocation: (token_amount / price) * step_size
+    const totalSteps = tokenValue.amount / firstPricingOption.price;
     const totalAllocation = totalSteps * pricing.stepSize;
  
     if (pricing.metric === 'milliseconds') {
@@ -427,9 +425,7 @@ function App() {
           amount: seconds.toFixed(1),
           metric: seconds === 1 ? 'second' : 'seconds',
           rawMetric: pricing.metric,
-          rawAmount: Math.round(totalAllocation), // Keep the raw amount in ms for calculations
-          mintFee: firstPricingOption.mintFee,
-          effectiveAmount: effectiveAmount
+          rawAmount: Math.round(totalAllocation) // Keep the raw amount in ms for calculations
         };
       } else {
         // If more than a minute, show in minutes
@@ -438,9 +434,7 @@ function App() {
           amount: minutes.toFixed(1),
           metric: minutes === 1 ? 'minute' : 'minutes',
           rawMetric: pricing.metric,
-          rawAmount: Math.round(totalAllocation), // Keep the raw amount in ms for calculations
-          mintFee: firstPricingOption.mintFee,
-          effectiveAmount: effectiveAmount
+          rawAmount: Math.round(totalAllocation) // Keep the raw amount in ms for calculations
         };
       }
     } else if (pricing.metric === 'bytes') {
@@ -450,11 +444,28 @@ function App() {
         amount: formattedData.value,
         type: formattedData.unit,
         rawMetric: pricing.metric,
-        rawAmount: Math.round(totalAllocation), // Keep the raw amount in KiB for calculations
-        mintFee: firstPricingOption.mintFee,
-        effectiveAmount: effectiveAmount
+        rawAmount: Math.round(totalAllocation) // Keep the raw amount for calculations
       };
     }
+  };
+
+  // Helper function to check if token meets minimum purchase requirements
+  const matchesMinimumPurchase = (tokenAmount, tokenMintUrls) => {
+    if (!tollgateDetails || tokenMintUrls.size === 0) return true;
+    
+    const pricing = getPricingInfo();
+    if (!pricing) return true;
+    
+    // Find the pricing option that matches the token's mint
+    const tokenMintUrl = Array.from(tokenMintUrls)[0]; // Use first mint URL from token
+    const mintPricing = pricing.pricingOptions.find(option => option.mintUrl === tokenMintUrl);
+    
+    if (!mintPricing) return true; // If no match found, allow it
+    
+    const totalSteps = tokenAmount / mintPricing.price;
+    const minSteps = mintPricing.mintFee; // This field now represents minimum steps
+    
+    return totalSteps >= minSteps;
   };
 
   // When token is pasted, extract proofs and calculate total value
@@ -531,6 +542,18 @@ function App() {
         
         if (!isFromSupportedMint && tokenMintUrls.size > 0) {
           setTokenError({ title: 'Mint Not Accepted', message: 'This TollGate doesn\'t accept tokens from this mint. Please use a token from the accepted payment methods below.' });
+          return;
+        }
+        
+        // Calculate the sum of proof values for minimum purchase check
+        const totalAmount = proofs.reduce((sum, proof) => {
+          const proofAmount = Number(proof.amount || 0);
+          return sum + proofAmount;
+        }, 0);
+        
+        // Check minimum purchase requirements
+        if (!matchesMinimumPurchase(totalAmount, tokenMintUrls)) {
+          setTokenError({ title: 'Minimum Purchase Required', message: 'This token amount is below the minimum purchase requirement for this mint. Please use a larger token.' });
           return;
         }
       }
@@ -811,28 +834,8 @@ function App() {
                         const allocation = calculatePurchasedAllocation();
                         if (!allocation) return null;
                         
-                        const parts = [];
-                        
-                        // Show mint fee if applicable
-                        if (allocation.mintFee > 0) {
-                          parts.push(`Mint fee: ${allocation.mintFee} sats`);
-                          parts.push(`Effective amount: ${allocation.effectiveAmount} sats`);
-                        }
-                        
-                        parts.push(`You'll get ${allocation.amount} ${allocation.metric} of internet access`);
-                        
                         return (
-                          <>
-                            {parts.map((part, index) => (
-                              <div key={index}>
-                                {index === parts.length - 1 ? (
-                                  <>You'll get <strong>{allocation.amount} {allocation.metric}</strong> of internet access</>
-                                ) : (
-                                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '2px' }}>{part}</div>
-                                )}
-                              </div>
-                            ))}
-                          </>
+                          <>You'll get <strong>{allocation.amount} {allocation.metric}</strong> of internet access</>
                         );
                       })()}
                     </PurchaseSummaryInline>
@@ -922,7 +925,7 @@ function App() {
                                   <MintRate $isPreferred={index === 0}>
                                     {rateDisplay}
                                     {option.mintFee > 0 && (
-                                      <MintFee> (+{option.mintFee} {option.unit} fee)</MintFee>
+                                      <MintMinimum> (min: {(option.mintFee * option.price).toFixed(0)} {option.unit})</MintMinimum>
                                     )}
                                   </MintRate>
                                 </MintWithPrice>
@@ -1666,9 +1669,9 @@ const MintRate = styled.div`
   }
 `;
 
-const MintFee = styled.span`
+const MintMinimum = styled.span`
   font-size: 9px;
-  color: #dc2626;
+  color: #2563eb;
   font-weight: 500;
   
   @media (max-width: 768px) {
