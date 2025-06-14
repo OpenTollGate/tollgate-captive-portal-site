@@ -199,12 +199,16 @@ function App() {
       
       // Fetch TollGate details
       const detailsResponse = await fetch(`${baseUrl}/`);
-      
+
       if (!detailsResponse.ok) {
         throw new Error(`Failed to fetch TollGate details: ${detailsResponse.status}`);
       }
       
       const detailsEvent = await detailsResponse.json();
+
+    // Check if the event kind is 10021 (Discovery)
+    if (detailsEvent.kind === 10021) {
+      // Handle the discovery event
       setTollgateDetails(detailsEvent);
       
       // Fetch device MAC address
@@ -234,12 +238,16 @@ function App() {
       }
       
       return true;
-    } catch (err) {
-      console.error('Error fetching TollGate data:', err);
-      setError('Could not fetch TollGate information. Retrying...');
-      return false;
+    } else {
+      throw new Error(`Invalid event kind: ${detailsEvent.kind}`);
     }
-  };
+  } catch (err) {
+    console.error('Error fetching TollGate data:', err);
+    setError('Could not fetch TollGate information. Retrying...');
+    return false;
+  }
+};
+
 
   // Initial data fetch on mount
   useEffect(() => {
