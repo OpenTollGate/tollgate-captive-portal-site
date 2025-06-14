@@ -12,6 +12,82 @@ import iconTransparent from './assets/logo/TollGate_icon-trannsparent.png';
 // Utility function to get current timestamp for Nostr
 const nostrNow = () => Math.floor(Date.now() / 1000);
 
+// Function to parse and handle Notice events (kind 21023)
+const parseNoticeEvent = (eventData) => {
+  try {
+    // Validate it's a Notice event
+    if (!eventData || eventData.kind !== 21023) {
+      return null;
+    }
+
+    // Extract required tags
+    const tags = eventData.tags || [];
+    const levelTag = tags.find(tag => tag[0] === 'level');
+    const codeTag = tags.find(tag => tag[0] === 'code');
+    
+    if (!levelTag || !codeTag) {
+      console.warn('Notice event missing required level or code tags');
+      return null;
+    }
+
+    const level = levelTag[1];
+    const code = codeTag[1];
+    const content = eventData.content || '';
+
+    // Validate level
+    const validLevels = ['error', 'warning', 'info', 'debug'];
+    if (!validLevels.includes(level)) {
+      console.warn(`Invalid notice level: ${level}`);
+      return null;
+    }
+
+    return {
+      level,
+      code,
+      content,
+      pubkey: eventData.pubkey,
+      created_at: eventData.created_at
+    };
+  } catch (error) {
+    console.error('Error parsing Notice event:', error);
+    return null;
+  }
+};
+
+// Function to handle Notice events and return user-friendly error messages
+const handleNoticeEvent = (noticeEvent) => {
+  if (!noticeEvent) {
+    return 'An unknown error occurred. Please try again.';
+  }
+
+  const { level, code, content } = noticeEvent;
+  
+  // Log the notice event for debugging
+  console.log(`Notice Event [${level.toUpperCase()}] ${code}:`, content);
+
+  // Return user-friendly messages based on error codes
+  switch (code) {
+    case 'session-error':
+      return 'Session error occurred. Please refresh the page and try again.';
+    case 'upstream-error-not-connected':
+      return 'TollGate is currently offline. Please try again later.';
+    case 'payment-error-mint-not-accepted':
+      return 'Payment error: This mint is not accepted by this TollGate.';
+    case 'payment-error-token-spent':
+      return 'Payment error: This cashu token has already been used.';
+    case 'payment-error-insufficient-amount':
+      return 'Payment error: Token amount is insufficient for access.';
+    case 'payment-error-invalid-token':
+      return 'Payment error: Token format is invalid or corrupted.';
+    default:
+      // For unknown error codes, use the content if available, otherwise generic message
+      if (content && content.trim()) {
+        return content
+      }
+      return 'An error occurred while processing your payment. Please try again.';
+  }
+};
+
 // Safely extract proofs from a decoded token
 const extractProofsFromToken = (decodedToken) => {
   const proofs = [];
@@ -93,7 +169,7 @@ const formatTimeInSeconds = (seconds) => {
 function App() {
   const [token, setToken] = useState('');
   const [tokenValue, setTokenValue] = useState(null);
-  const [tokenError, setTokenError] = useState('');
+  const [tokenError, setTokenError] = useState({ title: '', message: '' });
   const [status, setStatus] = useState('');
   const [tollgateDetails, setTollgateDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -108,9 +184,10 @@ function App() {
 
   // Get the base URL dynamically
   const getTollgateBaseUrl = () => {
-    // Get the current host (without port)
-    const currentHost = window.location.hostname;
-    // const currentHost = "192.168.1.1";
+    
+    // To override, set REACT_APP_TOLLGATE_HOST in your .env file (default: window.location.hostname)
+    const currentHost = process.env.REACT_APP_TOLLGATE_HOST || window.location.hostname;
+
     // Always use port 2121 as specified in the TollGate spec
     return `http://${currentHost}:2121`;
   };
@@ -238,55 +315,87 @@ function App() {
     };
   }, []);
 
-  // Helper function to get pricing info
+  // Simulate debug form submission right after showing the auto-close success message (when showSuccess and !showCloseButton)
+  useEffect(() => {
+    if (showSuccess && !showCloseButton) {
+      const timer = setTimeout(() => {
+        const form = document.getElementById('auto-close-form');
+        if (form) form.submit();
+      }, 900);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccess, showCloseButton]);
+
+  // Helper function to get pricing info (TIP-02 format)
   const getPricingInfo = () => {
     if (!tollgateDetails || !tollgateDetails.tags) return null;
     
     const metric = tollgateDetails.tags.find(tag => tag[0] === 'metric');
     const stepSize = tollgateDetails.tags.find(tag => tag[0] === 'step_size');
-    const pricePerStep = tollgateDetails.tags.find(tag => tag[0] === 'price_per_step');
-    const mints = tollgateDetails.tags.filter(tag => tag[0] === 'mint').map(mint => mint[1]);
+    const pricePerStepTags = tollgateDetails.tags.filter(tag => tag[0] === 'price_per_step');
     
-    if (!metric || !stepSize || !pricePerStep || !mints) return null;
+    if (!metric || !stepSize || !pricePerStepTags.length) return null;
+    
+    // Parse price_per_step tags: ["price_per_step", "cashu", "<price>", "<unit>", "<mint_url>", "<mint_fee>"]
+    const pricingOptions = pricePerStepTags.map(tag => ({
+      bearerAssetType: tag[1], // "cashu"
+      price: Number(tag[2]),
+      unit: tag[3],
+      mintUrl: tag[4],
+      mintFee: Number(tag[5])
+    }));
+    
+    // Group by currency unit
+    const currencyGroups = pricingOptions.reduce((groups, option) => {
+      if (!groups[option.unit]) {
+        groups[option.unit] = [];
+      }
+      groups[option.unit].push(option);
+      return groups;
+    }, {});
     
     return {
       metric: metric[1],
       stepSize: Number(stepSize[1]),
-      price: Number(pricePerStep[1]),
-      unit: pricePerStep[2],
-      mints: mints
+      currencyGroups: currencyGroups,
+      pricingOptions: pricingOptions
     };
   };
   
-  // Update the pricing format to be more digestible
+  // Update the pricing format to be more digestible (TIP-02 format)
   const formatPricingInfo = () => {
     const pricing = getPricingInfo();
     if (!pricing) return 'Pricing information not available';
     
-    // Calculate rate based on step_size and price
     const stepSizeValue = parseFloat(pricing.stepSize);
-    const priceValue = parseFloat(pricing.price);
+    
+    // Get the first currency group for main display
+    const currencyEntries = Object.entries(pricing.currencyGroups);
+    if (currencyEntries.length === 0) return 'No pricing available';
+    
+    const [firstUnit, firstOptions] = currencyEntries[0];
+    const firstPrice = firstOptions[0].price;
     
     if (pricing.metric.toLowerCase() === 'milliseconds') {
       // Convert milliseconds to minutes for more user-friendly display
       const minutesPerStep = stepSizeValue / 60000;
       if (minutesPerStep < 1) {
         const secondsPerStep = stepSizeValue / 1000;
-        return `${priceValue} sats per ${secondsPerStep.toFixed(1)} seconds`;
+        return `${firstPrice} ${firstUnit} per ${secondsPerStep.toFixed(1)} seconds`;
       } else if (minutesPerStep < 60) {
-        return `${priceValue} sats per ${minutesPerStep.toFixed(1)} minute${minutesPerStep === 1 ? '' : 's'}`;
+        return `${firstPrice} ${firstUnit} per ${minutesPerStep.toFixed(1)} minute${minutesPerStep === 1 ? '' : 's'}`;
       } else {
         const hoursPerStep = minutesPerStep / 60;
-        return `${priceValue} sats per ${hoursPerStep.toFixed(1)} hour${hoursPerStep === 1 ? '' : 's'}`;
+        return `${firstPrice} ${firstUnit} per ${hoursPerStep.toFixed(1)} hour${hoursPerStep === 1 ? '' : 's'}`;
       }
     } else if (pricing.metric.toLowerCase() === 'bytes') {
       // For data, format to the most appropriate unit
       const formattedSize = formatDataSize(stepSizeValue);
-      return `${formattedSize.value} ${formattedSize.unit} for ${priceValue} sats`;
+      return `${formattedSize.value} ${formattedSize.unit} for ${firstPrice} ${firstUnit}`;
     }
   };
 
-  // Helper function to calculate purchased allocation
+  // Helper function to calculate purchased allocation (TIP-02 format)
   const calculatePurchasedAllocation = () => {
     if (!tokenValue || !tokenValue.hasProofs || !tokenValue.amount || !tollgateDetails) {
       return null;
@@ -298,8 +407,13 @@ function App() {
       return null;
     }
     
+    // Use the first available pricing option for calculation
+    // In a real implementation, you'd want to match the mint from the token
+    const firstPricingOption = pricing.pricingOptions[0];
+    if (!firstPricingOption) return null;
+    
     // Calculate total allocation: (token_amount / price) * step_size
-    const totalSteps = tokenValue.amount / pricing.price;
+    const totalSteps = tokenValue.amount / firstPricingOption.price;
     const totalAllocation = totalSteps * pricing.stepSize;
  
     if (pricing.metric === 'milliseconds') {
@@ -330,9 +444,28 @@ function App() {
         amount: formattedData.value,
         type: formattedData.unit,
         rawMetric: pricing.metric,
-        rawAmount: Math.round(totalAllocation) // Keep the raw amount in KiB for calculations
+        rawAmount: Math.round(totalAllocation) // Keep the raw amount for calculations
       };
     }
+  };
+
+  // Helper function to check if token meets minimum purchase requirements
+  const matchesMinimumPurchase = (tokenAmount, tokenMintUrls) => {
+    if (!tollgateDetails || tokenMintUrls.size === 0) return true;
+    
+    const pricing = getPricingInfo();
+    if (!pricing) return true;
+    
+    // Find the pricing option that matches the token's mint
+    const tokenMintUrl = Array.from(tokenMintUrls)[0]; // Use first mint URL from token
+    const mintPricing = pricing.pricingOptions.find(option => option.mintUrl === tokenMintUrl);
+    
+    if (!mintPricing) return true; // If no match found, allow it
+    
+    const totalSteps = tokenAmount / mintPricing.price;
+    const minSteps = mintPricing.mintFee; // This field now represents minimum steps
+    
+    return totalSteps >= minSteps;
   };
 
   // When token is pasted, extract proofs and calculate total value
@@ -342,13 +475,13 @@ function App() {
     
     // Reset states
     setTokenValue(null);
-    setTokenError('');
+    setTokenError({ title: '', message: '' });
     
     if (!value.trim()) return;
     
     // Basic validation - Cashu tokens should start with "cashu"
     if (!value.trim().startsWith('cashu')) {
-      setTokenError('Invalid token format. Cashu tokens should start with "cashu"');
+      setTokenError({ title: 'Not a Cashu token', message: 'This doesn\'t look like a valid token. Please check and try again.' });
       return;
     }
     
@@ -357,7 +490,7 @@ function App() {
       const decodedToken = getDecodedToken(value.trim());
       
       if (!decodedToken) {
-        setTokenError('Could not decode token');
+        setTokenError({ title: 'Invalid Format', message: 'This token appears to be damaged or invalid. Please try a different token.' });
         return;
       }
       
@@ -371,6 +504,58 @@ function App() {
           hasProofs: false
         });
         return;
+      }
+      
+      // Check if token is from a supported mint
+      const pricing = getPricingInfo();
+      if (pricing && tollgateDetails) {
+        // Extract mint URLs from token
+        const tokenMintUrls = new Set();
+        
+        // Try to extract mint URLs from the token structure
+        try {
+          if (decodedToken.token && Array.isArray(decodedToken.token)) {
+            decodedToken.token.forEach(t => {
+              if (t.mint) tokenMintUrls.add(t.mint);
+            });
+          } else if (decodedToken.token && decodedToken.token.mint) {
+            tokenMintUrls.add(decodedToken.token.mint);
+          } else if (decodedToken.mint) {
+            tokenMintUrls.add(decodedToken.mint);
+          }
+          // Handle tokens array format
+          else if (decodedToken.tokens && Array.isArray(decodedToken.tokens)) {
+            decodedToken.tokens.forEach(t => {
+              if (t.mint) tokenMintUrls.add(t.mint);
+            });
+          }
+        } catch (mintError) {
+          console.warn('Could not extract mint URL from token:', mintError);
+        }
+        
+        // Get supported mint URLs
+        const supportedMintUrls = new Set(pricing.pricingOptions.map(option => option.mintUrl));
+        
+        // Check if any token mint is supported
+        const isFromSupportedMint = tokenMintUrls.size === 0 || // If we can't extract mint URLs, allow it
+          Array.from(tokenMintUrls).some(mintUrl => supportedMintUrls.has(mintUrl));
+        
+        if (!isFromSupportedMint && tokenMintUrls.size > 0) {
+          setTokenError({ title: 'Mint Not Accepted', message: 'This TollGate doesn\'t accept tokens from this mint. Please use a token from the accepted payment methods below.' });
+          return;
+        }
+        
+        // Calculate the sum of proof values for minimum purchase check
+        const totalAmount = proofs.reduce((sum, proof) => {
+          const proofAmount = Number(proof.amount || 0);
+          return sum + proofAmount;
+        }, 0);
+        
+        // Check minimum purchase requirements
+        if (!matchesMinimumPurchase(totalAmount, tokenMintUrls)) {
+          setTokenError({ title: 'Minimum Purchase Required', message: 'This token amount is below the minimum purchase requirement for this mint. Please use a larger token.' });
+          return;
+        }
       }
       
       // Calculate the sum of proof values
@@ -389,7 +574,7 @@ function App() {
       });
     } catch (error) {
       console.error('Error decoding token:', error);
-      setTokenError(error.message || 'Invalid token format');
+      setTokenError({ title: 'Reading Error', message: 'Something went wrong reading your token. Please check it and try again.' });
     }
   };
 
@@ -474,11 +659,50 @@ function App() {
       });
       
       if (!response.ok) {
-        if (response.status === 402) {
-          throw new Error('Payment required. Your token was not accepted.');
-        } else {
-          throw new Error(`Server error: ${response.status}`);
+        let errorMessage = 'An error occurred while processing your payment.';
+        
+        try {
+          // Try to parse the response as a Notice event
+          const responseText = await response.text();
+          let noticeEvent = null;
+          
+          try {
+            // First try parsing as JSON (Notice event)
+            const responseData = JSON.parse(responseText);
+            noticeEvent = parseNoticeEvent(responseData);
+          } catch (jsonError) {
+            // If JSON parsing fails, log and continue with generic error
+            console.log('Response is not valid JSON, using generic error handling');
+          }
+          
+          if (noticeEvent) {
+            // We successfully parsed a Notice event
+            errorMessage = handleNoticeEvent(noticeEvent);
+            console.log('Handled Notice event:', noticeEvent);
+          } else {
+            // No valid Notice event found, use status-specific messages
+            if (response.status === 402) {
+              errorMessage = 'Payment required. Your token was not accepted.';
+            } else if (response.status === 400) {
+              errorMessage = 'Bad request. Please check your token and try again.';
+            } else if (response.status === 500) {
+              errorMessage = 'Server error. Please try again later.';
+            } else {
+              errorMessage = `Server error (${response.status}). Please try again.`;
+            }
+            
+            // Log the raw response for debugging
+            console.error(`Server returned ${response.status}:`, responseText);
+          }
+        } catch (parseError) {
+          // If we can't even read the response, use a generic error
+          console.error('Error reading server response:', parseError);
+          errorMessage = response.status === 402
+            ? 'Payment required. Your token was not accepted.'
+            : `Server error (${response.status}). Please try again.`;
         }
+        
+        throw new Error(errorMessage);
       }
       
       // Success!
@@ -500,7 +724,7 @@ function App() {
       
     } catch (error) {
       console.error('Error sending token:', error);
-      setStatus(`Error: ${error.message}`);
+      setStatus(error.message);
     }
   };
 
@@ -522,7 +746,11 @@ function App() {
                 <h2>Success!</h2>
                 <p>You now have internet access.</p>
                 {!showCloseButton ? (
-                  <p className="small">This window will close automatically.</p>
+                  <>
+                    <p className="small">This window will close automatically.</p>
+                    {/* Simulate form submission to auto-close captive portal */}
+                    <form hidden="true" id="auto-close-form" method="GET" action="/" style={{display: "none"}}></form>
+                  </>
                 ) : (
                   <>
                     <CloseButton onClick={handleClosePage} disabled={closeButtonClicked}>
@@ -543,11 +771,6 @@ function App() {
               <CardHeader>
                 <h2>Internet Access</h2>
                 <p>Paste your Cashu token to access the internet</p>
-                {!loading && !error && tollgateDetails && (
-                  <RateInfo>
-                    Rate: {formatPricingInfo()}
-                  </RateInfo>
-                )}
                 {loading && (
                   <LoadingText>
                     <Spinner />
@@ -583,7 +806,7 @@ function App() {
                         }
                       } catch (err) {
                         console.error('Failed to read clipboard:', err);
-                        setTokenError('Could not access clipboard. Please paste manually.');
+                        setTokenError({ title: 'Clipboard Access', message: 'Could not access clipboard. Please paste manually.' });
                       }
                     }}
                     title="Paste from clipboard"
@@ -620,19 +843,23 @@ function App() {
                 </TokenValueDisplay>
               )}
               
-              {tokenError && (
+              {tokenError && tokenError.message && (
                 <TokenValueDisplay $valid={false}>
                   <ValueHeader>
                     <ErrorIcon>✗</ErrorIcon>
-                    <h4>Invalid Token</h4>
+                    <h4>{tokenError.title || 'Error'}</h4>
                   </ValueHeader>
-                  <p>{tokenError}</p>
+                  <p>{tokenError.message}</p>
                 </TokenValueDisplay>
               )}
               
-              <Button 
-                onClick={handleSendToken}
+              <Button
                 disabled={!tokenValue}
+                // Using onPointerDown instead of submit to allow button press with virtual keyboard visible.
+                onPointerDown={e => {
+                  e.preventDefault();
+                  handleSendToken()
+                }}
               >
                 {(() => {
                   const allocation = calculatePurchasedAllocation();
@@ -652,10 +879,64 @@ function App() {
               </Button>
               
               {status && !showSuccess && (
-                <StatusMessage>
+                <StatusMessage isError={status.toLowerCase().includes('error')}>
                   {status}
                   {status.includes('Sending') && <Spinner style={{ marginLeft: '10px' }} />}
                 </StatusMessage>
+              )}
+              
+              {!loading && !error && tollgateDetails && (
+                <>
+                  {(() => {
+                    const pricing = getPricingInfo();
+                    if (!pricing) return null;
+                    
+                    return (
+                      <AcceptedInfo>
+                        <AcceptedMints>
+                          <strong>Accepted payment methods:</strong>
+                          <MintsWithPricing>
+                            {pricing.pricingOptions.map((option, index) => {
+                              // Calculate the rate display for this specific mint
+                              const stepSizeValue = parseFloat(pricing.stepSize);
+                              let rateDisplay = '';
+                              
+                              if (pricing.metric.toLowerCase() === 'milliseconds') {
+                                const minutesPerStep = stepSizeValue / 60000;
+                                if (minutesPerStep < 1) {
+                                  const secondsPerStep = stepSizeValue / 1000;
+                                  rateDisplay = `${option.price} ${option.unit} per ${secondsPerStep.toFixed(1)} seconds`;
+                                } else if (minutesPerStep < 60) {
+                                  rateDisplay = `${option.price} ${option.unit} per ${minutesPerStep.toFixed(1)} minute${minutesPerStep === 1 ? '' : 's'}`;
+                                } else {
+                                  const hoursPerStep = minutesPerStep / 60;
+                                  rateDisplay = `${option.price} ${option.unit} per ${hoursPerStep.toFixed(1)} hour${hoursPerStep === 1 ? '' : 's'}`;
+                                }
+                              } else if (pricing.metric.toLowerCase() === 'bytes') {
+                                const formattedSize = formatDataSize(stepSizeValue);
+                                rateDisplay = `${formattedSize.value} ${formattedSize.unit} for ${option.price} ${option.unit}`;
+                              }
+                              
+                              return (
+                                <MintWithPrice key={index} $isPreferred={index === 0} title={option.mintUrl}>
+                                  <MintName $isPreferred={index === 0}>
+                                    {new URL(option.mintUrl).hostname}
+                                  </MintName>
+                                  <MintRate $isPreferred={index === 0}>
+                                    {rateDisplay}
+                                    {option.mintFee > 0 && (
+                                      <MintMinimum> (min: {(option.mintFee * option.price).toFixed(0)} {option.unit})</MintMinimum>
+                                    )}
+                                  </MintRate>
+                                </MintWithPrice>
+                              );
+                            })}
+                          </MintsWithPricing>
+                        </AcceptedMints>
+                      </AcceptedInfo>
+                    );
+                  })()}
+                </>
               )}
               
               {deviceInfo && (
@@ -994,8 +1275,9 @@ const StatusMessage = styled.div`
   margin-top: 20px;
   padding: 10px;
   border-radius: 6px;
-  background-color: #f3f4f6;
-  color: #4f46e5;
+  background-color: ${props => props.isError ? '#fef2f2' : '#f3f4f6'};
+  color: ${props => props.isError ? '#dc2626' : '#4f46e5'};
+  border: ${props => props.isError ? '1px solid #fecaca' : 'none'};
   font-weight: 500;
   text-align: center;
   display: flex;
@@ -1306,5 +1588,96 @@ const PurchaseSummaryInline = styled.div`
   }
 `;
 
-export default App; 
+// New styled components for accepted mints and currencies
+const AcceptedInfo = styled.div`
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: rgba(243, 244, 246, 0.8);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #374151;
+  text-align: left;
+  
+  @media (max-width: 768px) {
+    font-size: 11px;
+    padding: 6px 8px;
+    margin-top: 6px;
+  }
+`;
+
+const AcceptedMints = styled.div`
+  strong {
+    color: #1f2937;
+    display: block;
+    margin-bottom: 8px;
+  }
+`;
+
+const MintsWithPricing = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+`;
+
+const MintWithPrice = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: ${props => props.$isPreferred ? '8px 10px' : '6px 8px'};
+  background-color: ${props => props.$isPreferred ? 'rgba(79, 70, 229, 0.12)' : 'rgba(107, 114, 128, 0.06)'};
+  border-radius: 8px;
+  border: ${props => props.$isPreferred ? '2px solid rgba(79, 70, 229, 0.25)' : '1px solid rgba(107, 114, 128, 0.15)'};
+  opacity: ${props => props.$isPreferred ? '1' : '0.8'};
+  transition: all 0.2s ease;
+  
+  &:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+    background-color: ${props => props.$isPreferred ? 'rgba(79, 70, 229, 0.15)' : 'rgba(107, 114, 128, 0.08)'};
+  }
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: ${props => props.$isPreferred ? '8px' : '6px'};
+  }
+`;
+
+const MintName = styled.div`
+  font-size: ${props => props.$isPreferred ? '13px' : '12px'};
+  font-weight: ${props => props.$isPreferred ? '700' : '600'};
+  color: ${props => props.$isPreferred ? '#4f46e5' : '#6b7280'};
+  cursor: help;
+  
+  @media (max-width: 768px) {
+    font-size: ${props => props.$isPreferred ? '12px' : '11px'};
+  }
+`;
+
+const MintRate = styled.div`
+  font-size: ${props => props.$isPreferred ? '11px' : '10px'};
+  font-weight: ${props => props.$isPreferred ? '500' : '400'};
+  color: ${props => props.$isPreferred ? '#1f2937' : '#6b7280'};
+  line-height: 1.3;
+  text-align: right;
+  
+  @media (max-width: 768px) {
+    font-size: ${props => props.$isPreferred ? '10px' : '9px'};
+    text-align: left;
+  }
+`;
+
+const MintMinimum = styled.span`
+  font-size: 9px;
+  color: #2563eb;
+  font-weight: 500;
+  
+  @media (max-width: 768px) {
+    font-size: 8px;
+  }
+`;
+
+export default App;
 
