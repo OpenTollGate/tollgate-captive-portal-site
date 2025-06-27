@@ -4,8 +4,8 @@ import { getDecodedToken } from '@cashu/cashu-ts';
 // Get the base URL dynamically
 export const getTollgateBaseUrl = () => {
   // Get the current host (without port)
-  // const currentHost = window.location.hostname;
-  const currentHost = "10.50.184.1";
+  const currentHost = window.location.hostname;
+  // const currentHost = "10.50.184.1";
   // Always use port 2121 as specified in the TollGate spec
   return `http://${currentHost}:2121`;
 };
