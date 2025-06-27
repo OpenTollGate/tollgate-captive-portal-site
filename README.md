@@ -2,17 +2,12 @@
 
 ![](tollgate-captive-portal.png)
 
-A captive portal website for [Tollgate](https://tollgate.me) with a light moving background. This portal allows users to paste a Cashu token to gain internet access.
+A captive portal website for [Tollgate](https://tollgate.me) with a light moving background. This portal allows users to paste a Cashu token or pay with BTC Lightning to gain internet access.
 
 ## Features
 
-- Modern UI with animated background
-- Input field for Cashu token
-- Displays token value upon pasting
-- Button to send the token to a Nostr relay
-- Responsive design
-- Built with [Vite](https://vitejs.dev/) for fast development and builds
-- PWA support (installable, offline-ready)
+- Pay with Cashu Token
+- Pay with BTC Lightning
 
 ## Getting Started
 
