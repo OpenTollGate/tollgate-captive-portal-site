@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import styled from 'styled-components';
+
+import './Background.scss';
 
 const Background = () => {
   const canvasRef = useRef(null);
@@ -7,24 +8,26 @@ const Background = () => {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    
-    // Set canvas dimensions to match window
-    const setDimensions = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    
-    setDimensions();
-    window.addEventListener('resize', setDimensions);
-    
+
     // Particle class for the moving light effect
     class Particle {
       constructor() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 5 + 1;
-        this.speedX = Math.random() * 3 - 1.5;
-        this.speedY = Math.random() * 3 - 1.5;
+        // Calculate distance from window center
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const dx = this.x - centerX;
+        const dy = this.y - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        // Normalize distance (0 at center, 1 at farthest corner)
+        const maxDistance = Math.sqrt(centerX * centerX + centerY * centerY);
+        const distanceFactor = distance / maxDistance;
+        // Size increases slowly at first, then faster the farther from center (ease-in)
+        const easedDistance = Math.pow(distanceFactor, 2); // quadratic ease-in
+        this.size = (Math.random() * 2.25 + 1) * (1 + easedDistance);
+        this.speedX = (Math.random() - 0.5) / 1.4;
+        this.speedY = (Math.random() - 0.5) / 1.4;
         this.color = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.1})`;
       }
       
@@ -46,25 +49,35 @@ const Background = () => {
         ctx.fill();
       }
     }
-    
-    // Create particle array
-    const particlesArray = [];
-    const particleCount = 100;
-    
-    for (let i = 0; i < particleCount; i++) {
-      particlesArray.push(new Particle());
+
+    let particlesArray = [];
+    const createParticles = () => {
+      // Create particle array
+      const particleCount = (window.innerWidth + window.innerHeight) / 16;
+      
+      for (let i = 0; i < particleCount; i++) {
+        particlesArray.push(new Particle());
+      }
     }
+    
+    // Set canvas dimensions to match window
+    let resizeTimer;
+    const reinit = () => {
+      particlesArray = [];
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        createParticles();
+      }, 200)
+    };
+    
+    reinit();
+    window.addEventListener('resize', reinit);
     
     // Animation loop
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Background gradient
-      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      gradient.addColorStop(0, '#1a1a2e');
-      gradient.addColorStop(1, '#16213e');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
       
       // Draw particles
       particlesArray.forEach(particle => {
@@ -96,20 +109,11 @@ const Background = () => {
     animate();
     
     return () => {
-      window.removeEventListener('resize', setDimensions);
+      window.removeEventListener('resize', reinit);
     };
   }, []);
 
-  return <StyledCanvas ref={canvasRef} />;
-};
-
-const StyledCanvas = styled.canvas`
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-`;
+  return <canvas ref={canvasRef} className="tollgate-captive-portal-background"></canvas>
+}
 
 export default Background; 

@@ -1,0 +1,191 @@
+/**
+* Use this file for
+* - app specific styles
+* - shared element styles
+**/
+
+.tollgate-captive-portal {
+  &-interface {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100svh;
+    position: relative;
+    z-index: 1;
+    margin-left: 1.5rem;
+    margin-right: 1.5rem;
+    justify-content: center;
+  }
+  
+  &-header {
+    padding-top: clamp(2rem, 4.8077vw + .0769rem, 5rem); /* 400px = 20px to 1024px = 50px */
+    padding-bottom: clamp(2rem, 4.8077vw + .0769rem, 5rem); /* 400px = 20px to 1024px = 50px */
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  
+    > img {
+      width: clamp(18rem, 6.4103vw + 15.4359rem, 22rem); /* 400px = 180px to 1024px = 220px */
+      max-width: 100%;
+      max-height: 100%;
+    }
+  }
+  
+  &-content {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    color: var(--color);
+  }
+  
+  &-content-container {
+    width: 500px;
+    max-width: 100%;
+    border-radius: var(--border-radius-large);
+    box-shadow: 0 0 5rem 1rem rgba(0,0,0,0.05);
+  }
+  
+  &-tabs {
+    display: flex;
+  }
+  
+  &-tabs-tab {
+    padding: 1rem;
+    flex: 1; /* 50/50 */
+    text-align: center;
+    appearance: none;
+    border: none;
+    background-color: transparent;
+    font-weight: 600;
+    background-color: rgba(255,255,255, .9);
+
+    &-cashu {
+      border-top-left-radius: var(--border-radius-large);
+    }
+    &-lightning {
+      border-top-right-radius: var(--border-radius-large);
+    }
+  }
+  
+  &-tabs-tab[data-active=false] {
+    opacity: .85;
+
+    &:hover,
+    &:focus,
+    &:active {
+      opacity: .9;
+    }
+  }
+
+  &-tabs-tab-cashu[data-active=false] {
+    border-top-left-radius: var(--border-radius-large);
+    box-shadow: inset .15rem -.15rem .5rem 0 rgba(0,0,0,0.05);
+  }
+  
+  &-tabs-tab-lightning[data-active=false] {
+    border-top-right-radius: var(--border-radius-large);
+    box-shadow: inset .15rem -.15rem .5rem 0 rgba(0,0,0,0.05);
+  }
+  
+  &-view {
+    padding: .8em;
+    background-color: rgba(255,255,255, .9);
+    border-bottom-right-radius: var(--border-radius-large);
+    border-bottom-left-radius: var(--border-radius-large);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  &-method {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    &-content {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    &-header {
+      text-align: center;
+      padding-top: 1rem;
+      padding-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    
+      h1 {
+        font-size: var(--font-size-large);
+      }
+    
+      h2 {
+        font-size: var(--font-size);
+        font-weight: 400;
+      }
+    }
+
+    &-options {
+      padding: .8rem;
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+      background-color: white;
+      border-radius: var(--border-radius);
+
+      h5 {
+        font-size: var(--font-size-small);
+        font-weight: 600;
+      }
+
+      button {
+        font-size: var(--font-size-small);
+        padding-top: .2rem;
+        padding-bottom: .2rem;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        column-gap: .4rem;
+      }
+    }
+
+    &-submit .cta {
+      font-weight: 400;
+    }
+    
+    &-footer {
+      margin-top: .2rem;
+      text-align: center;
+      font-size: var(--font-size-xsmall);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      gap: .4rem;
+      flex-wrap: wrap;
+    }
+  }
+
+  &-deviceinfo {
+    text-transform: uppercase;
+  }
+
+  &-loading {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+    gap: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+  
+  &-footer {
+    padding-top: clamp(2rem, 1.6026vw + 1.359rem, 3.5rem); /* 400px = 20px to 1024px = 30px */
+    padding-bottom: clamp(2rem, 3.2051vw + .7179rem, 4rem); /* 400px = 20px to 1024px = 40px */
+    text-align: center;
+    font-size: var(--font-size-small);
+    color: var(--color-negative);
+  }
+}
