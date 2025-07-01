@@ -86,22 +86,26 @@ This project uses [i18next](https://www.i18next.com/) and [react-i18next](https:
 
 ## Error Codes
 
-### Tollgate Error Codes (`src/helpers/tollgate.js`)
+#### Tollgate Error Codes 
+
+[`src/helpers/tollgate.js`](src/helpers/tollgate.js)
 
 | Code  | Label                              | Meaning                                                                 |
 |-------|------------------------------------|-------------------------------------------------------------------------|
-| TG1   | Could not fetch TollGate information | TollGate could not connect to its relay. Contact the network administrator or try again later. |
-| TG2   | Failed to fetch TollGate details   | The request to fetch TollGate details failed (non-OK HTTP response).    |
-| TG3   | Failed to fetch device info        | The request to fetch device info (MAC address) failed (non-OK HTTP response). |
+| `TG1` | Could not fetch TollGate information | TollGate could not connect to its relay. Contact the network administrator or try again later. |
+| `TG2` | Failed to fetch TollGate details   | The request to fetch TollGate details failed (non-OK HTTP response).    |
+| `TG3` | Failed to fetch device info        | The request to fetch device info (MAC address) failed (non-OK HTTP response). |
 
-### Cashu Error Codes (`src/helpers/cashu.js`)
+#### Cashu Error Codes
+
+[`src/helpers/cashu.js`](src/helpers/cashu.js)
 
 | Code  | Label                  | Meaning                                              |
 |-------|------------------------|------------------------------------------------------|
-| CU1   | Token missing          | No token was provided.                               |
-| CU2   | Invalid token format   | The provided token does not start with "cashu".      |
-| CU3   | Invalid Cashu Token    | The token could not be decoded.                      |
-| CU4   | Token validation error | An error occurred during token validation/decoding.   |
+| `CU1` | Token missing          | No token was provided.                               |
+| `CU2` | Invalid token format   | The provided token does not start with "cashu".      |
+| `CU3` | Invalid Cashu Token    | The token could not be decoded.                      |
+| `CU4` | Token validation error | An error occurred during token validation/decoding.   |
 
 ## License
 
