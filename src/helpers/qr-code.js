@@ -5,64 +5,35 @@ import QRCode from 'qrcode-svg';
  * Opens the camera and scans a QR code. Returns a Promise that resolves with the QR code text.
  * @returns {Promise<string>} The scanned QR code text.
  */
-export async function scanQr({ options = {} } = {}) {
+export async function scanQr({ options = {} } = {}, setError, i18n) {
   return new Promise(async (resolve, reject) => {
     // Create container for video and buttons
     const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.top = '0';
-    container.style.left = '0';
-    container.style.width = '100vw';
-    container.style.height = '100vh';
-    container.style.zIndex = '9999';
-    container.style.backgroundColor = 'black';
-    container.style.overflow = 'hidden';
+    container.classList = 'tollgate-captive-portal-scan-qr-container'
     document.body.appendChild(container);
 
     // Create fullscreen video element
     const videoElem = document.createElement('video');
-    videoElem.style.position = 'absolute';
-    videoElem.style.top = '0';
-    videoElem.style.left = '0';
-    videoElem.style.width = '100vw';
-    videoElem.style.height = '100vh';
-    videoElem.style.objectFit = 'cover';
-    videoElem.style.zIndex = '1';
-    videoElem.setAttribute('playsinline', '');
+    videoElem.classList = 'tollgate-captive-portal-scan-qr-video-element'
     container.appendChild(videoElem);
 
     // Create bottom bar for buttons (overlay)
     const buttonBar = document.createElement('div');
-    buttonBar.style.position = 'absolute';
-    buttonBar.style.left = '0';
-    buttonBar.style.right = '0';
-    buttonBar.style.bottom = '0';
-    buttonBar.style.width = '100%';
-    buttonBar.style.zIndex = '2';
-    buttonBar.style.display = 'flex';
-    buttonBar.style.justifyContent = 'center';
-    buttonBar.style.gap = '1rem';
-    buttonBar.style.padding = '2rem';
+    buttonBar.classList = 'tollgate-captive-portal-scan-qr-button-bar'
     container.appendChild(buttonBar);
 
     // Helper to create styled buttons
     function makeButton(text) {
       const btn = document.createElement('button');
-      btn.style.width = 'auto';
       btn.textContent = text;
-      btn.style.display = 'flex';
-      btn.style.alignItems = 'center';
-      btn.style.justifyContent = 'center';
-      btn.style.gap = '1rem';
-      // btn.style.background = 'transparent';
       btn.classList = 'ghost cta';
       return btn;
     }
 
     // Create buttons
-    const flipButton = makeButton('Flip Camera');
-    const uploadButton = makeButton('Upload from File');
-    const cancelButton = makeButton('Cancel');
+    const flipButton = makeButton(i18n('qr_flip_camera'));
+    const uploadButton = makeButton(i18n('qr_upload'));
+    const cancelButton = makeButton(i18n('qr_cancel'));
 
     // Add buttons to bar
     buttonBar.appendChild(flipButton);
@@ -132,7 +103,14 @@ export async function scanQr({ options = {} } = {}) {
         cleanup();
         resolve(result.data || result);
       } catch (err) {
-        alert('No QR code found in the selected image.');
+        setError({
+          status: 0,
+          code: 'QR03',
+          label: i18n('QR03_label'),
+          message: i18n('QR03_message')
+        })
+        cleanup();
+        reject(err);
       }
     };
 

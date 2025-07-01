@@ -90,22 +90,29 @@ This project uses [i18next](https://www.i18next.com/) and [react-i18next](https:
 
 [`src/helpers/tollgate.js`](src/helpers/tollgate.js)
 
-| Code  | Label                              | Meaning                                                                 |
-|-------|------------------------------------|-------------------------------------------------------------------------|
-| `TG01` | Could not fetch TollGate information | TollGate could not connect to its relay. Contact the network administrator or try again later. |
-| `TG02` | Failed to fetch TollGate details   | The request to fetch TollGate details failed (non-OK HTTP response).    |
-| `TG03` | Failed to fetch device info        | The request to fetch device info (MAC address) failed (non-OK HTTP response). |
+| Code   | Label                              | Meaning                                                                 |
+|--------|------------------------------------|-------------------------------------------------------------------------|
+| `TG01` | Failed to fetch TollGate details   | The request to fetch TollGate details failed (non-OK HTTP response).    |
+| `TG02` | Failed to fetch device info        | The request to fetch device info (MAC address) failed (non-OK HTTP response). |
+| `TG03` | Could not fetch TollGate information | TollGate could not connect to its relay. Contact the network administrator or try again later. |
+| `TG04` | Pricing Error                      | Could not get TollGate pricing information.                             |
 
 #### Cashu Error Codes
 
 [`src/helpers/cashu.js`](src/helpers/cashu.js)
 
-| Code  | Label                  | Meaning                                              |
-|-------|------------------------|------------------------------------------------------|
-| `CU01` | Token missing          | No token was provided.                               |
-| `CU02` | Invalid token format   | The provided token does not start with "cashu".      |
-| `CU03` | Invalid Cashu Token    | The token could not be decoded.                      |
-| `CU04` | Token validation error | An error occurred during token validation/decoding.   |
+| Code   | Label                  | Meaning                                              |
+|--------|------------------------|------------------------------------------------------|
+| `CU01` | No access options available | Could not parse TollGate access options.             |
+| `CU02` | Token missing          | No token was provided.                               |
+| `CU03` | Invalid token format   | The provided token does not start with "cashu".      |
+| `CU04` | Invalid Cashu Token    | The token could not be decoded.                      |
+| `CU05` | Token proofs missing   | Token was successfully decoded but no proofs were found. |
+| `CU06` | Token validation error | An error occurred during token validation/decoding.   |
+| `CU07` | Payment failed         | Failed to generate keys to sign the payment event.    |
+| `CU08` | Payment failed         | Your token was not accepted (HTTP 402).              |
+| `CU09` | Payment failed         | Server error. Reload the page and try again.          |
+| `CU10` | Payment failed         | Error sending token. Reload the page and try again.   |
 
 ## License
 

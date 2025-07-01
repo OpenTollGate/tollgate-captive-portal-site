@@ -12,6 +12,9 @@
   --font-size-medium: clamp(1.6rem, .3205vw + 1.4718rem, 1.8rem); /* 400px = 16px to 1024px = 18px */
   --font-size-large: clamp(1.8rem, .3205vw + 1.6718rem, 2rem); /* 400px = 18px to 1024px = 20px */
 
+  --color-black: #000000;
+  --color-black-transparent: rgba(0,0,0,0.90);
+
   --color: #171D35;
   --color-negative: #959CB1;
   
@@ -241,5 +244,44 @@ select {
     width: .5em;
     height: .5em;
     border-radius: .5em;
+  }
+}
+
+.checkmark {
+  width: 72px;
+  height: 72px;
+  display: block;
+}
+
+.checkmark-circle {
+  stroke: var(--color-green, #4AA922);
+  stroke-width: 4;
+  stroke-miterlimit: 10;
+  fill: none;
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: checkmark-circle 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.checkmark-check {
+  stroke: var(--color-green, #4AA922);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: checkmark-check 0.3s 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+@keyframes checkmark-circle {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes checkmark-check {
+  to {
+    stroke-dashoffset: 0;
   }
 }

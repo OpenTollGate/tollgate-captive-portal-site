@@ -5,6 +5,7 @@ import Background from './components/Background.jsx'
 import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
 import { Error } from './components/Status.jsx';
+import { AccessGrantedIcon } from './components/Icon.jsx'
 
 import { fetchTollgateData } from './helpers/tollgate.js'
 
@@ -27,7 +28,7 @@ export const App = () => {
   useEffect(() => {
     const fetch = async () => {
       setLoading(true);
-      const response = await fetchTollgateData();
+      const response = await fetchTollgateData(t);
       
       if (!response.status) {
         setRetrying(true);
@@ -62,7 +63,7 @@ export const App = () => {
     // Set up the retry interval
     retryIntervalRef.current = setInterval(async () => {
       console.log('Retrying to fetch TollGate details...');
-      const response = await fetchTollgateData();
+      const response = await fetchTollgateData(t);
       
       // If successful, clear the interval
       if (response.status) {
@@ -83,6 +84,8 @@ export const App = () => {
     };
   }, [error, tollgateDetails]);
 
+  // console.log(tollgateDetails);
+
   return (
     <div id="tollgate-captive-portal" className="tollgate-captive-portal">
       <Background />
@@ -93,7 +96,7 @@ export const App = () => {
         <div className="tollgate-captive-portal-content">
           <div className="tollgate-captive-portal-content-container">
 
-            <div className="tollgate-captive-portal-tabs" aria-label="Tab Navigation">
+            <div className="tollgate-captive-portal-tabs" aria-label={t('tab_aria_label')}>
               <Tab type="cashu" method={method} setMethod={setMethod} />
               <Tab type="lightning" method={method} setMethod={setMethod} />
             </div>
@@ -123,7 +126,7 @@ const Header = () => {
   const { t } = useTranslation();
 
   return <div className="tollgate-captive-portal-header">
-    <img src={logoWhite} alt="TollGate Logo"></img>
+    <img src={logoWhite} alt={t('header_image_alt')}></img>
   </div>
 }
 
@@ -141,12 +144,35 @@ const Tab = ({ type, method, setMethod }) => {
   </button>
 }
 
-const Loading = () => {
+export const Loading = () => {
   const { t } = useTranslation();
 
   return <div className="tollgate-captive-portal-loading">
     <span className="spinner big"></span>
     {t('loading')}
+  </div>
+}
+
+export const Processing = () => {
+  const { t } = useTranslation();
+
+  return <div className="tollgate-captive-portal-processing">
+    <span className="spinner big"></span>
+    {t('processing')}
+  </div>
+}
+
+export const AccessGranted = ({ allocation }) => {
+  const { t } = useTranslation();
+
+  return <div className="tollgate-captive-portal-access-granted">
+    <div className="tollgate-captive-portal-access-granted-checkmark">
+      <AccessGrantedIcon />
+    </div>
+    <div className="tollgate-captive-portal-access-granted-label">
+      <h2>{t('access_granted_title')}</h2>
+      <p dangerouslySetInnerHTML={{__html: t('access_granted_subtitle', { purchased: `<strong>${allocation}</strong>` })}}></p>
+    </div>
   </div>
 }
 

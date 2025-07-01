@@ -1,5 +1,5 @@
 export const ErrorIcon = () => (
-  <svg className="icon" viewBox="0 0 24 24">
+  <svg className="icon" viewBox="0 0 24 24" style={{overflow: 'visible'}}>
       <title>Error Icon</title>
       <g>
         <path fill="currentColor" d="M12,0 C5.376,0 0,5.376 0,12 C0,18.624 5.376,24 12,24 C18.624,24 24,18.624 24,12 C24,5.376 18.624,0 12,0 L12,0 Z M13.2,18.464088 L10.8,18.464088 L10.8,16.064088 L13.2,16.064088 L13.2,18.464088 L13.2,18.464088 Z M13.2,13.664088 L10.8,13.664088 L10.8,6.46408799 L13.2,6.46408799 L13.2,13.664088 L13.2,13.664088 Z"></path>
@@ -8,7 +8,7 @@ export const ErrorIcon = () => (
 );
 
 export const SuccessIcon = () => (
-  <svg className="icon" viewBox="0 0 24 24">
+  <svg className="icon" viewBox="0 0 24 24" style={{overflow: 'visible'}}>
       <title>Success Icon</title>
       <g>
         <path fill="currentColor" d="M12.5,0 C5.876,0 0.5,5.376 0.5,12 C0.5,18.624 5.876,24 12.5,24 C19.124,24 24.5,18.624 24.5,12 C24.5,5.376 19.124,0 12.5,0 L12.5,0 Z M10.6902934,17.3194286 L6.16602687,12.7951621 L7.44187003,11.5193189 L10.6902934,14.7586937 L17.55813,7.89085714 L18.8339731,9.17574883 L10.6902934,17.3194286 L10.6902934,17.3194286 Z"></path>
@@ -24,6 +24,7 @@ export const QrCodeIcon = () => (
     stroke-width="1.5"
     stroke="currentColor"
     class="size-6"
+    style={{overflow: 'visible'}}
   >
     <path
       stroke-linecap="round"
@@ -37,3 +38,10 @@ export const QrCodeIcon = () => (
     />
   </svg>
 );
+
+export const AccessGrantedIcon = () => (
+  <svg viewBox="0 0 60 60" className="checkmark" width="72" height="72" style={{overflow: 'visible'}}>
+    <circle className="checkmark-circle" cx="30" cy="30" r="26" fill="none" />
+    <path className="checkmark-check" fill="none" d="M18 32l8 8 16-16" />
+  </svg>
+)

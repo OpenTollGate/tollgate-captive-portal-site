@@ -12,7 +12,7 @@ export const Lightning = (props) => {
   
   return <div className="tollgate-captive-portal-method-lightning tollgate-captive-portal-method">
       <div className="tollgate-captive-portal-method-header">
-        <h1>{i18n('ssid')}</h1>
+        <h1>{i18n('portal_title')}</h1>
         <h2><Trans i18nKey="provide_lightning" components={{ 1: <a href="https://en.wikipedia.org/wiki/Lightning_Network" target="_blank" rel="noreferrer"></a> }} /></h2>
       </div>
       <div className="tollgate-captive-portal-method-content">
