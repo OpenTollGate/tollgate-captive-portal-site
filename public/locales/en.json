@@ -1,4 +1,5 @@
 {
+  "loading": "Loading",
   "clipboard_permission_denied": "Permission to read from clipboard was denied. Please allow clipboard access or paste manually.",
   "clipboard_failed": "Failed to read from clipboard. Please try again or paste manually.",
   "paste": "Paste",

@@ -7,7 +7,8 @@ import DeviceInfo from './DeviceInfo';
 import { Error, Success } from './Status';
 
 import { scanQr } from '../helpers/qr-code';
-import { getPricingInfo, formatPricingInfo, validateToken, calculatePurchasedAllocation } from '../helpers/tollgate';
+import { getPricingInfo, formatPricingInfo, calculatePurchasedAllocation } from '../helpers/tollgate';
+import { validateToken } from '../helpers/cashu';
 
 import './Cashu.scss'
 
