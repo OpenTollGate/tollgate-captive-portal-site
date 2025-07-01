@@ -16,7 +16,7 @@ export const fetchTollgateData = async () => {
     if (!detailsResponse.ok) {
       return {
         status: 0,
-        code: 'TG2',
+        code: 'TG02',
         label: 'Failed to fetch TollGate details',
         message: `${detailsResponse.status}`
       };
@@ -28,7 +28,7 @@ export const fetchTollgateData = async () => {
     if (!whoamiResponse.ok) {
       return {
         status: 'error',
-        code: 'TG3',
+        code: 'TG03',
         label: 'Failed to fetch device info',
         message: `${whoamiResponse.status}`
       };
@@ -53,7 +53,7 @@ export const fetchTollgateData = async () => {
     console.error('Error fetching TollGate data:', err);
     return {
       status: 0,
-      code: 'TG1',
+      code: 'TG01',
       label: 'Could not fetch TollGate information',
       message: 'TollGate could not connect to its relay. Contact the network administrator or try again later.'
     };

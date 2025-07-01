@@ -92,9 +92,9 @@ This project uses [i18next](https://www.i18next.com/) and [react-i18next](https:
 
 | Code  | Label                              | Meaning                                                                 |
 |-------|------------------------------------|-------------------------------------------------------------------------|
-| `TG1` | Could not fetch TollGate information | TollGate could not connect to its relay. Contact the network administrator or try again later. |
-| `TG2` | Failed to fetch TollGate details   | The request to fetch TollGate details failed (non-OK HTTP response).    |
-| `TG3` | Failed to fetch device info        | The request to fetch device info (MAC address) failed (non-OK HTTP response). |
+| `TG01` | Could not fetch TollGate information | TollGate could not connect to its relay. Contact the network administrator or try again later. |
+| `TG02` | Failed to fetch TollGate details   | The request to fetch TollGate details failed (non-OK HTTP response).    |
+| `TG03` | Failed to fetch device info        | The request to fetch device info (MAC address) failed (non-OK HTTP response). |
 
 #### Cashu Error Codes
 
@@ -102,10 +102,10 @@ This project uses [i18next](https://www.i18next.com/) and [react-i18next](https:
 
 | Code  | Label                  | Meaning                                              |
 |-------|------------------------|------------------------------------------------------|
-| `CU1` | Token missing          | No token was provided.                               |
-| `CU2` | Invalid token format   | The provided token does not start with "cashu".      |
-| `CU3` | Invalid Cashu Token    | The token could not be decoded.                      |
-| `CU4` | Token validation error | An error occurred during token validation/decoding.   |
+| `CU01` | Token missing          | No token was provided.                               |
+| `CU02` | Invalid token format   | The provided token does not start with "cashu".      |
+| `CU03` | Invalid Cashu Token    | The token could not be decoded.                      |
+| `CU04` | Token validation error | An error occurred during token validation/decoding.   |
 
 ## License
 

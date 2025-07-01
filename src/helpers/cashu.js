@@ -42,7 +42,7 @@ export const validateToken = (token = '') => {
     if (!token.trim()) {
       return {
         status: 0,
-        code: 'CU1',
+        code: 'CU01',
         label: 'Token missing',
         message: 'No token provided.'
       };
@@ -52,7 +52,7 @@ export const validateToken = (token = '') => {
     if (!token.trim().startsWith('cashu')) {
       return {
         status: 0,
-        code: 'CU2',
+        code: 'CU02',
         label: 'Invalid token format',
         message: 'Cashu tokens should start with "cashu".'
       };
@@ -65,7 +65,7 @@ export const validateToken = (token = '') => {
       if (!decodedToken) {
         return {
           status: 0,
-          code: 'CU3',
+          code: 'CU03',
           label: 'Invalid Cashu Token',
           message: 'Token could not be decoded.'
         };
@@ -73,7 +73,7 @@ export const validateToken = (token = '') => {
     } catch(err) {
       return {
         status: 0,
-        code: 'CU3',
+        code: 'CU03',
         label: 'Invalid Cashu Token',
         message: 'Token could not be decoded.'
       };
@@ -113,7 +113,7 @@ export const validateToken = (token = '') => {
     console.error('Error decoding token:', error);
     return {
       status: 0,
-      code: 'CU4',
+      code: 'CU04',
       label: 'Token validation error',
       message: error.message || 'Invalid token format.'
     };
