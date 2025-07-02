@@ -124,9 +124,6 @@ export const Cashu = (props) => {
         {!success && !processing && <div className="tollgate-captive-portal-method-submit">
           {!tokenValue && <button disabled>{t('purchase')}</button>}
           {(tokenValue && !processing) && (() => {
-            const stepSizeInfo = getStepSizeValues(selectedMint, t);
-            const formattedStepSize = stepSizeInfo ? `${stepSizeInfo.value} ${stepSizeInfo.unit}` : "[step_size_formatted]";
-
             return <button 
               className="cta" 
               dangerouslySetInnerHTML={{
