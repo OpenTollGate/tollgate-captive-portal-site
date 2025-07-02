@@ -108,7 +108,7 @@ export const validateToken = (token = '', mint, i18n) => {
         hasProofs: true,
         amount: totalAmount,
         proofCount: proofs.length,
-        unit: 'sats'
+        unit: 'sat'
       }
     };
   } catch (error) {
