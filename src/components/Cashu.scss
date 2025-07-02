@@ -8,6 +8,24 @@
     position: relative;
     overflow: hidden;
 
+    .cancel {
+      background-color: transparent;
+      color: var(--color-gray-darken);
+      opacity: .8;
+      font-size: var(--font-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-right: 0.4rem;
+      padding-left: .8rem;
+
+      &:hover,
+      &:focus,
+      &:active {
+        opacity: 1;
+      }
+    }
+
     #cashu-token {
       padding-right: 4rem;
     }

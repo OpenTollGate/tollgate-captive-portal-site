@@ -14,7 +14,7 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
   try {
     const baseUrl = getTollgateBaseUrl();
 
-    // for debugging
+    // just for development
     // return {
     //   status: 1,
     //   value: {
@@ -47,7 +47,7 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
         status: 0,
         code: 'TG01',
         label: i18n('TG01_label'),
-        message: detailsResponse.status || i18n('TG01_message')
+        message: i18n('TG01_message')
       };
     }
 
@@ -61,7 +61,7 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
         status: 'error',
         code: 'TG02',
         label: i18n('TG02_label'),
-        message: whoamiResponse.status || i18n('TG02_message')
+        message: i18n('TG02_message')
       };
     }
 

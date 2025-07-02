@@ -117,7 +117,7 @@ export const validateToken = (token = '', mint, i18n) => {
       status: 0,
       code: 'CU05',
       label: i18n('CU05_label'),
-      message: error.message || i18n('CU05_message')
+      message: i18n('CU05_message') 
     };
   }
 };
@@ -142,7 +142,7 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
         status: 0,
         code: 'CU06',
         label: i18n('CU06_label'),
-        message: error.message || i18n('CU06_message')
+        message: i18n('CU06_message')
       };
     }
     
@@ -191,7 +191,7 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
           status: 0,
           code: 'CU07',
           label: i18n('CU07_label'),
-          message: response.message || i18n('CU07_message')
+          message: i18n('CU07_message')
         };
       } else {
         console.error('Server error:', response);
@@ -199,7 +199,7 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
           status: 0,
           code: 'CU08',
           label: i18n('CU08_label'),
-          message: response.message || i18n('CU08_message')
+          message: i18n('CU08_message')
         };
       }
     }
@@ -215,7 +215,7 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
       status: 0,
       code: 'CU09',
       label: i18n('CU09_label'),
-      message: error.message || i18n('CU09_message')
+      message: i18n('CU09_message')
     };
   }
 }

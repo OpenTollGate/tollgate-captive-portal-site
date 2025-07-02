@@ -1,5 +1,11 @@
+// external
+import React from 'react';
+import { createRoot } from 'react-dom/client';
 import QrScanner from 'qr-scanner';
 import QRCode from 'qrcode-svg';
+
+// internal
+import { ImageIcon, FlipCameraIcon, CancelIcon } from '../components/Icon'
 
 /**
  * Opens the camera and scans a QR code. Returns a Promise that resolves with the QR code text.
@@ -10,6 +16,12 @@ export async function scanQr({ options = {} } = {}, setError, i18n) {
     // Create container for video and buttons
     const container = document.createElement('div');
     container.classList = 'tollgate-captive-portal-scan-qr-container'
+    const overlay = document.createElement('div');
+    overlay.classList = 'tollgate-captive-portal-scan-qr-overlay'
+    container.appendChild(overlay);
+    const overlayInner = document.createElement('div');
+    overlayInner.classList = 'tollgate-captive-portal-scan-qr-overlay-inner'
+    overlay.appendChild(overlayInner);
     document.body.appendChild(container);
 
     // Create fullscreen video element
@@ -22,23 +34,31 @@ export async function scanQr({ options = {} } = {}, setError, i18n) {
     buttonBar.classList = 'tollgate-captive-portal-scan-qr-button-bar'
     container.appendChild(buttonBar);
 
-    // Helper to create styled buttons
-    function makeButton(text) {
-      const btn = document.createElement('button');
-      btn.textContent = text;
-      btn.classList = 'ghost cta';
-      return btn;
-    }
+    // Create bottom bar for buttons (overlay)
+    const buttonBarLeft = document.createElement('div');
+    buttonBarLeft.classList = 'tollgate-captive-portal-scan-qr-button-bar-left'
+    buttonBar.appendChild(buttonBarLeft);
 
     // Create buttons
-    const flipButton = makeButton(i18n('qr_flip_camera'));
-    const uploadButton = makeButton(i18n('qr_upload'));
-    const cancelButton = makeButton(i18n('qr_cancel'));
+    const flipButton = document.createElement('button');
+    flipButton.title = i18n('qr_flip_camera');
+    flipButton.classList = 'ghost cta flip-camera';
+    
+    const uploadButton = document.createElement('button');
+    uploadButton.title = i18n('qr_upload');
+    uploadButton.classList = 'ghost cta upload';
+
+    const cancelButton = document.createElement('button');
+    cancelButton.title = i18n('qr_cancel');
+    cancelButton.classList = 'ghost cancel';
 
     // Add buttons to bar
-    buttonBar.appendChild(flipButton);
-    buttonBar.appendChild(uploadButton);
+    buttonBarLeft.appendChild(flipButton);
+    createRoot(flipButton).render(React.createElement(FlipCameraIcon, null))
+    buttonBarLeft.appendChild(uploadButton);
+    createRoot(uploadButton).render(React.createElement(ImageIcon, null))
     buttonBar.appendChild(cancelButton);
+    createRoot(cancelButton).render(React.createElement(CancelIcon, null))
 
     // File input for upload
     const fileInput = document.createElement('input');
@@ -69,10 +89,8 @@ export async function scanQr({ options = {} } = {}, setError, i18n) {
 
     async function setupCameras() {
       cameras = await QrScanner.listCameras();
-      if (cameras.length <= 1) {
-        flipButton.style.display = 'none';
-      } else {
-        flipButton.style.display = '';
+      if (cameras.length > 1) {
+        flipButton.style.display = 'block';
       }
     }
 
@@ -126,8 +144,11 @@ export async function scanQr({ options = {} } = {}, setError, i18n) {
       { returnDetailedScanResult: true, ...options, preferredCamera: cameras[currentCameraIdx]?.id }
     );
     qrScanner.start().catch(err => {
-      cleanup();
-      reject(err);
+      overlayInner.classList.add('error');
+      overlayInner.setAttribute('data-error', i18n('QR04_message'))
+      // console.log(err)
+      // // cleanup();
+      // // reject(err);
     });
   });
 }

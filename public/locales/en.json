@@ -10,7 +10,7 @@
   "provide_cashu": "Provide a <1>Cashu</1> token to access the internet",
   "input_placeholder": "cashuxyz…",
   "scanning": "Scanning...",
-  "scan_qr": "Scan QR",
+  "scan_qr": "QR",
   "qr_flip_camera": "Flip Camera",
   "qr_upload": "Upload from File",
   "qr_cancel": "cancel",
@@ -57,7 +57,7 @@
   "CU07_message": "Your token was not accepted.",
   "CU08_label": "Payment failed",
   "CU08_message": "Server error. Reload the page and try again.",
-  "CU09_label": "Payment failed.",
+  "CU09_label": "Payment Failed",
   "CU09_message": "Reload the page and try again.",
   "TG01_label": "Failed to fetch TollGate details",
   "TG01_message": "Could not fetch TollGate details.",
@@ -76,5 +76,7 @@
   "QR02_label": "Failed to read from camera",
   "QR02_message": "Please try again or paste manually.",
   "QR03_label": "Qr code not found",
-  "QR03_message": "No QR code found in the selected image."
+  "QR03_message": "No QR code found in the selected image.",
+  "QR04_label": "Camera error",
+  "QR04_message": "Make sure to have a camera and that this page has permission to use the camera."
 } 

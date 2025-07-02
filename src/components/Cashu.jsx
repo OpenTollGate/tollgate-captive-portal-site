@@ -8,6 +8,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 import DeviceInfo from './DeviceInfo';
 import { Error, Success } from './Status';
 import { Processing, AccessGranted } from '../App'
+import { CancelIcon } from './Icon'
 
 // helpers
 import { scanQr } from '../helpers/qr-code';
@@ -76,7 +77,7 @@ export const Cashu = (props) => {
   // handle processing change 
   useEffect(() => {
     if (processing) {
-      setTimeout( async () => {
+      const submit = async () => {
         const response = await submitToken(token, tollgateDetails, allocation, t);
         setProcessing(false);
 
@@ -89,7 +90,9 @@ export const Cashu = (props) => {
         } else {
           setError(response)
         }
-      }, 2000)
+      }
+
+      submit()
     }
   }, [processing])
 
@@ -171,9 +174,9 @@ const TokenInput = ({ token, setToken, scanning, setScanning, setError }) => {
       <div className="tollgate-captive-portal-method-input-actions">
         {token.length ? <>
           {/* reset */}
-          <button className="ghost cta small ellipsis" onClick={() => {
+          <button className="small cancel" onClick={() => {
             setToken('')
-          }}>×</button>
+          }}><CancelIcon/></button>
         </> : <>
           {/* paste from clipboard */}
           <button className="ghost cta small ellipsis" onClick={async (input) => {
