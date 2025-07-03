@@ -113,6 +113,7 @@ This project uses [i18next](https://www.i18next.com/) and [react-i18next](https:
 | `CU08` | Payment failed         | Your token was not accepted (HTTP 402).              |
 | `CU09` | Payment failed         | Server error. Reload the page and try again.          |
 | `CU10` | Payment failed         | Error sending token. Reload the page and try again.   |
+| `CU11` | Not enough funds         | This token does not provide enough funds for the selected Mint.   |
 
 ## License
 

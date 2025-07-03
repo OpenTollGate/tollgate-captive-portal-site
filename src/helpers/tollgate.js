@@ -14,31 +14,35 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
   try {
     const baseUrl = getTollgateBaseUrl();
 
+    // TODO: keep this up do date (last update @blockheight 903814)
+    // example tollgate tip01 data https://github.com/OpenTollGate/tollgate/blob/main/protocol/01.md
     // just for development
-    // return {
-    //   status: 1,
-    //   value: {
-    //     detailsEvent: {
-    //       kind: 10021,
-    //       id: "298930dc3fbc7d6cd81fa256f75982647a66459870f84df4ab1394c653605b38",
-    //       pubkey: "dcce4729d4b134d5471a2c699dac1387fd769262ba8cbf183317082a6b612b8a",
-    //       created_at: 0,
-    //       tags: [
-    //         [ "metric", "bytes" ],
-    //         [ "step_size", "600000"],
-    //         [ "tips", "1", "2", "3", "4" ],
-    //         [ "price_per_step", "cashu", "1", "", "https://mint.minibits.cash/Bitcoin", "0" ],
-    //         [ "price_per_step", "cashu", "2", "", "https://mint2.nutmix.cash", "0" ]
-    //       ],
-    //       content: "",
-    //       sig: "0f3aed6edd5725865c863c4c2e4e019f8e81370944d1bb9df702102dec95d1e0141bec2ccca6cbf3f1f73aef2a3b6039bf5b0083c04e892c013368d215e19642"
-    //     },
-    //     deviceInfo: {
-    //       type: 'mac',
-    //       value: '1A:2B:3C:4D:5E'
-    //     }
-    //   }
-    // }
+    return {
+      status: 1,
+      value: {
+        detailsEvent: {
+          kind: 10021,
+          id: "298930dc3fbc7d6cd81fa256f75982647a66459870f84df4ab1394c653605b38",
+          pubkey: "dcce4729d4b134d5471a2c699dac1387fd769262ba8cbf183317082a6b612b8a",
+          created_at: 0,
+          tags: [
+            ["metric", "milliseconds"], // milliseconds or byte
+            ["step_size", "600000"], // 1 minute step size
+            ["step_purchase_limits", "1", "0"], // Min 1 minute, max infinite minutes
+            ["tips", "1", "2", "3", "4"],
+            ["price_per_step", "cashu", "210", "sat", "https://mint.domain.net", 1],
+            ["price_per_step", "cashu", "210", "sat", "https://other.mint.net", 1],
+            ["price_per_step", "cashu", "500", "sat", "https://mint.thirddomain.eu", 3],
+          ],
+          content: "",
+          sig: "0f3aed6edd5725865c863c4c2e4e019f8e81370944d1bb9df702102dec95d1e0141bec2ccca6cbf3f1f73aef2a3b6039bf5b0083c04e892c013368d215e19642"
+        },
+        deviceInfo: {
+          type: 'mac',
+          value: '1A:2B:3C:4D:5E'
+        }
+      }
+    }
 
     // Fetch TollGate details
     const detailsResponse = await fetch(`${baseUrl}/`);
@@ -92,33 +96,21 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
   }
 };
 
-// example tollgate data 
-// {
-//   kind = 10021,
-//   id = "298930dc3fbc7d6cd81fa256f75982647a66459870f84df4ab1394c653605b38",
-//   pubkey = "dcce4729d4b134d5471a2c699dac1387fd769262ba8cbf183317082a6b612b8a",
-//   created_at = 0,
-//   tags = [
-//     [ "metric", "milliseconds" ],
-//     [ "step_size", "600000"],
-//     [ "tips", "1", "2", "3", "4" ],
-//     [ "price_per_step", "cashu", "1", "", "https://mint.minibits.cash/Bitcoin", "0" ],
-//     [ "price_per_step", "cashu", "2", "", "https://mint2.nutmix.cash", "0" ]
-//   ],
-//   content = "",
-//   sig = "0f3aed6edd5725865c863c4c2e4e019f8e81370944d1bb9df702102dec95d1e0141bec2ccca6cbf3f1f73aef2a3b6039bf5b0083c04e892c013368d215e19642"
-// }
-
 export const getAccessOptions = (detailEvent, i18n) => {
   if (!detailEvent || !Array.isArray(detailEvent.tags)) return [];
 
-  // Extract metric and step_size from tags
+  // Extract metric, step_size and step_purchase_limits from tags
   let metric = null;
   let step_size = null;
+  let step_purchase_limits = { min: 1, max: 0 };
 
   for (const tag of detailEvent.tags) {
     if (tag[0] === 'metric') metric = tag[1];
     if (tag[0] === 'step_size') step_size = Number(tag[1]);
+    if (tag[0] === 'step_purchase_limits') {
+      step_purchase_limits.min = tag[1] && !isNaN(tag[1]) ? Number(tag[1]) : 1;
+      step_purchase_limits.max = tag[2] && !isNaN(tag[2]) ? Number(tag[2]) : 0;
+    };
   }
 
   // Return error if any of the variables is not successfully extracted
@@ -132,16 +124,17 @@ export const getAccessOptions = (detailEvent, i18n) => {
   }
 
   // Find all price_per_step tags
-  const pricing = detailEvent.tags
+  const accessOptions = detailEvent.tags
     .filter((tag) => {
       // filter tags 'price_per_step' at index 0
       return tag[0] === 'price_per_step'
     })
     .map((tag) => {
-      // extract pricing info for each mint
+      // extract accessOptions info for each mint
 
+      // TODO: keep this up do date (last update @blockheight 903814)
+      // example tollgate tip01 data https://github.com/OpenTollGate/tollgate/blob/main/protocol/01.md
       // ["price_per_step", "<bearer_asset_type>", "<price>", "<unit>", "<mint_url>", "<min_steps>"]
-      // Example: [ 'price_per_step', 'cashu', '1', '', 'https://mint.minibits.cash/Bitcoin', '0' ]
 
       const asset_type = tag[1] || '';
       if("cashu" !== asset_type) return;
@@ -155,11 +148,13 @@ export const getAccessOptions = (detailEvent, i18n) => {
       if(!url.length) return;
 
       // If tag[5] exists and is a number, use as min_steps, else fallback
-      const min_steps = tag[5] !== undefined && !isNaN(Number(tag[5])) ? Number(tag[5]) : 0;
+      let min_steps = tag[5] !== undefined ? tag[5] : 0;
+      min_steps = isNaN(min_steps) ? 0 :  Number(min_steps)
 
       return {
         metric,
         step_size,
+        step_purchase_limits,
         url,
         asset_type,
         price,
@@ -167,44 +162,47 @@ export const getAccessOptions = (detailEvent, i18n) => {
         min_steps
       };
     }).sort((a, b) => {
-      // sort by price asc
-      return a.price - b.price
+      // sort by best option
+      // TODO: what if option.unit is exotic? how to compare different units?
+
+      // Based on https://github.com/OpenTollGate/tollgate/blob/main/protocol/02.md
+      // compare price per step calculating from min_steps
+      return a.price / (a.min_steps || 1) - b.price / (b.min_steps || 1)
     });
 
-  return pricing;
+  // console.log(accessOptions)
+
+  return accessOptions;
 }
 
 export const getStepSizeValues = (mint, i18n) => {
-  // set stepsize to mint.step_size or 1 if 0
-  const setpSize = mint.step_size || 1;
-
-  if ('milliseconds' === mint.metric) {
-    return formatTimeInSeconds(setpSize, i18n)
+    if ('milliseconds' === mint.metric) {
+    return formatTimeInSeconds(mint.step_size, true, i18n)
   } else if ('bytes' === mint.metric) {
-    return formatDataSize(setpSize, i18n);
+    return formatDataSize(mint.step_size, i18n);
   }
 
   return false;
 }
 
-export const formatTimeInSeconds = (milliseconds, i18n) => {
+export const formatTimeInSeconds = (milliseconds, abbreviate, i18n) => {
   const seconds = milliseconds / 1000;
   if (seconds < 60) {
     return {
       value: (seconds % 1 !== 0) ? seconds.toFixed(2) : seconds, // decimals when needed
-      unit: seconds === 1 ? i18n('second') : i18n('second_plural')
+      unit: abbreviate ? i18n('second_abbreviation') : seconds === 1 ? i18n('second') : i18n('second_plural')
     };
   } else if (seconds < 3600) {
     const minutes = seconds / 60;
     return {
       value: (minutes % 1 !== 0) ? minutes.toFixed(2) : minutes, // decimals when needed
-      unit: minutes === 1 ? i18n('minute') : i18n('minute_plural')
+      unit: abbreviate ? i18n('minute_abbreviation') : minutes === 1 ? i18n('minute') : i18n('minute_plural')
     };
   } else {
     const hours = seconds / 3600;
     return {
       value: (hours % 1 !== 0) ? hours.toFixed(2) : hours, // decimals when needed
-      unit: hours === 1 ? i18n('hour') : i18n('hour_plural')
+      unit: abbreviate ? i18n('hour_abbreviation') : hours === 1 ? i18n('hour') : i18n('hour_plural')
     };
   }
 };
@@ -230,10 +228,11 @@ export const formatDataSize = (kibiBytes, i18n) => {
 };
 
 // Calculate allocation of milliseconds or bytes
-export const calculateAllocation = (token, mint, i18n) => {
-  const allocation = token.amount / mint.price * mint.step_size;
+export const calculateAllocation = (amount, mint, i18n) => {
+  const allocation = mint.step_size * (amount / mint.price *  (mint.min_steps || 1));
+
   if ('milliseconds' === mint.metric) {
-    return formatTimeInSeconds(allocation, i18n)
+    return formatTimeInSeconds(allocation, false, i18n)
   } else if ('bytes' === mint.metric) {
     return formatDataSize(allocation, i18n);
   }

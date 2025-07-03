@@ -141,12 +141,47 @@
 
       button {
         font-size: var(--font-size-small);
-        padding-top: .2rem;
-        padding-bottom: .2rem;
+        padding: .4rem;
         display: flex;
-        flex-wrap: wrap;
+        align-items: center;
+        flex-wrap: nowrap;
         justify-content: space-between;
         column-gap: .4rem;
+
+        &.active {
+          .mint-meta-address,
+          .mint-meta-price-per-step {
+            background-color: var(--color-white-transparent);
+            color: var(--color-cta);
+          }
+        }
+      }
+
+      .mint-price {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        text-transform: uppercase;
+        font-size: var(--font-size);
+
+        // prevent shrinking 
+        flex: 1 0 auto;
+      }
+
+      .mint-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .4rem;
+        justify-content: flex-end;
+
+        &-address,
+        &-price-per-step {
+          background-color: var(--color-gray-darken);
+          padding: 0 .6rem;
+          border-radius: var(--border-radius-small);
+          color: var(--color-white);
+        }
       }
     }
 
@@ -273,48 +308,6 @@
           text-align: center;
         }
       }
-
-      // &:after {
-      //   content: attr(data-error);
-      //   padding: 3rem;
-      //   text-align: center;
-      // }
-      // border-radius: var(--border-radius);
-
-      // &:not(.error) {
-      //   border-color: var(--color-red);
-      // }
-      // &::after,
-      // &::before {
-      //   position: absolute;
-      //   content: '';
-      //   margin: 3rem;
-      //   display: none;
-      //   width: calc(100vw - 6rem);
-      //   height: calc(100vh - 15rem);
-      //   align-items: center;
-      //   justify-content: center;
-      //   box-sizing: border-box;
-      // }
-      // &::after {
-      //   content: attr(data-error);
-      // }
-      // &::before {
-      //   display: block;
-      //   border: 2px solid var(--color-cta);
-      //   border-radius: var(--border-radius);
-      //   aspect-ratio: 1/1;
-      // }
-    }
-
-    &-overlay.error {
-      // &::after {
-      //   display: flex;
-      // }
-
-      // &::before {
-      //   border-color: var(--color-red);
-      // }
     }
 
     &-button-bar {
@@ -359,6 +352,23 @@
       align-items: center;
       justify-content: space-between;
       gap: 1rem;
+    }
+  }
+
+  button.clipboard {
+    &-success.cta,
+    &-success.ghost {
+      border-color: var(--color-green);
+      background-color: var(--color-green-transparent);
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    &-error.cta,
+    &-error.ghost {
+      border-color: var(--color-error);
+      background-color: var(--color-error-transparent);
+      pointer-events: none;
+      cursor: not-allowed;
     }
   }
 }

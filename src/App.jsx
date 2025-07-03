@@ -1,14 +1,19 @@
+// external
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
+import classNames from 'classnames';
 
+// internal
 import Background from './components/Background.jsx'
 import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
 import { Error } from './components/Status.jsx';
-import { AccessGrantedIcon } from './components/Icon.jsx'
+import { AccessGrantedIcon, RadioButtonIcon } from './components/Icon.jsx'
 
-import { fetchTollgateData } from './helpers/tollgate.js'
+// helpers
+import { fetchTollgateData, getStepSizeValues } from './helpers/tollgate.js'
 
+// styles and assets
 import './App.scss'
 
 // Import the TollGate logos
@@ -153,12 +158,14 @@ export const Loading = () => {
   </div>
 }
 
-export const Processing = () => {
+export const Processing = ({ label }) => {
   const { t } = useTranslation();
+
+  if (!label || "string" !== typeof label || !label.length) label = t('processing')
 
   return <div className="tollgate-captive-portal-processing">
     <span className="spinner big"></span>
-    {t('processing')}
+    {label}
   </div>
 }
 
@@ -180,6 +187,38 @@ const Footer = () => {
   return <div className="tollgate-captive-portal-footer">
     <p><Trans i18nKey="powered_by" components={{ 1: <a href="https://tollgate.me/" target="_blank" rel="noreferrer"></a> }} /></p>
   </div>
+}
+
+export const AccessOptions = ({ pricingInfo, selectedMint, setSelectedMint }) => {
+  const { t } = useTranslation();
+  return <>
+    {pricingInfo.length && pricingInfo.map(mint => {
+      if (!mint.price || !mint.url) return null;
+      let mintAddressStripped = mint.url.replace('https://', '');
+      mintAddressStripped = mintAddressStripped.replace('http://', '');
+
+      const stepSizeInfo = getStepSizeValues(mint, t);
+      const formattedStepSize = stepSizeInfo ? `${stepSizeInfo.value} ${stepSizeInfo.unit}` : "[step_size_formatted]";
+      const pricePerStep = mint.price / (mint.min_steps || 1);
+      let mintPriceFormatted = `${pricePerStep.toFixed((pricePerStep % 1 !== 0) ? 2 : 0)} ${mint.unit} / ${formattedStepSize}`;
+
+      return <button 
+        key={mintAddressStripped} 
+        className={classNames('ghost', 'ellipsis', { 'cta active': mint.url === selectedMint.url })}
+        onClick={() => {
+          setSelectedMint(mint);
+        }}>
+        <span className="mint-price ellipsis">
+          <RadioButtonIcon />
+          {mint.price} {mint.unit}
+        </span>
+        <span className="mint-meta">
+          <span className="mint-meta-address">{mintAddressStripped}</span>
+          <span className="mint-meta-price-per-step">{mintPriceFormatted}</span>
+        </span>
+      </button>
+    })}
+  </>
 }
 
 export default App

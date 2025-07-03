@@ -159,12 +159,11 @@ export async function scanQr({ options = {} } = {}, setError, i18n) {
  * @param {object} [options] - Optional QR code options.
  * @returns {string} An SVG string representing the QR code image.
  */
-export function createQr(text, options = { width: 256, height: 256, margin: 2 }) {
+export function createQr(text, options = {}) {
   const qr = new QRCode({
     content: text,
-    width: options.width || 256,
-    height: options.height || 256,
-    padding: options.margin || 2,
+    container: "svg-viewbox",
+    padding: 0,
     ...options,
   });
   return qr.svg();

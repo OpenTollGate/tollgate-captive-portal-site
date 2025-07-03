@@ -41,24 +41,4 @@
       gap: .4rem;
     }
   }
-
-  .tollgate-captive-portal-method-options {
-    > button.cta .fake-radio {
-      border-color: var(--color-white-transparent);
-      
-      &:after {
-        background-color: var(--color-white-transparent);
-      }
-    }
-  }
-
-  // .tollgate-captive-portal-pricing {
-  //   font-weight: 600;
-  // }
-
-  .mint-url {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-  }
 }

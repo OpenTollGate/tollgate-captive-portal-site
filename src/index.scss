@@ -34,6 +34,7 @@
   --color-gray-darken: #C4C4C4;
   --color-gray-transparent: rgba(245, 245, 245, .9);
 
+  --border-radius-small: .3rem;
   --border-radius: .6rem;
   --border-radius-large: 1.2rem;
   --border-width: .2rem;
@@ -125,7 +126,8 @@ button:not([id*=tab]),
 button[disabled],
 input[type=button],
 input[type=reset],
-select {
+select,
+a.btn {
   appearance: none;
   width: 100%;
   border-radius: var(--border-radius);
@@ -138,6 +140,13 @@ select {
   color: var(--color-white);
   opacity: .9;
   font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+
+  &[disabled] {
+    opacity: .4;
+  }
 
   &:not([disabled]) {
     cursor: pointer;
@@ -223,27 +232,6 @@ select {
     100% {
         transform: rotate(360deg);
     }
-  }
-}
-
-.fake-radio {
-  width: 1em;
-  height: 1em;
-  display: inline-block;
-  border-radius: 1em;
-  border-width: .125em;
-  border-color: var(--color-gray);
-  border-style: solid;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &.active:after {
-    content: '';
-    background-color: var(--color-gray);
-    width: .5em;
-    height: .5em;
-    border-radius: .5em;
   }
 }
 
