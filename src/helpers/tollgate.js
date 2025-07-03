@@ -17,32 +17,32 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
     // this block is for development only: it returns mock data instead of fetching from the backend
     // todo: keep this up do date (last update @blockheight 903814)
     // example tollgate tip01 data https://github.com/OpenTollGate/tollgate/blob/main/protocol/01.md
-    return {
-      status: 1,
-      value: {
-        detailsEvent: {
-          kind: 10021,
-          id: "298930dc3fbc7d6cd81fa256f75982647a66459870f84df4ab1394c653605b38",
-          pubkey: "dcce4729d4b134d5471a2c699dac1387fd769262ba8cbf183317082a6b612b8a",
-          created_at: 0,
-          tags: [
-            ["metric", "milliseconds"], // milliseconds or byte
-            ["step_size", "600000"], // 1 minute step size
-            ["step_purchase_limits", "1", "0"], // min 1 minute, max infinite minutes
-            ["tips", "1", "2", "3", "4"],
-            ["price_per_step", "cashu", "210", "sat", "https://mint.domain.net", 1],
-            ["price_per_step", "cashu", "210", "sat", "https://other.mint.net", 1],
-            ["price_per_step", "cashu", "500", "sat", "https://mint.thirddomain.eu", 3],
-          ],
-          content: "",
-          sig: "0f3aed6edd5725865c863c4c2e4e019f8e81370944d1bb9df702102dec95d1e0141bec2ccca6cbf3f1f73aef2a3b6039bf5b0083c04e892c013368d215e19642"
-        },
-        deviceInfo: {
-          type: 'mac',
-          value: '1A:2B:3C:4D:5E'
-        }
-      }
-    }
+    // return {
+    //   status: 1,
+    //   value: {
+    //     detailsEvent: {
+    //       kind: 10021,
+    //       id: "298930dc3fbc7d6cd81fa256f75982647a66459870f84df4ab1394c653605b38",
+    //       pubkey: "dcce4729d4b134d5471a2c699dac1387fd769262ba8cbf183317082a6b612b8a",
+    //       created_at: 0,
+    //       tags: [
+    //         ["metric", "milliseconds"], // milliseconds or byte
+    //         ["step_size", "600000"], // 1 minute step size
+    //         ["step_purchase_limits", "1", "0"], // min 1 minute, max infinite minutes
+    //         ["tips", "1", "2", "3", "4"],
+    //         ["price_per_step", "cashu", "210", "sat", "https://mint.domain.net", 1],
+    //         ["price_per_step", "cashu", "210", "sat", "https://other.mint.net", 1],
+    //         ["price_per_step", "cashu", "500", "sat", "https://mint.thirddomain.eu", 3],
+    //       ],
+    //       content: "",
+    //       sig: "0f3aed6edd5725865c863c4c2e4e019f8e81370944d1bb9df702102dec95d1e0141bec2ccca6cbf3f1f73aef2a3b6039bf5b0083c04e892c013368d215e19642"
+    //     },
+    //     deviceInfo: {
+    //       type: 'mac',
+    //       value: '1A:2B:3C:4D:5E'
+    //     }
+    //   }
+    // }
 
     // fetch tollgate details from the backend
     const detailsResponse = await fetch(`${baseUrl}/`);
