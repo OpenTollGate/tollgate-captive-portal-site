@@ -16,11 +16,12 @@ import { fetchTollgateData, getStepSizeValues } from './helpers/tollgate.js'
 // styles and assets
 import './App.scss'
 
-// Import the TollGate logos
+// import the tollgate logos
 import logoWhite from './assets/logo/TollGate_Logo-C-white.png';
 
+// main component
 export const App = () => {
-  const { t } = useTranslation();
+  const { t, ready } = useTranslation();
   const [method, setMethod] = useState('cashu');
   const [tollgateDetails, setTollgateDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,48 +30,50 @@ export const App = () => {
   const [retrying, setRetrying] = useState(false);
   const retryIntervalRef = useRef(null);
 
-  // Initial data fetch on mount
+  // initial data fetch on translation ready
   useEffect(() => {
-    const fetch = async () => {
-      setLoading(true);
-      const response = await fetchTollgateData(t);
+    if (ready) {
+      const fetch = async () => {
+        setLoading(true);
+        const response = await fetchTollgateData(t);
+        
+        if (!response.status) {
+          setRetrying(true);
+          setError(response);
+        } else {
+          setTollgateDetails(response);
+        }
+        
+        setLoading(false);
+      };
       
-      if (!response.status) {
-        setRetrying(true);
-        setError(response);
-      } else {
-        setTollgateDetails(response);
-      }
+      fetch();
       
-      setLoading(false);
-    };
-    
-    fetch();
-    
-    // Cleanup on unmount
-    return () => {
-      if (retryIntervalRef.current) {
-        clearInterval(retryIntervalRef.current);
-      }
-    };
-  }, []);
+      // cleanup on unmount
+      return () => {
+        if (retryIntervalRef.current) {
+          clearInterval(retryIntervalRef.current);
+        }
+      };
+    }
+  }, [ready]);
   
-  // Set up retry mechanism when there's an error
+  // set up retry mechanism when there's an error
   useEffect(() => {
-    // Only set up retry if there's an error and no existing retry interval
+    // only set up retry if there's an error and no existing retry interval
     if (!error || tollgateDetails || retryIntervalRef.current) {
       return;
     }
     
-    console.log('Setting up retry interval for TollGate details');
+    console.log('setting up retry interval for tollgate details');
     setRetrying(true);
     
-    // Set up the retry interval
+    // set up the retry interval
     retryIntervalRef.current = setInterval(async () => {
-      console.log('Retrying to fetch TollGate details...');
+      console.log('retrying to fetch tollgate details...');
       const response = await fetchTollgateData(t);
       
-      // If successful, clear the interval
+      // if successful, clear the interval
       if (response.status) {
         clearInterval(retryIntervalRef.current);
         retryIntervalRef.current = null;
@@ -80,7 +83,7 @@ export const App = () => {
       }
     }, 5000);
     
-    // Cleanup function
+    // cleanup function
     return () => {
       if (retryIntervalRef.current) {
         clearInterval(retryIntervalRef.current);
@@ -89,8 +92,7 @@ export const App = () => {
     };
   }, [error, tollgateDetails]);
 
-  // console.log(tollgateDetails);
-
+  // main render
   return (
     <div id="tollgate-captive-portal" className="tollgate-captive-portal">
       <Background />
@@ -113,6 +115,7 @@ export const App = () => {
                 <Error label={error.label} code={error.code} message={error.message} />
               </div>}
 
+              {/* show cashu or lightning method based on selection */}
               {!loading && !error && method === 'cashu' && <Cashu tollgateDetails={tollgateDetails.value} />}
               {!loading && !error && method === 'lightning' && <Lightning tollgateDetails={tollgateDetails.value} />}
             </div>
@@ -127,6 +130,7 @@ export const App = () => {
   );
 }
 
+// header component showing tollgate logo above container
 const Header = () => {
   const { t } = useTranslation();
 
@@ -135,6 +139,7 @@ const Header = () => {
   </div>
 }
 
+// tab component for the container header
 const Tab = ({ type, method, setMethod }) => {
   const { t } = useTranslation();
 
@@ -149,6 +154,7 @@ const Tab = ({ type, method, setMethod }) => {
   </button>
 }
 
+// loading component shows a spinner
 export const Loading = () => {
   const { t } = useTranslation();
 
@@ -158,6 +164,7 @@ export const Loading = () => {
   </div>
 }
 
+// processing component shows a spinner
 export const Processing = ({ label }) => {
   const { t } = useTranslation();
 
@@ -169,6 +176,7 @@ export const Processing = ({ label }) => {
   </div>
 }
 
+// shows access granted message if payment succeeded
 export const AccessGranted = ({ allocation }) => {
   const { t } = useTranslation();
 
@@ -183,15 +191,18 @@ export const AccessGranted = ({ allocation }) => {
   </div>
 }
 
+// footer component below container
 const Footer = () => {
   return <div className="tollgate-captive-portal-footer">
     <p><Trans i18nKey="powered_by" components={{ 1: <a href="https://tollgate.me/" target="_blank" rel="noreferrer"></a> }} /></p>
   </div>
 }
 
+// mint access options component
 export const AccessOptions = ({ pricingInfo, selectedMint, setSelectedMint }) => {
   const { t } = useTranslation();
   return <>
+    {/* render a button for each available mint option */}
     {pricingInfo.length && pricingInfo.map(mint => {
       if (!mint.price || !mint.url) return null;
       let mintAddressStripped = mint.url.replace('https://', '');

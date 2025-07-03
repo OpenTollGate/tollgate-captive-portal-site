@@ -139,7 +139,8 @@
         font-weight: 600;
       }
 
-      button {
+      button.cta,
+      button.ghost {
         font-size: var(--font-size-small);
         padding: .4rem;
         display: flex;

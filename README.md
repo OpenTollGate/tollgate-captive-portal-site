@@ -2,21 +2,29 @@
 
 ![](tollgate-captive-portal.png)
 
-A captive portal website for [Tollgate](https://tollgate.me) with a light moving background. This portal allows users to paste a Cashu token or pay with BTC Lightning to gain internet access.
+A captive portal website for [Tollgate](https://tollgate.me). This portal allows users to paste a Cashu token or pay with BTC Lightning to gain internet access.
 
 ## Features
 
 - Pay with Cashu Token
 - Pay with BTC Lightning
 
-## Getting Started
+## Contributing
 
-### Prerequisites
+### Internationalization (i18n)
+
+Add a new `[language_code]` to the `supportedLanguages` array in [`./src/helpers/i18n.js`](./src/helpers/i18n.js)
+
+Create `[language_code].json` file in [`./public/locales/`](./public/locales/) folder and follow the structure of [`./public/locales/en.json`](./public/locales/en.json).
+
+---
+
+### Development
 
 - Node.js (v22.17.0 or later)
 - npm (v10.9.2 or later)
 
-### Installation
+#### Installation
 
 1. Clone the repository
 ```bash
@@ -29,92 +37,83 @@ cd tollgate-captive-portal-site
 npm install
 ```
 
-3. Start the development server (Vite)
+3. Start the development server
 ```bash
 npm run dev
 ```
 
-The application will be available at http://localhost:5173 (or the port shown in your terminal).
-
-### Production Build
-
-To create a production build:
-
-```bash
-npm run build
-```
-
-To preview the production build locally:
-
-```bash
-npm run preview
-```
-
-The build files will be generated in the `dist` directory.
-
-#### Rename Output HTML (Optional)
-
-To rename the output `index.html` to `splash.html` in the `dist` directory (for captive portal compatibility):
-
-```bash
-npm run rename-html
-```
-
-## How It Works
-
-1. The user is presented with a captive portal screen when they try to access the internet
-2. The user pastes their Cashu token into the input field
-3. The token value is displayed to the user
-4. The user clicks the "Send Token" button
-5. The token is sent to a Nostr relay at 192.168.1.1:3334 as a kind 21000 event
-6. If successful, the user is granted internet access
-
-## Configuration
+#### Configuration
 
 To configure the Nostr relay address and other settings, modify the relevant variables in the [`tollgate.js`](./src/helpers/tollgate.js) file.
 
-## Internationalization (i18n)
+The hardcoded mock data (used for development) should be updated regularly to match the latest [TollGate protocol tip01 example](https://github.com/OpenTollGate/tollgate/blob/main/protocol/01.md). This ensures development and testing reflect the current protocol.
 
-This project uses [i18next](https://www.i18next.com/) and [react-i18next](https://react.i18next.com/) for internationalization support.
+---
 
-- **Supported languages** are managed in [`src/helpers/i18n.js`](./src/helpers/i18n.js) via the `supportedLanguages` array.
-- **Translation files** are located in the [`public/locales/`](./public/locales/) directory. Each language has its own JSON file (e.g., `en.json`).
-- **Language detection** is automatic, using the browser's language settings. The default fallback language is English (`en`).
-- **Adding a new language:**
-  1. Add the language code (e.g., `de` for German) to the `supportedLanguages` array in `i18n.js`.
-  2. Create a new translation file in `public/locales/` (e.g., `de.json`) following the structure of `en.json`.
+### Error Codes
 
-## Error Codes
+#### TollGate Error Codes
 
-#### Tollgate Error Codes 
-
-[`src/helpers/tollgate.js`](src/helpers/tollgate.js)
-
-| Code   | Label                              | Meaning                                                                 |
-|--------|------------------------------------|-------------------------------------------------------------------------|
-| `TG01` | Failed to fetch TollGate details   | The request to fetch TollGate details failed (non-OK HTTP response).    |
-| `TG02` | Failed to fetch device info        | The request to fetch device info (MAC address) failed (non-OK HTTP response). |
-| `TG03` | Could not fetch TollGate information | TollGate could not connect to its relay. Contact the network administrator or try again later. |
-| `TG04` | Pricing Error                      | Could not get TollGate pricing information.                             |
+| Code   | Use-Case Description |
+|--------|---------------------|
+| `TG001` | Triggered when the app fails to fetch TollGate details from the backend (e.g., network/server error on the main details endpoint). |
+| `TG002` | Triggered when the app fails to fetch device information (such as MAC address) from the backend. |
+| `TG003` | Triggered when there is a general error fetching TollGate data, such as a network failure or the relay is unreachable. |
+| `TG004` | Triggered when the app cannot extract or parse pricing information from the TollGate details event (e.g., missing or malformed pricing tags). |
 
 #### Cashu Error Codes
 
-[`src/helpers/cashu.js`](src/helpers/cashu.js)
+| Code   | Use-Case Description |
+|--------|---------------------|
+| `CU001` | Triggered when no valid access options are available for the user (e.g., no valid mints or pricing options found in the TollGate event). |
+| `CU002` | Triggered when the provided Cashu token does not contain enough funds for the selected mint or access option. |
+| `CU100` | Triggered when the user submits an empty or missing token. |
+| `CU101` | Triggered when the provided token does not start with "cashu" (invalid format). |
+| `CU102` | Triggered when the token cannot be decoded (malformed or corrupted token). |
+| `CU103` | Triggered when the token is decoded but contains no proofs (i.e., no spendable value). |
+| `CU104` | Triggered when there is a general error during token validation or decoding (unexpected error). |
+| `CU105` | Triggered when the app fails to generate cryptographic keys needed to sign the payment event (client-side cryptography error). |
+| `CU106` | Triggered when the backend (TollGate) rejects the token with a 402 (payment required) response, meaning the token was not accepted. |
+| `CU107` | Triggered when the backend returns a general server error (not 402) during token submission. |
+| `CU108` | Triggered when there is a client-side error sending the token to the backend (e.g., network failure or unexpected error during submission). |
 
-| Code   | Label                  | Meaning                                              |
-|--------|------------------------|------------------------------------------------------|
-| `CU01` | No access options available | Could not parse TollGate access options.             |
-| `CU02` | Token missing          | No token was provided.                               |
-| `CU03` | Invalid token format   | The provided token does not start with "cashu".      |
-| `CU04` | Invalid Cashu Token    | The token could not be decoded.                      |
-| `CU05` | Token proofs missing   | Token was successfully decoded but no proofs were found. |
-| `CU06` | Token validation error | An error occurred during token validation/decoding.   |
-| `CU07` | Payment failed         | Failed to generate keys to sign the payment event.    |
-| `CU08` | Payment failed         | Your token was not accepted (HTTP 402).              |
-| `CU09` | Payment failed         | Server error. Reload the page and try again.          |
-| `CU10` | Payment failed         | Error sending token. Reload the page and try again.   |
-| `CU11` | Not enough funds         | This token does not provide enough funds for the selected Mint.   |
+#### Lightning Error Codes
 
-## License
+| Code   | Use-Case Description |
+|--------|---------------------|
+| `LN001` | Triggered when no valid access options are available for Lightning payments (e.g., no valid mints or pricing options found). |
+| `LN002` | Triggered when the user-specified amount is not enough to purchase access from the selected mint. |
+
+#### Clipboard Error Codes
+
+| Code   | Use-Case Description |
+|--------|---------------------|
+| `CB001` | Triggered when the browser denies permission to read from the clipboard (user did not grant access). |
+| `CB002` | Triggered when reading from the clipboard fails for any other reason (e.g., clipboard is empty, or an unexpected error occurs). |
+
+#### QR Code Error Codes
+
+| Code   | Use-Case Description |
+|--------|---------------------|
+| `QR001` | Triggered when the browser denies permission to access the camera for QR scanning. |
+| `QR002` | Triggered when the app fails to read a QR code from the camera (e.g., camera error, no QR code detected, or scan interrupted). |
+| `QR003` | Triggered when the user uploads an image but no QR code is found in the selected image. |
+| `QR004` | Triggered when there is a general camera error (e.g., no camera present, or the page does not have permission to use it). |
+
+---
+
+### Discussion Topics
+
+- [ ] **Handle exotic units in access options sorting**  
+  The code currently sorts access options by price per step, assuming all units are directly comparable (e.g., all in 'sat'). If a new or exotic unit appears (not 'sat'), the comparison may be invalid. Logic should be added to handle and compare different units safely.
+
+- [ ] **Check if token unit matches mint unit**  
+  When validating a Cashu token, the code should verify that the unit of the token matches the unit expected by the selected mint (e.g., both are 'sat'). If they do not match, the user should be shown an appropriate error.
+
+- [ ] **Status and open questions for Lightning implementation**  
+  The Lightning payment flow currently uses a placeholder invoice is not fully integrated. What are the next steps for a production-ready Lightning integration?
+
+### License
 
 This project is licensed under the GPLv3 License.
+

@@ -20,9 +20,11 @@ import { copyTextToClipboard } from '../helpers/clipboard';
 // styles and assets
 import './Lightning.scss'
 
+// main component for handling lightning payments
 export const Lightning = (props) => {
   const { t } = useTranslation();
   const { tollgateDetails } = props;
+  // state for payment flow and user input
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
@@ -41,9 +43,9 @@ export const Lightning = (props) => {
     } else {
       setError({
         status: 0,
-        code: 'CU01',
-        label: 'No access options available',
-        message: 'Could not parse TollGate access options.'
+        code: 'LN001',
+        label: t('LN001_label'),
+        message: t('LN001_message')
       })
     }
   }, [tollgateDetails])
@@ -55,9 +57,9 @@ export const Lightning = (props) => {
       if (unitAmount < selectedMint.price) {
         setError({
           status: 0,
-          code: 'LN04',
-          label: 'Not enough funds',
-          message: 'The specified amount  does not provide enough funds for the selected mint.'
+          code: 'LN002',
+          label: t('LN002_label'),
+          message: t('LN002_message')
         })
       } else {
         setError(null)
@@ -98,13 +100,17 @@ export const Lightning = (props) => {
     }, [processing])
   
   return <div className="tollgate-captive-portal-method-lightning tollgate-captive-portal-method">
+      {/* header: shows the portal title and a short description about lightning */}
       {((!success && !processing) || (invoice && !success)) && <Header />}
 
       <div className="tollgate-captive-portal-method-content">
+        {/* processing: displays a loading indicator and message while invoice is being requested */}
         {(!success && processing) && <Processing label={t('processing_invoice_request')} />}
 
+        {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
         {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
+        {/* unitinput: input field for entering the amount to pay, and selecting access option */}
         {(!success && !processing && accessOptions.length && !invoice) && <UnitInput 
           pricingInfo={accessOptions} 
           selectedMint={selectedMint}
@@ -112,8 +118,10 @@ export const Lightning = (props) => {
           setUnitAmount={setUnitAmount}
         />}
 
+        {/* error: shows error messages for invalid input or other issues */}
         {error && <Error label={error.label} code={error.code} message={error.message} />}
 
+        {/* accessoptions: lets the user select from available access/pricing options */}
         {(!success && !processing && accessOptions.length && !invoice) && <div className="tollgate-captive-portal-method-options">
           <h5>{t('access_options')}</h5>
           <AccessOptions 
@@ -123,6 +131,7 @@ export const Lightning = (props) => {
           />
         </div>}
 
+        {/* invoice: shows the lightning invoice as a qr code and provides copy/open actions */}
         {!success && !processing && invoice && <div className="tollgate-captive-portal-method-invoice">
           <div className="tollgate-captive-portal-method-invoice-header">
             <span dangerouslySetInnerHTML={{
@@ -160,6 +169,7 @@ export const Lightning = (props) => {
           </div>
         </div>}
 
+        {/* purchase button: only enabled if amount is valid and no error */}
         {!success && !processing && !invoice && <div className="tollgate-captive-portal-method-submit">
           {(!unitAmount || error) && <button disabled>{t('purchase')}</button>}
           {(allocation && !processing && !error) && (() => {
@@ -181,12 +191,15 @@ export const Lightning = (props) => {
       </div>
       
       <div className="tollgate-captive-portal-method-footer">
+        {/* deviceinfo: shows device and network details for the user */}
         <DeviceInfo tollgateDetails={tollgateDetails} />
+        {/* languageswitcher: allows the user to change the ui language */}
         <LanguageSwitcher />
       </div>
   </div>;
 }
 
+// lightning header component
 const Header = () => {
   const { t } = useTranslation();
   return <div className="tollgate-captive-portal-method-header">
@@ -195,9 +208,11 @@ const Header = () => {
   </div>
 }
 
+// lightning unit input component for entering the amount to pay
 const UnitInput = ({pricingInfo, selectedMint, unitAmount, setUnitAmount}) => {
   const { t } = useTranslation();
   return <div className="tollgate-captive-portal-method-input">
+    {/* input for entering the amount to pay in the selected unit */}
     <input 
       value={unitAmount} 
       placeholder={t('lightning_input_placeholder')} 
@@ -223,9 +238,11 @@ const UnitInput = ({pricingInfo, selectedMint, unitAmount, setUnitAmount}) => {
       }}
     ></input>
     <div className="tollgate-captive-portal-method-input-actions">
+      {/* button to decrease the amount by the minimum price */}
       <button className="small cta ghost" disabled={unitAmount - selectedMint.price < selectedMint.price} onClick={() => {
         setUnitAmount(unitAmount - selectedMint.price)
       }}>–</button>
+      {/* button to increase the amount by the minimum price */}
       <button className="small cta ghost" onClick={() => {
         setUnitAmount(unitAmount + selectedMint.price)
       }}>+</button>
