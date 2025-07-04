@@ -1,18 +1,18 @@
 // external
-import { getDecodedToken } from '@cashu/cashu-ts';
-import { getPublicKey, getEventHash, getSignature } from 'nostr-tools';
+import { getDecodedToken } from "@cashu/cashu-ts";
+import { getPublicKey, getEventHash, getSignature } from "nostr-tools";
 
 // helpers
-import { getTollgateBaseUrl } from './tollgate'
+import { getTollgateBaseUrl } from "./tollgate";
 
 // safely extract proofs from a decoded token, handling different possible token formats
 export const extractProofsFromToken = (decodedToken) => {
   const proofs = [];
-  
+
   try {
     // handle token array format
     if (decodedToken.token && Array.isArray(decodedToken.token)) {
-      decodedToken.token.forEach(t => {
+      decodedToken.token.forEach((t) => {
         if (t.proofs && Array.isArray(t.proofs)) {
           proofs.push(...t.proofs);
         }
@@ -28,7 +28,7 @@ export const extractProofsFromToken = (decodedToken) => {
     }
     // handle token with tokens array
     else if (decodedToken.tokens && Array.isArray(decodedToken.tokens)) {
-      decodedToken.tokens.forEach(t => {
+      decodedToken.tokens.forEach((t) => {
         if (t.proofs && Array.isArray(t.proofs)) {
           proofs.push(...t.proofs);
         }
@@ -36,32 +36,32 @@ export const extractProofsFromToken = (decodedToken) => {
     }
   } catch (error) {
     // log and ignore extraction errors
-    console.error('error extracting proofs:', error);
+    console.error("error extracting proofs:", error);
   }
-  
+
   return proofs;
 };
 
 // validate a cashu token: check format, decode, extract proofs, and sum value
-export const validateToken = (token = '', mint, i18n) => {
+export const validateToken = (token = "", mint, i18n) => {
   try {
     // check for empty or non-string token
-    if ('string' !== typeof token || !token.trim()) {
+    if ("string" !== typeof token || !token.trim()) {
       return {
         status: 0,
-        code: 'CU100',
-        label: i18n('CU100_label'),
-        message: i18n('CU100_message')
+        code: "CU100",
+        label: i18n("CU100_label"),
+        message: i18n("CU100_message"),
       };
     }
 
     // basic validation - cashu tokens should start with "cashu"
-    if (!token.trim().startsWith('cashu')) {
+    if (!token.trim().startsWith("cashu")) {
       return {
         status: 0,
-        code: 'CU101',
-        label: i18n('CU101_label'),
-        message: i18n('CU101_message')
+        code: "CU101",
+        label: i18n("CU101_label"),
+        message: i18n("CU101_message"),
       };
     }
 
@@ -72,17 +72,17 @@ export const validateToken = (token = '', mint, i18n) => {
       if (!decodedToken) {
         return {
           status: 0,
-          code: 'CU102',
-          label: i18n('CU102_label'),
-          message: i18n('CU102_message')
+          code: "CU102",
+          label: i18n("CU102_label"),
+          message: i18n("CU102_message"),
         };
       }
-    } catch(err) {
+    } catch (err) {
       return {
         status: 0,
-        code: 'CU102',
-        label: i18n('CU102_label'),
-        message: i18n('CU102_message')
+        code: "CU102",
+        label: i18n("CU102_label"),
+        message: i18n("CU102_message"),
       };
     }
 
@@ -91,9 +91,9 @@ export const validateToken = (token = '', mint, i18n) => {
     if (!proofs || proofs.length === 0) {
       return {
         status: 0,
-        code: 'CU103',
-        label: i18n('CU103_label'),
-        message: i18n('CU103_message')
+        code: "CU103",
+        label: i18n("CU103_label"),
+        message: i18n("CU103_message"),
       };
     }
 
@@ -113,17 +113,17 @@ export const validateToken = (token = '', mint, i18n) => {
         hasProofs: true,
         amount: totalAmount,
         proofCount: proofs.length,
-        unit: 'sat'
-      }
+        unit: "sat",
+      },
     };
   } catch (error) {
     // catch and report unexpected errors
-    console.error('error decoding token:', error);
+    console.error("error decoding token:", error);
     return {
       status: 0,
-      code: 'CU104',
-      label: i18n('CU104_label'),
-      message: i18n('CU104_message') 
+      code: "CU104",
+      label: i18n("CU104_label"),
+      message: i18n("CU104_message"),
     };
   }
 };
@@ -136,24 +136,24 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
     // generate a random private key for signing
     const privateKeyBytes = window.crypto.getRandomValues(new Uint8Array(32));
     const privateKeyHex = Array.from(privateKeyBytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
     // generate the pubkey from private key using nostr-tools
     let pubkey;
     try {
       pubkey = getPublicKey(privateKeyHex);
     } catch (error) {
       // failed to generate pubkey
-      console.error('error getting public key:', error);
+      console.error("error getting public key:", error);
       return {
         status: 0,
-        code: 'CU105',
-        label: i18n('CU105_label'),
-        message: i18n('CU105_message')
+        code: "CU105",
+        label: i18n("CU105_label"),
+        message: i18n("CU105_message"),
       };
     }
-    
+
     // create the nostr event according to tip-01 spec
     const unsignedEvent = {
       kind: 21000,
@@ -162,54 +162,58 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
       created_at: Math.floor(Date.now() / 1000),
       tags: [
         ["p", tollgatePubkey],
-        ["device-identifier", tollgateDetails.deviceInfo.type, tollgateDetails.deviceInfo.value],
+        [
+          "device-identifier",
+          tollgateDetails.deviceInfo.type,
+          tollgateDetails.deviceInfo.value,
+        ],
         ["payment", token],
       ],
     };
-    
+
     // calculate the event hash (id)
     const id = getEventHash(unsignedEvent);
-    
+
     // sign the event using signEvent, which is still available
     const sig = getSignature(unsignedEvent, privateKeyHex);
-    
+
     // create a clean event object for sending
     const event = {
       ...unsignedEvent,
       id,
-      sig
+      sig,
     };
-    
-    console.log('sending signed event:', event);
+
+    console.log("sending signed event:", event);
 
     // send the event to the tollgate server
     const baseUrl = getTollgateBaseUrl();
     const response = await fetch(`${baseUrl}/`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(event),
     });
-    
+
     if (!response.ok) {
       if (response.status === 402) {
         // payment required: token was not accepted
-        console.error('error processing token:', response);
+        console.error("error processing token:", response);
         return {
           status: 0,
-          code: 'CU106',
-          label: i18n('CU106_label'),
-          message: i18n('CU106_message')
+          code: "CU106",
+          label: i18n("CU106_label"),
+          message: i18n("CU106_message"),
         };
       } else {
         // other server error
-        console.error('server error:', response);
+        console.error("server error:", response);
         return {
           status: 0,
-          code: 'CU107',
-          label: i18n('CU107_label'),
-          message: i18n('CU107_message')
+          code: "CU107",
+          label: i18n("CU107_label"),
+          message: i18n("CU107_message"),
         };
       }
     }
@@ -217,17 +221,17 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
     // payment was successful
     return {
       status: 1,
-      label: i18n('access_granted_title'),
-      message: i18n('access_granted_subtitle', { purchased: allocation })
+      label: i18n("access_granted_title"),
+      message: i18n("access_granted_subtitle", { purchased: allocation }),
     };
   } catch (error) {
     // catch and report unexpected errors
-    console.error('error sending token:', error);
+    console.error("error sending token:", error);
     return {
       status: 0,
-      code: 'CU108',
-      label: i18n('CU108_label'),
-      message: i18n('CU108_message')
+      code: "CU108",
+      label: i18n("CU108_label"),
+      message: i18n("CU108_message"),
     };
   }
-}
+};

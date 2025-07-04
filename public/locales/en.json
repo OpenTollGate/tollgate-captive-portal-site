@@ -10,7 +10,7 @@
   "tab_aria_label": "Tab Navigation",
   "cashu_tab": "🥜 Cashu",
   "lightning_tab": "⚡️ Lightning",
-  
+
   "loading": "Loading",
   "cancel": "Cancel",
   "paste": "Paste",
@@ -43,7 +43,7 @@
 
   "provide_lightning": "Pay with <1>BTC Lightning</1> to access the internet.",
   "provide_cashu": "Pay with <1>Cashu</1> to access the internet.",
-  
+
   "cashu_input_placeholder": "cashuxyz…",
   "lightning_input_placeholder": "Enter amount…",
   "lightning_open_wallet": "Open Wallet",
@@ -57,10 +57,10 @@
   "generate_invoice": "Generate Invoice",
   "mint_pricing_info_unavailable": "Pricing information not available",
   "mint_pricing": "{{price}} / {{unit}}",
-  
+
   "access_granted_title": "Payment successful!",
   "access_granted_subtitle": "You now have {{purchased}} of internet access. This window should close automatically. If it does not, you can safely leave this page.",
-  
+
   "TG001_label": "Failed to fetch TollGate details",
   "TG001_message": "Could not fetch TollGate details.",
   "TG002_label": "Failed to fetch device information",
@@ -112,4 +112,4 @@
   "QR003_message": "No QR code found in the selected image.",
   "QR004_label": "Camera error",
   "QR004_message": "Please make sure you have a camera and that this page has permission to use it."
-} 
+}

@@ -1,11 +1,11 @@
 // import i18next core and react integration
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
-import HttpBackend from 'i18next-http-backend';
-import LanguageDetector from 'i18next-browser-languagedetector';
+import i18n from "i18next";
+import { initReactI18next } from "react-i18next";
+import HttpBackend from "i18next-http-backend";
+import LanguageDetector from "i18next-browser-languagedetector";
 
 // list of supported languages for the app
-export const supportedLanguages = ['en']; // add more as needed
+export const supportedLanguages = ["en"]; // add more as needed
 
 // utility function to get available languages
 export function getAvailableLanguages() {
@@ -23,12 +23,12 @@ i18n
   .use(initReactI18next)
   .init({
     // fallback language if user's language is not available
-    fallbackLng: 'en',
+    fallbackLng: "en",
     // list of supported languages
     supportedLngs: supportedLanguages,
     // backend config: where to load translation files from
     backend: {
-      loadPath: '/locales/{{lng}}.json',
+      loadPath: "/locales/{{lng}}.json",
     },
     // interpolation config: don't escape values (react does it)
     interpolation: {
@@ -41,4 +41,4 @@ i18n
   });
 
 // export the configured i18n instance
-export default i18n; 
+export default i18n;

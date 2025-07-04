@@ -6,7 +6,7 @@ import './Status.scss'
 
 // error message component for displaying error notifications to the user
 export const Error = (props) => {
-  const {label, code, message} = props;
+  const { label, code, message } = props;
 
   return <div className="status error">
     <div className="status-header">
@@ -27,7 +27,7 @@ export const Error = (props) => {
 
 // success message component for displaying success notifications to the user
 export const Success = (props) => {
-  const {label, info, message} = props;
+  const { label, info, message } = props;
 
   return <div className="status success">
     <div className="status-header">
@@ -41,7 +41,7 @@ export const Success = (props) => {
     </div>
     {/* optional success message content, can include html */}
     {message && <div className="status-content">
-      <p className="status-message" dangerouslySetInnerHTML={{__html:message}}></p>
+      <p className="status-message" dangerouslySetInnerHTML={{ __html: message }}></p>
     </div>}
   </div>
 }

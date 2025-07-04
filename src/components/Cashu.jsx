@@ -140,8 +140,8 @@ export const Cashu = (props) => {
         {(!success && !processing && accessOptions.length) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
 
         {/* success: displays a message when a valid cashu token is detected, before purchase */}
-        {(!success && !processing && tokenValue) && <Success 
-          label={t('valid_cashu_token')} 
+        {(!success && !processing && tokenValue) && <Success
+          label={t('valid_cashu_token')}
           info={tokenValue.amount !== 1 ? t('sat_plural', { count: tokenValue.amount }) : t('sat', { count: tokenValue.amount })}
           message={t('valid_cashu_token_message', { purchased: `${allocation.value} ${allocation.unit}` })}
         />}
@@ -152,9 +152,9 @@ export const Cashu = (props) => {
         {/* accessoptions: lets the user select from available access/pricing options */}
         {(!success && !processing && accessOptions.length) && <div className="tollgate-captive-portal-method-options">
           <h5>{t('access_options')}</h5>
-          <AccessOptions 
-            pricingInfo={accessOptions} 
-            selectedMint={selectedMint} 
+          <AccessOptions
+            pricingInfo={accessOptions}
+            selectedMint={selectedMint}
             setSelectedMint={setSelectedMint}
           />
         </div>}
@@ -163,16 +163,16 @@ export const Cashu = (props) => {
         {!success && !processing && <div className="tollgate-captive-portal-method-submit">
           {(!tokenValue || error) && <button disabled>{t('purchase')}</button>}
           {(tokenValue && !processing && !error) && (() => {
-            return <button 
-              className="cta" 
+            return <button
+              className="cta"
               dangerouslySetInnerHTML={{
-              __html: 
-                selectedMint ? 
-                t('purchase_filled', { 
-                  price: `<strong>${tokenValue.amount} ${tokenValue.unit}</strong>`, 
-                  unit: `<strong>${allocation.value} ${allocation.unit}</strong>`
-                }) : 
-                t('purchase')
+                __html:
+                  selectedMint ?
+                    t('purchase_filled', {
+                      price: `<strong>${tokenValue.amount} ${tokenValue.unit}</strong>`,
+                      unit: `<strong>${allocation.value} ${allocation.unit}</strong>`
+                    }) :
+                    t('purchase')
               }}
               onClick={() => setProcessing(true)} />
           })()}
@@ -202,11 +202,11 @@ const TokenInput = ({ token, setToken, scanning, setScanning, setError }) => {
   const { t } = useTranslation();
   return (
     <div className="tollgate-captive-portal-method-input">
-      <input 
-        value={token} 
-        placeholder={t('cashu_input_placeholder')} 
-        type="text" 
-        id="cashu-token" 
+      <input
+        value={token}
+        placeholder={t('cashu_input_placeholder')}
+        type="text"
+        id="cashu-token"
         onChange={(e) => setToken(e.target.value)}
       ></input>
       <div className="tollgate-captive-portal-method-input-actions">
@@ -214,12 +214,12 @@ const TokenInput = ({ token, setToken, scanning, setScanning, setError }) => {
           {/* reset button to clear the input */}
           <button className="small cancel" onClick={() => {
             setToken('')
-          }}><CancelIcon/></button>
+          }}><CancelIcon /></button>
         </> : <>
           {/* paste from clipboard button */}
           <button className="ghost cta small ellipsis" onClick={async (input) => {
             const paste = await requestPaste(t);
-            if(paste.status) {
+            if (paste.status) {
               setToken(paste.value)
             } else {
               setError(paste)
@@ -230,7 +230,7 @@ const TokenInput = ({ token, setToken, scanning, setScanning, setError }) => {
             if (scanning) return;
             setScanning(true);
             const response = await requestScanQr(t);
-            if(response.status) {
+            if (response.status) {
               setToken(response.value)
             } else {
               // check the code as we can receive 0 which means no error needed

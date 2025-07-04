@@ -36,19 +36,19 @@ export const App = () => {
       const fetch = async () => {
         setLoading(true);
         const response = await fetchTollgateData(t);
-        
+
         if (!response.status) {
           setRetrying(true);
           setError(response);
         } else {
           setTollgateDetails(response);
         }
-        
+
         setLoading(false);
       };
-      
+
       fetch();
-      
+
       // cleanup on unmount
       return () => {
         if (retryIntervalRef.current) {
@@ -57,22 +57,22 @@ export const App = () => {
       };
     }
   }, [ready]);
-  
+
   // set up retry mechanism when there's an error
   useEffect(() => {
     // only set up retry if there's an error and no existing retry interval
     if (!error || tollgateDetails || retryIntervalRef.current) {
       return;
     }
-    
+
     console.log('setting up retry interval for tollgate details');
     setRetrying(true);
-    
+
     // set up the retry interval
     retryIntervalRef.current = setInterval(async () => {
       console.log('retrying to fetch tollgate details...');
       const response = await fetchTollgateData(t);
-      
+
       // if successful, clear the interval
       if (response.status) {
         clearInterval(retryIntervalRef.current);
@@ -82,7 +82,7 @@ export const App = () => {
         setError(false);
       }
     }, 5000);
-    
+
     // cleanup function
     return () => {
       if (retryIntervalRef.current) {
@@ -143,11 +143,11 @@ const Header = () => {
 const Tab = ({ type, method, setMethod }) => {
   const { t } = useTranslation();
 
-  return <button 
+  return <button
     onClick={() => setMethod(type)}
     data-active={method === type}
-    className={`tollgate-captive-portal-tabs-tab tollgate-captive-portal-tabs-tab-${type} ellipsis`} 
-    label={t(`${type}_tab`)} 
+    className={`tollgate-captive-portal-tabs-tab tollgate-captive-portal-tabs-tab-${type} ellipsis`}
+    label={t(`${type}_tab`)}
     id={`tab-${type}`}
     aria-controls={`tab-${type}`}>
     {t(`${type}_tab`)}
@@ -186,7 +186,7 @@ export const AccessGranted = ({ allocation }) => {
     </div>
     <div className="tollgate-captive-portal-access-granted-label">
       <h2>{t('access_granted_title')}</h2>
-      <p dangerouslySetInnerHTML={{__html: t('access_granted_subtitle', { purchased: `<strong>${allocation}</strong>` })}}></p>
+      <p dangerouslySetInnerHTML={{ __html: t('access_granted_subtitle', { purchased: `<strong>${allocation}</strong>` }) }}></p>
     </div>
   </div>
 }
@@ -213,8 +213,8 @@ export const AccessOptions = ({ pricingInfo, selectedMint, setSelectedMint }) =>
       const pricePerStep = mint.price / (mint.min_steps || 1);
       let mintPriceFormatted = `${pricePerStep.toFixed((pricePerStep % 1 !== 0) ? 2 : 0)} ${mint.unit} / ${formattedStepSize}`;
 
-      return <button 
-        key={mintAddressStripped} 
+      return <button
+        key={mintAddressStripped}
         className={classNames('ghost', 'ellipsis', { 'cta active': mint.url === selectedMint.url })}
         onClick={() => {
           setSelectedMint(mint);

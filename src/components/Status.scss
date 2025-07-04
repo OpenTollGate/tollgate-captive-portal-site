@@ -4,13 +4,13 @@
 **/
 
 .status {
-  border-width: .2rem;
+  border-width: 0.2rem;
   border-style: solid;
   border-radius: 6px;
-  padding: .8rem;
+  padding: 0.8rem;
   display: flex;
   flex-direction: column;
-  gap: .6rem;
+  gap: 0.6rem;
 
   &.error {
     background: var(--color-red-transparent);
@@ -27,15 +27,15 @@
   &-header {
     display: flex;
     justify-content: space-between;
-    gap: .6rem;
+    gap: 0.6rem;
     font-weight: 600;
   }
 
   &-content {
-    padding-top: .6rem;
+    padding-top: 0.6rem;
     border-top-color: var(--color-white);
     border-top-style: solid;
-    border-top-width: .2rem;
+    border-top-width: 0.2rem;
     font-size: var(--font-size-small);
   }
 
@@ -43,10 +43,10 @@
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    gap: .4em;
+    gap: 0.4em;
 
     .icon {
-      margin-top: .175em;
+      margin-top: 0.175em;
     }
   }
 }
