@@ -113,6 +113,9 @@ The hardcoded mock data (used for development) should be updated regularly to ma
 - [ ] **Status and open questions for Lightning implementation**  
   The Lightning payment flow currently uses a placeholder invoice is not fully integrated. What are the next steps for a production-ready Lightning integration?
 
+- [ ] **Captive portals may restrict camera or clipboard permissions**  
+  Captive portals often run in restricted network environments, which may prevent browsers from granting camera or clipboard permissions—even if the portal is served over HTTPS. How should the app handle or communicate these limitations to users, and what are possible workarounds or fallback strategies?
+
 ### License
 
 This project is licensed under the GPLv3 License.
