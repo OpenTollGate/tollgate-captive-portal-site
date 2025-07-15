@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@cashu/cashu-ts": "^2.2.2",
+    "ajv": "^6.12.6",
+    "nostr-tools": "^1.17.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "nostr-tools": "^1.17.0",
-    "@cashu/cashu-ts": "^2.2.2",
     "styled-components": "^6.1.0"
   },
   "scripts": {
@@ -35,4 +36,4 @@
       "last 1 safari version"
     ]
   }
-} 
+}

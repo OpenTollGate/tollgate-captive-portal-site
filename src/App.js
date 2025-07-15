@@ -128,6 +128,7 @@ function App() {
       }
       
       const detailsEvent = await detailsResponse.json();
+      console.log('Tollgate Details Event:', detailsEvent); // Debug log
       setTollgateDetails(detailsEvent);
       
       // Fetch device MAC address
@@ -247,15 +248,20 @@ function App() {
     const pricePerStep = tollgateDetails.tags.find(tag => tag[0] === 'price_per_step');
     const mints = tollgateDetails.tags.filter(tag => tag[0] === 'mint').map(mint => mint[1]);
     
-    if (!metric || !stepSize || !pricePerStep || !mints) return null;
+    if (!metric || !stepSize || !pricePerStep || !mints) {
+      console.log('Missing pricing tags:', { metric, stepSize, pricePerStep, mints }); // Debug log
+      return null;
+    }
     
-    return {
+    const pricingInfo = {
       metric: metric[1],
       stepSize: Number(stepSize[1]),
       price: Number(pricePerStep[1]),
       unit: pricePerStep[2],
       mints: mints
     };
+    console.log('Parsed Pricing Info:', pricingInfo); // Debug log
+    return pricingInfo;
   };
   
   // Update the pricing format to be more digestible
@@ -264,6 +270,7 @@ function App() {
     if (!pricing) return 'Pricing information not available';
     
     // Calculate rate based on step_size and price
+    console.log('Pricing.price before parseFloat:', pricing.price); // Debug log
     const stepSizeValue = parseFloat(pricing.stepSize);
     const priceValue = parseFloat(pricing.price);
     
