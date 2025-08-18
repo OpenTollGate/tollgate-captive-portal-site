@@ -248,16 +248,37 @@ function App() {
     const pricePerStep = tollgateDetails.tags.find(tag => tag[0] === 'price_per_step');
     const mints = tollgateDetails.tags.filter(tag => tag[0] === 'mint').map(mint => mint[1]);
     
-    if (!metric || !stepSize || !pricePerStep || !mints) {
+    if (!metric || !stepSize || !pricePerStep || !mints.length) {
       console.log('Missing pricing tags:', { metric, stepSize, pricePerStep, mints }); // Debug log
       return null;
     }
     
+    // Safely extract values with validation
+    const metricValue = metric[1];
+    const stepSizeValue = stepSize[1];
+    const priceValue = pricePerStep[1];
+    const unitValue = pricePerStep[2];
+    
+    // Validate that we have all required values
+    if (!metricValue || stepSizeValue === undefined || priceValue === undefined) {
+      console.log('Invalid pricing tag values:', { metricValue, stepSizeValue, priceValue, unitValue });
+      return null;
+    }
+    
+    // Convert to numbers and validate they're not NaN
+    const stepSizeNum = Number(stepSizeValue);
+    const priceNum = Number(priceValue);
+    
+    if (isNaN(stepSizeNum) || isNaN(priceNum)) {
+      console.log('Invalid numeric values in pricing tags:', { stepSizeValue, priceValue, stepSizeNum, priceNum });
+      return null;
+    }
+    
     const pricingInfo = {
-      metric: metric[1],
-      stepSize: Number(stepSize[1]),
-      price: Number(pricePerStep[1]),
-      unit: pricePerStep[2],
+      metric: metricValue,
+      stepSize: stepSizeNum,
+      price: priceNum,
+      unit: unitValue || 'sats', // Default unit if not provided
       mints: mints
     };
     console.log('Parsed Pricing Info:', pricingInfo); // Debug log
@@ -269,10 +290,16 @@ function App() {
     const pricing = getPricingInfo();
     if (!pricing) return 'Pricing information not available';
     
+    // Additional safety check - pricing should already be validated, but double-check
+    if (isNaN(pricing.stepSize) || isNaN(pricing.price) || pricing.stepSize <= 0 || pricing.price <= 0) {
+      console.warn('Invalid pricing values detected:', pricing);
+      return 'Pricing information not available';
+    }
+    
     // Calculate rate based on step_size and price
     console.log('Pricing.price before parseFloat:', pricing.price); // Debug log
-    const stepSizeValue = parseFloat(pricing.stepSize);
-    const priceValue = parseFloat(pricing.price);
+    const stepSizeValue = pricing.stepSize; // Already validated as number
+    const priceValue = pricing.price; // Already validated as number
     
     if (pricing.metric.toLowerCase() === 'milliseconds') {
       // Convert milliseconds to minutes for more user-friendly display
@@ -291,6 +318,9 @@ function App() {
       const formattedSize = formatDataSize(stepSizeValue);
       return `${formattedSize.value} ${formattedSize.unit} for ${priceValue} sats`;
     }
+    
+    // Fallback for unknown metrics
+    return `${priceValue} ${pricing.unit || 'sats'} per ${stepSizeValue} ${pricing.metric}`;
   };
 
   // Helper function to calculate purchased allocation
@@ -305,9 +335,26 @@ function App() {
       return null;
     }
     
+    // Additional safety checks for numeric values
+    if (isNaN(tokenValue.amount) || isNaN(pricing.price) || isNaN(pricing.stepSize) ||
+        tokenValue.amount <= 0 || pricing.price <= 0 || pricing.stepSize <= 0) {
+      console.warn('Invalid values for allocation calculation:', {
+        tokenAmount: tokenValue.amount,
+        price: pricing.price,
+        stepSize: pricing.stepSize
+      });
+      return null;
+    }
+    
     // Calculate total allocation: (token_amount / price) * step_size
     const totalSteps = tokenValue.amount / pricing.price;
     const totalAllocation = totalSteps * pricing.stepSize;
+    
+    // Ensure totalAllocation is a valid number
+    if (isNaN(totalAllocation) || totalAllocation <= 0) {
+      console.warn('Invalid total allocation calculated:', totalAllocation);
+      return null;
+    }
  
     if (pricing.metric === 'milliseconds') {
       // Convert milliseconds to minutes or seconds for display
@@ -340,6 +387,14 @@ function App() {
         rawAmount: Math.round(totalAllocation) // Keep the raw amount in KiB for calculations
       };
     }
+    
+    // Fallback for unknown metrics
+    return {
+      amount: totalAllocation.toFixed(2),
+      metric: pricing.metric,
+      rawMetric: pricing.metric,
+      rawAmount: totalAllocation
+    };
   };
 
   // When token is pasted, extract proofs and calculate total value
