@@ -4,7 +4,10 @@
  */
 
 class MintProxyClient {
-    constructor(wsUrl = 'ws://localhost:2122/mint-proxy') {
+    constructor(wsUrl) {
+        // Get the dynamic host same way as tollgate helper
+        const currentHost = import.meta.env.VITE_TOLLGATE_HOST || window.location.hostname;
+        wsUrl = wsUrl || `ws://${currentHost}:2122/mint-proxy`;
         this.wsUrl = wsUrl;
         this.ws = null;
         this.pendingRequests = new Map();
@@ -269,39 +272,10 @@ export { MintProxyClient };
 
 // Factory function for creating instances
 export const createMintProxyClient = (wsUrl) => {
-    return new MintProxyClient(wsUrl);
-};
-
-// Helper function to integrate with existing tollgate flow
-export const addTokensToSession = async (tokens) => {
-    try {
-        const response = await fetch('/fund-session', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                cashuToken: tokens
-            })
-        });
-        
-        if (response.ok) {
-            console.log('Tokens added to session successfully');
-            return { status: 1, message: 'Tokens added successfully' };
-        } else {
-            console.error('Failed to add tokens to session');
-            return { 
-                status: 0, 
-                code: 'session_error',
-                message: 'Failed to add tokens to session' 
-            };
-        }
-    } catch (error) {
-        console.error('Error adding tokens to session:', error);
-        return { 
-            status: 0, 
-            code: 'network_error',
-            message: 'Network error while adding tokens to session' 
-        };
+    // Use dynamic host if no URL provided
+    if (!wsUrl) {
+        const currentHost = import.meta.env.VITE_TOLLGATE_HOST || window.location.hostname;
+        wsUrl = `ws://${currentHost}:2122/mint-proxy`;
     }
+    return new MintProxyClient(wsUrl);
 };

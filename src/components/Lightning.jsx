@@ -14,7 +14,8 @@ import { CancelIcon, SwitchIcon } from './Icon'
 // helpers
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
 import { requestInvoice } from '../helpers/lightning';
-import { createMintProxyClient, addTokensToSession } from '../helpers/mint-proxy';
+import { createMintProxyClient } from '../helpers/mint-proxy';
+import { submitToken } from '../helpers/cashu';
 import { createQr } from '../helpers/qr-code';
 import { copyTextToClipboard } from '../helpers/clipboard';
 
@@ -148,29 +149,24 @@ export const Lightning = (props) => {
     };
   }, [useMintProxy, accessOptions]);
 
-  // handle tokens received from mint proxy
+  // handle tokens received from mint proxy - use same flow as Cashu component
   const handleTokensReceived = async (tokensData) => {
     try {
       setProcessing(true);
       
-      // Add tokens to session
-      const result = await addTokensToSession(tokensData);
+      // Submit tokens using the same method as the Cashu component
+      const response = await submitToken(tokensData, tollgateDetails, allocation, t);
       
       setProcessing(false);
       
-      if (result.status) {
+      if (response.status) {
         setSuccess(true);
         // auto-close after 3 seconds
         setTimeout(() => {
           window.close();
         }, 3000);
       } else {
-        setError({
-          status: 0,
-          code: result.code || 'MP005',
-          label: t('session_error', 'Session Error'),
-          message: result.message || t('tokens_session_failed', 'Failed to add tokens to session')
-        });
+        setError(response);
       }
     } catch (error) {
       console.error('Error handling tokens:', error);
