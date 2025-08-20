@@ -78,4 +78,93 @@
   .tollgate-captive-portal-method-submit button {
     font-weight: 600;
   }
+
+  // Mint proxy specific styles
+  .connection-status {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .connection-indicator {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+    
+    &::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+    }
+    
+    &[data-status="connected"]::before {
+      background-color: #10b981; // green
+    }
+    
+    &[data-status="connecting"]::before {
+      background-color: #f59e0b; // orange
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    &[data-status="disconnected"]::before {
+      background-color: #6b7280; // gray
+    }
+    
+    &[data-status="error"]::before {
+      background-color: #ef4444; // red
+    }
+  }
+
+  .mint-proxy-toggle {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    
+    label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 0.9rem;
+      
+      input[type="checkbox"] {
+        margin-right: 0.5rem;
+      }
+    }
+  }
+
+  .invoice-status {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    text-align: center;
+    
+    p {
+      margin: 0;
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
 }
