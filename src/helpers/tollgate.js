@@ -1,6 +1,4 @@
 // tollgate host
-// replace this if your are not developing the tollgate captive portal directly on a tollgate
-// export const currentHost = "10.50.184.1";
 const currentHost = import.meta.env.VITE_TOLLGATE_HOST || window.location.hostname;
 
 // get the base url dynamically

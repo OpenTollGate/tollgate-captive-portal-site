@@ -35,7 +35,6 @@ export const Lightning = (props) => {
   const [unitAmount, setUnitAmount] = useState('')
   const [allocation, setAllocation] = useState(null)
   const [invoice, setInvoice] = useState(null);
-  const [useMintProxy, setUseMintProxy] = useState(true); // Default to mint proxy
   const [mintProxyClient, setMintProxyClient] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [tokens, setTokens] = useState(null);
@@ -85,7 +84,7 @@ export const Lightning = (props) => {
 
   // initialize mint proxy client
   useEffect(() => {
-    if (useMintProxy && !mintProxyClient && accessOptions.length > 0) {
+    if (!mintProxyClient && accessOptions.length > 0) {
       try {
         setConnectionStatus('connecting');
         const client = createMintProxyClient();
@@ -139,15 +138,15 @@ export const Lightning = (props) => {
       }
     }
     
-    // cleanup on unmount or when switching away from mint proxy
+    // cleanup on unmount
     return () => {
-      if (mintProxyClient && (!useMintProxy || accessOptions.length === 0)) {
+      if (mintProxyClient && accessOptions.length === 0) {
         mintProxyClient.disconnect();
         setMintProxyClient(null);
         setConnectionStatus('disconnected');
       }
     };
-  }, [useMintProxy, accessOptions]);
+  }, [accessOptions]);
 
   // handle tokens received from mint proxy - use same flow as Cashu component
   const handleTokensReceived = async (tokensData) => {
@@ -184,7 +183,7 @@ export const Lightning = (props) => {
   useEffect(() => {
     if (processing && !invoice) {
       const request = async () => {
-        if (useMintProxy && mintProxyClient && connectionStatus === 'connected') {
+        if (mintProxyClient && connectionStatus === 'connected') {
           // Use mint proxy to request invoice
           mintProxyClient.requestInvoice(selectedMint.url, unitAmount);
         } else {
@@ -206,22 +205,22 @@ export const Lightning = (props) => {
 
       request()
     }
-  }, [processing, useMintProxy, mintProxyClient, connectionStatus])
+  }, [processing, mintProxyClient, connectionStatus])
 
   return <div className="tollgate-captive-portal-method-lightning tollgate-captive-portal-method">
     {/* header: shows the portal title and a short description about lightning */}
-    {((!success && !processing) || (invoice && !success)) && <Header useMintProxy={useMintProxy} />}
+    {((!success && !processing) || (invoice && !success)) && <Header />}
 
     <div className="tollgate-captive-portal-method-content">
       {/* processing: displays a loading indicator and message while invoice is being requested */}
-      {(!success && processing && !tokens) && <Processing label={useMintProxy ? t('processing_mint_request', 'Requesting invoice from mint...') : t('processing_invoice_request')} />}
+      {(!success && processing && !tokens) && <Processing label={t('processing_mint_request', 'Requesting invoice from mint...')} />}
       {(!success && processing && tokens) && <Processing label={t('processing_tokens', 'Processing tokens...')} />}
 
       {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
       {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
       {/* connection status for mint proxy */}
-      {useMintProxy && connectionStatus !== 'connected' && !success && !processing && !invoice && (
+      {connectionStatus !== 'connected' && !success && !processing && !invoice && (
         <div className="connection-status">
           <span className="connection-indicator" data-status={connectionStatus}>
             {connectionStatus === 'connecting' ? t('connecting', 'Connecting...') :
@@ -232,22 +231,8 @@ export const Lightning = (props) => {
         </div>
       )}
 
-      {/* mint proxy toggle */}
-      {(!success && !processing && !invoice && accessOptions.length) && (
-        <div className="mint-proxy-toggle">
-          <label>
-            <input
-              type="checkbox"
-              checked={useMintProxy}
-              onChange={(e) => setUseMintProxy(e.target.checked)}
-            />
-            {t('auto_mint_tokens', 'Automatically mint Cashu tokens')}
-          </label>
-        </div>
-      )}
-
       {/* unitinput: input field for entering the amount to pay, and selecting access option */}
-      {(!success && !processing && accessOptions.length && !invoice && (!useMintProxy || connectionStatus === 'connected')) && <UnitInput
+      {(!success && !processing && accessOptions.length && !invoice && connectionStatus === 'connected') && <UnitInput
         pricingInfo={accessOptions}
         selectedMint={selectedMint}
         unitAmount={unitAmount}
@@ -258,7 +243,7 @@ export const Lightning = (props) => {
       {error && <Error label={error.label} code={error.code} message={error.message} />}
 
       {/* accessoptions: lets the user select from available access/pricing options */}
-      {(!success && !processing && accessOptions.length && !invoice && (!useMintProxy || connectionStatus === 'connected')) && <div className="tollgate-captive-portal-method-options">
+      {(!success && !processing && accessOptions.length && !invoice && connectionStatus === 'connected') && <div className="tollgate-captive-portal-method-options">
         <h5>{t('access_options')}</h5>
         <AccessOptions
           pricingInfo={accessOptions}
@@ -336,15 +321,15 @@ export const Lightning = (props) => {
 }
 
 // lightning header component
-const Header = ({ useMintProxy }) => {
+const Header = () => {
   const { t } = useTranslation();
   return <div className="tollgate-captive-portal-method-header">
     <h1>{t('portal_title')}</h1>
     <h2>
-      {useMintProxy ?
-        t('provide_mint_proxy', 'Pay with Lightning to automatically mint Cashu tokens') :
-        (<Trans i18nKey="provide_lightning" components={{ 1: <a href="https://en.wikipedia.org/wiki/Lightning_Network" target="_blank" rel="noreferrer"></a> }} />)
-      }
+      <Trans i18nKey="provide_mint_proxy"
+        defaults="Pay with <1>Lightning</1> to automatically mint Cashu tokens"
+        components={{ 1: <a href="https://en.wikipedia.org/wiki/Lightning_Network" target="_blank" rel="noreferrer"></a> }}
+      />
     </h2>
   </div>
 }
