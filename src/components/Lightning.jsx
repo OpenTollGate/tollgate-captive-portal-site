@@ -14,6 +14,8 @@ import { CancelIcon, SwitchIcon } from './Icon'
 // helpers
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
 import { requestInvoice } from '../helpers/lightning';
+import { createMintProxyClient } from '../helpers/mint-proxy';
+import { submitToken } from '../helpers/cashu';
 import { createQr } from '../helpers/qr-code';
 import { copyTextToClipboard } from '../helpers/clipboard';
 
@@ -33,6 +35,9 @@ export const Lightning = (props) => {
   const [unitAmount, setUnitAmount] = useState('')
   const [allocation, setAllocation] = useState(null)
   const [invoice, setInvoice] = useState(null);
+  const [mintProxyClient, setMintProxyClient] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [tokens, setTokens] = useState(null);
 
   // set accessoptions if tollgateDetails are set
   useEffect(() => {
@@ -77,27 +82,130 @@ export const Lightning = (props) => {
     }
   }, [selectedMint])
 
+  // initialize mint proxy client
+  useEffect(() => {
+    if (!mintProxyClient && accessOptions.length > 0) {
+      try {
+        setConnectionStatus('connecting');
+        const client = createMintProxyClient();
+        
+        // Set up event listeners
+        client.on('open', () => {
+          setConnectionStatus('connected');
+          setError(null);
+        });
+        
+        client.on('close', () => {
+          setConnectionStatus('disconnected');
+        });
+        
+        client.on('error', (errorData) => {
+          setConnectionStatus('error');
+          setError({
+            status: 0,
+            code: errorData.code || 'MP002',
+            label: t('connection_error', 'Connection Error'),
+            message: errorData.message || t('mint_proxy_connection_failed', 'Failed to connect to mint proxy')
+          });
+          setProcessing(false);
+        });
+        
+        client.on('invoice_ready', (message) => {
+          console.log('Invoice received from mint proxy:', message);
+          setInvoice(message.invoice);
+          setProcessing(false);
+        });
+        
+        client.on('tokens_ready', (message) => {
+          console.log('Tokens received from mint proxy:', message);
+          setTokens(message.tokens);
+          setInvoice(null);
+          
+          // Automatically add tokens to session
+          handleTokensReceived(message.tokens);
+        });
+        
+        setMintProxyClient(client);
+      } catch (error) {
+        console.error('Failed to create mint proxy client:', error);
+        setConnectionStatus('error');
+        setError({
+          status: 0,
+          code: 'MP003',
+          label: t('initialization_error', 'Initialization Error'),
+          message: t('mint_proxy_init_failed', 'Failed to initialize mint proxy connection')
+        });
+      }
+    }
+    
+    // cleanup on unmount
+    return () => {
+      if (mintProxyClient && accessOptions.length === 0) {
+        mintProxyClient.disconnect();
+        setMintProxyClient(null);
+        setConnectionStatus('disconnected');
+      }
+    };
+  }, [accessOptions]);
+
+  // handle tokens received from mint proxy - use same flow as Cashu component
+  const handleTokensReceived = async (tokensData) => {
+    try {
+      setProcessing(true);
+      
+      // Submit tokens using the same method as the Cashu component
+      const response = await submitToken(tokensData, tollgateDetails, allocation, t);
+      
+      setProcessing(false);
+      
+      if (response.status) {
+        setSuccess(true);
+        // auto-close after 3 seconds
+        setTimeout(() => {
+          window.close();
+        }, 3000);
+      } else {
+        setError(response);
+      }
+    } catch (error) {
+      console.error('Error handling tokens:', error);
+      setProcessing(false);
+      setError({
+        status: 0,
+        code: 'MP006',
+        label: t('processing_error', 'Processing Error'),
+        message: t('tokens_processing_failed', 'Error processing received tokens')
+      });
+    }
+  };
+
   // handle processing change
   useEffect(() => {
     if (processing && !invoice) {
       const request = async () => {
-        const response = await requestInvoice(unitAmount, tollgateDetails.deviceInfo, t);
+        if (mintProxyClient && connectionStatus === 'connected') {
+          // Use mint proxy to request invoice
+          mintProxyClient.requestInvoice(selectedMint.url, unitAmount);
+        } else {
+          // Use traditional lightning invoice request
+          const response = await requestInvoice(unitAmount, tollgateDetails.deviceInfo, t);
 
-        setTimeout(() => {
-          setProcessing(false);
-          console.log(response)
+          setTimeout(() => {
+            setProcessing(false);
+            console.log(response)
 
-          if (response.status) {
-            setInvoice(response.invoice)
-          } else {
-            setError(response)
-          }
-        }, 500)
+            if (response.status) {
+              setInvoice(response.invoice)
+            } else {
+              setError(response)
+            }
+          }, 500);
+        }
       }
 
       request()
     }
-  }, [processing])
+  }, [processing, mintProxyClient, connectionStatus])
 
   return <div className="tollgate-captive-portal-method-lightning tollgate-captive-portal-method">
     {/* header: shows the portal title and a short description about lightning */}
@@ -105,13 +213,26 @@ export const Lightning = (props) => {
 
     <div className="tollgate-captive-portal-method-content">
       {/* processing: displays a loading indicator and message while invoice is being requested */}
-      {(!success && processing) && <Processing label={t('processing_invoice_request')} />}
+      {(!success && processing && !tokens) && <Processing label={t('processing_mint_request', 'Requesting invoice from mint...')} />}
+      {(!success && processing && tokens) && <Processing label={t('processing_tokens', 'Processing tokens...')} />}
 
       {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
       {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
+      {/* connection status for mint proxy */}
+      {connectionStatus !== 'connected' && !success && !processing && !invoice && (
+        <div className="connection-status">
+          <span className="connection-indicator" data-status={connectionStatus}>
+            {connectionStatus === 'connecting' ? t('connecting', 'Connecting...') :
+             connectionStatus === 'disconnected' ? t('disconnected', 'Disconnected') :
+             connectionStatus === 'error' ? t('connection_error', 'Connection Error') :
+             t('connected', 'Connected')}
+          </span>
+        </div>
+      )}
+
       {/* unitinput: input field for entering the amount to pay, and selecting access option */}
-      {(!success && !processing && accessOptions.length && !invoice) && <UnitInput
+      {(!success && !processing && accessOptions.length && !invoice && connectionStatus === 'connected') && <UnitInput
         pricingInfo={accessOptions}
         selectedMint={selectedMint}
         unitAmount={unitAmount}
@@ -122,7 +243,7 @@ export const Lightning = (props) => {
       {error && <Error label={error.label} code={error.code} message={error.message} />}
 
       {/* accessoptions: lets the user select from available access/pricing options */}
-      {(!success && !processing && accessOptions.length && !invoice) && <div className="tollgate-captive-portal-method-options">
+      {(!success && !processing && accessOptions.length && !invoice && connectionStatus === 'connected') && <div className="tollgate-captive-portal-method-options">
         <h5>{t('access_options')}</h5>
         <AccessOptions
           pricingInfo={accessOptions}
@@ -204,7 +325,12 @@ const Header = () => {
   const { t } = useTranslation();
   return <div className="tollgate-captive-portal-method-header">
     <h1>{t('portal_title')}</h1>
-    <h2><Trans i18nKey="provide_lightning" components={{ 1: <a href="https://en.wikipedia.org/wiki/Lightning_Network" target="_blank" rel="noreferrer"></a> }} /></h2>
+    <h2>
+      <Trans i18nKey="provide_mint_proxy"
+        defaults="Pay with <1>Lightning</1> to automatically mint Cashu tokens"
+        components={{ 1: <a href="https://en.wikipedia.org/wiki/Lightning_Network" target="_blank" rel="noreferrer"></a> }}
+      />
+    </h2>
   </div>
 }
 

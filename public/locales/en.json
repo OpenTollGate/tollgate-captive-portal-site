@@ -43,6 +43,7 @@
 
   "provide_lightning": "Pay with <1>BTC Lightning</1> to access the internet.",
   "provide_cashu": "Pay with <1>Cashu</1> to access the internet.",
+  "provide_mint_proxy": "Pay with <1>Lightning</1> to automatically mint Cashu tokens",
 
   "cashu_input_placeholder": "cashuxyz…",
   "lightning_input_placeholder": "Enter amount…",
@@ -98,6 +99,22 @@
   "LN001_message": "Could not parse TollGate access options.",
   "LN002_label": "Not enough funds",
   "LN002_message": "The specified amount does not provide enough funds for the selected mint.",
+
+  "connecting": "Connecting...",
+  "connected": "Connected",
+  "disconnected": "Disconnected",
+  "connection_error": "Connection Error",
+  "initialization_error": "Initialization Error",
+  "session_error": "Session Error",
+  "processing_error": "Processing Error",
+  "processing_mint_request": "Requesting invoice from mint...",
+  "processing_tokens": "Processing tokens...",
+  "mint_proxy_waiting": "Waiting for payment confirmation and automatic token minting...",
+  "mint_proxy_connection_failed": "Failed to connect to mint proxy",
+  "mint_proxy_init_failed": "Failed to initialize mint proxy connection",
+  "tokens_session_failed": "Failed to add tokens to session",
+  "tokens_processing_failed": "Error processing received tokens",
+  "auto_mint_tokens": "Automatically mint Cashu tokens",
 
   "CB001_label": "No permission",
   "CB001_message": "Permission to read from the clipboard was denied. Please allow clipboard access or paste manually.",
