@@ -1,0 +1,44 @@
+/**
+* Use this file for
+* - cashu payment specific styles
+**/
+
+.tollgate-captive-portal-method-cashu {
+  .tollgate-captive-portal-method-input {
+    position: relative;
+    overflow: hidden;
+
+    .cancel {
+      background-color: transparent;
+      color: var(--color-gray-darken);
+      opacity: 0.8;
+      font-size: var(--font-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-right: 0.4rem;
+      padding-left: 0.8rem;
+
+      &:hover,
+      &:focus,
+      &:active {
+        opacity: 1;
+      }
+    }
+
+    #cashu-token {
+      padding-right: 4rem;
+    }
+
+    &-actions {
+      position: absolute;
+      right: 0.8rem;
+      top: 0;
+      display: flex;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+  }
+}

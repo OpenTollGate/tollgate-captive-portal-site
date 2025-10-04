@@ -1,0 +1,81 @@
+/**
+* Use this file for
+* - lightning payment specific styles
+**/
+
+.tollgate-captive-portal-method-lightning {
+  .tollgate-captive-portal-method-input {
+    position: relative;
+    overflow: hidden;
+
+    #lightning-unit-amount {
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+    }
+
+    &-actions {
+      position: absolute;
+      right: 0.8rem;
+      top: 0;
+      display: flex;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+  }
+
+  .tollgate-captive-portal-method-invoice {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    &-svg {
+      aspect-ratio: 1/1;
+      width: 100%;
+      padding: 1rem;
+      background-color: var(--color-white);
+      border-radius: var(--border-radius);
+      cursor: pointer;
+
+      svg {
+        display: block;
+      }
+    }
+
+    &-header {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+
+      button {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        background-color: transparent;
+        color: var(--color-red);
+        padding: 0;
+        width: auto;
+
+        svg {
+          margin-top: -0.1rem;
+        }
+      }
+    }
+
+    &-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+  }
+
+  .tollgate-captive-portal-method-submit button {
+    font-weight: 600;
+  }
+}
