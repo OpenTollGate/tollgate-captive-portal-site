@@ -30,7 +30,7 @@ function generateAssetManifestPlugin() {
             else if (relPath.endsWith('.css')) manifest.assets.css.push(relPath);
             else if (relPath.match(/\.(png|jpe?g|svg|ico)$/i)) manifest.assets.images.push(relPath);
             else if (relPath.startsWith('locales/')) manifest.assets.locales.push(relPath);
-            else if (relPath === 'splash.html') manifest.assets.html.push(relPath);
+            else if (relPath === 'splash.html' || relPath === '404.html') manifest.assets.html.push(relPath);
             else if (relPath.endsWith('manifest.json')) manifest.assets.manifest.push(relPath);
           }
         }
