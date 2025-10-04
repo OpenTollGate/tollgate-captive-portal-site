@@ -110,10 +110,6 @@ export const Cashu = (props) => {
 
         if (response.status) {
           setSuccess(true);
-          // try to auto-close the page after 3 seconds
-          setTimeout(() => {
-            window.close();
-          }, 3000);
         } else {
           setError(response)
         }
