@@ -235,24 +235,31 @@ export const formatTimeInSeconds = (milliseconds, abbreviate, i18n) => {
 };
 
 // helper function to format data size in user-friendly units
-export const formatDataSize = (kibiBytes, i18n) => {
+export const formatDataSize = (Bytes, i18n) => {
   // show value in kib, mb, or gb depending on size
-  if (kibiBytes < 1024) {
+
+    if (Bytes < 1024) {
     // less than 1 mb
     return {
-      value: kibiBytes,
-      unit: i18n("KiB"),
+      value: Bytes,
+      unit: i18n("B"),
     };
-  } else if (kibiBytes < 1048576) {
+  } else if (Bytes < 1048576) {
+    // less than 1 mb
+    return {
+      value: Bytes,
+      unit: i18n("KiB").toFixed(1),
+    };
+  } else if (Bytes < 1073741824) {
     // less than 1 gb
     return {
-      value: (kibiBytes / 1024).toFixed(1),
-      unit: i18n("MB"),
+      value: (Bytes / 1048576).toFixed(2),
+      unit: i18n("MiB"),
     };
   } else {
     return {
-      value: (kibiBytes / 1048576).toFixed(2),
-      unit: i18n("GB"),
+      value: (Bytes / 1073741824).toFixed(3),
+      unit: i18n("GiB"),
     };
   }
 };
