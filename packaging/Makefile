@@ -2,6 +2,13 @@ PKG_MAKEFILE_DIR:=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 include $(TOPDIR)/rules.mk
 
+# NOTE: tollgate-wrt is not yet listed in opkg/apk feeds, so DEPENDS won't
+# resolve during `opkg install`. Two install paths are supported:
+#   1. tollgate-wrt bundles portal files directly (current approach in develop)
+#   2. This standalone package overlays the admin SPA + rpcd plugin on top.
+#      Requires tollgate-wrt pre-installed: `opkg install --force-depends <ipk>`
+# Once tollgate-wrt is published to feeds, the standalone package will install
+# cleanly without --force-depends.
 PKG_NAME:=tollgate-captive-portal
 TOLLGATE_DISPLAY_VERSION:=$(if $(strip $(PACKAGE_VERSION)),$(PACKAGE_VERSION),0.0.0)
 
