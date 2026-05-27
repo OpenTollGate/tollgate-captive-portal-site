@@ -1,0 +1,58 @@
+.admin-devices {
+  h2 {
+    font-size: var(--font-size-large);
+    margin-bottom: 0;
+  }
+
+  &-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.6rem;
+  }
+
+  &-desc {
+    font-size: var(--font-size-small);
+    color: var(--color-negative);
+  }
+
+  &-table-wrap {
+    overflow-x: auto;
+  }
+
+  &-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #0d1326;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+
+    th, td {
+      padding: 0.8rem 1.2rem;
+      text-align: left;
+      font-size: var(--font-size-small);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    th {
+      color: var(--color-negative);
+      text-transform: uppercase;
+      font-weight: 600;
+      font-size: var(--font-size-xsmall);
+      letter-spacing: 0.05em;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  }
+
+  &-mac {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, monospace;
+    font-size: var(--font-size-xsmall);
+  }
+}

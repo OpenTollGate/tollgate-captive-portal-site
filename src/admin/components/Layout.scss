@@ -1,0 +1,150 @@
+.admin-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.admin-sidebar {
+  width: 22rem;
+  background: #0d1326;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  transition: transform 0.2s;
+
+  &-header {
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &-logo {
+    width: 14rem;
+    max-width: 100%;
+  }
+
+  &-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0 1rem;
+  }
+
+  &-link {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem 1rem;
+    border-radius: var(--border-radius);
+    color: var(--color-negative);
+    text-decoration: none;
+    font-size: var(--font-size);
+    transition: background 0.15s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--color-white);
+      opacity: 1;
+    }
+
+    &.active {
+      background: rgba(255, 181, 76, 0.12);
+      color: var(--color-cta);
+    }
+  }
+
+  &-icon {
+    font-size: var(--font-size-medium);
+    width: 2rem;
+    text-align: center;
+  }
+}
+
+.admin-sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
+}
+
+.admin-main {
+  flex: 1;
+  margin-left: 22rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 2rem;
+  background: #0d1326;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  &-menu {
+    display: none;
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--color-white);
+    font-size: 2rem;
+    padding: 0.2rem 0.6rem;
+    width: auto;
+    opacity: 1;
+  }
+
+  &-title {
+    flex: 1;
+    font-size: var(--font-size-medium);
+    font-weight: 600;
+  }
+
+  &-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  &-user {
+    font-size: var(--font-size-small);
+    color: var(--color-negative);
+  }
+}
+
+.admin-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 100rem;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+
+    &.open {
+      transform: translateX(0);
+    }
+  }
+
+  .admin-main {
+    margin-left: 0;
+  }
+
+  .admin-header-menu {
+    display: block !important;
+  }
+
+  .admin-content {
+    padding: 1rem;
+  }
+}

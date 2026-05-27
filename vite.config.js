@@ -38,21 +38,40 @@ function generateAssetManifestPlugin() {
       walk(buildDir);
       const outPath = path.join(buildDir, 'asset-manifest.json');
       fs.writeFileSync(outPath, JSON.stringify(manifest, null, 2));
-      // eslint-disable-next-line no-console
       console.log('asset-manifest.json generated.');
     }
   };
 }
 
-export default defineConfig({
-  plugins: [react(), generateAssetManifestPlugin()],
-  build: {
-    outDir: "build",
-    rollupOptions: {
-      input: {
-        portal: path.resolve(__dirname, 'index.html'),
-        balance: path.resolve(__dirname, 'balance.html'),
+const app = process.env.VITE_APP || 'portal';
+
+const configs = {
+  portal: {
+    plugins: [react(), generateAssetManifestPlugin()],
+    base: '/',
+    build: {
+      outDir: 'build',
+      rollupOptions: {
+        input: {
+          portal: path.resolve(__dirname, 'index.html'),
+          balance: path.resolve(__dirname, 'balance.html'),
+        },
       },
     },
   },
-});
+  admin: {
+    plugins: [react()],
+    base: '/tollgate/',
+    build: {
+      outDir: 'dist/admin',
+      emptyOutDir: true,
+      rollupOptions: {
+        input: {
+          admin: path.resolve(__dirname, 'admin.html'),
+        },
+      },
+    },
+  },
+};
+
+export default defineConfig(configs[app] || configs.portal);
