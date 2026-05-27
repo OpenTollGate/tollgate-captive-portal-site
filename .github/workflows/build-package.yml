@@ -247,7 +247,6 @@ jobs:
     if: always() && needs.package-ipk.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     container:
       image: ubuntu:latest
       options: --user root
@@ -255,7 +254,7 @@ jobs:
       run:
         shell: bash
     env:
-      BLOSSOM_SERVER: "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com"
+      BLOSSOM_SERVER: "https://blossom.orangesync.tech"
       RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
       PUBLISH_MATRIX: ${{ needs.define-package-matrix.outputs.matrix }}
       PACKAGE_VERSION: ${{ needs.determine-versioning.outputs.package_version }}
