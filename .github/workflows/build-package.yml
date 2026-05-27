@@ -247,6 +247,7 @@ jobs:
     if: always() && needs.package-ipk.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: true
     container:
       image: ubuntu:latest
       options: --user root
