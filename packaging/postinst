@@ -1,0 +1,30 @@
+#!/bin/sh
+
+echo "Running post-installation for tollgate-captive-portal..."
+
+if ! uci -q get uhttpd.tollgate >/dev/null 2>&1; then
+    echo "Adding uhttpd tollgate section for admin SPA on :80"
+    uci set uhttpd.tollgate=uhttpd
+    uci set uhttpd.tollgate.home='/www/tollgate'
+    uci set uhttpd.tollgate.ubus_prefix='/ubus'
+    uci set uhttpd.tollgate.script_timeout='60'
+    uci set uhttpd.tollgate.network_timeout='30'
+    uci set uhttpd.tollgate.max_requests='3'
+    uci set uhttpd.tollgate.tcp_keepalive='1'
+    uci set uhttpd.tollgate.error_page='/admin.html'
+    uci add_list uhttpd.tollgate.listen_http='0.0.0.0:80'
+    uci add_list uhttpd.tollgate.listen_http='[::]:80'
+    uci commit uhttpd
+fi
+
+echo "Restarting rpcd..."
+/etc/init.d/rpcd restart
+
+echo "Restarting uhttpd..."
+/etc/init.d/uhttpd restart
+
+echo "Restarting NoDogSplash to pick up portal changes..."
+/etc/init.d/nodogsplash restart 2>/dev/null || true
+
+echo "Post-installation completed"
+exit 0

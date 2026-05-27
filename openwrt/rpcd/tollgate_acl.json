@@ -1,0 +1,32 @@
+{
+  "tollgate": {
+    "description": "TollGate router management",
+    "read": {
+      "ubus": {
+        "tollgate": [
+          "config_schema",
+          "config_get",
+          "wallet_balance",
+          "wallet_info",
+          "status",
+          "health",
+          "upstream_scan",
+          "upstream_list"
+        ]
+      }
+    },
+    "write": {
+      "ubus": {
+        "tollgate": [
+          "config_set",
+          "config_save",
+          "config_save_identities",
+          "wallet_fund",
+          "wallet_drain_cashu",
+          "upstream_connect",
+          "upstream_remove"
+        ]
+      }
+    }
+  }
+}

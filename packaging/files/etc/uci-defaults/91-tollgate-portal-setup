@@ -1,0 +1,37 @@
+#!/bin/sh
+
+SETUP_FLAG="/etc/tollgate-captive-portal-setup-done"
+
+if [ -f "$SETUP_FLAG" ]; then
+    exit 0
+fi
+
+LOGFILE=/tmp/tollgate-portal-setup.log
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOGFILE"; }
+
+log "Starting tollgate-captive-portal setup"
+
+if ! uci -q get uhttpd.tollgate >/dev/null 2>&1; then
+    log "Adding uhttpd tollgate section for admin SPA on :80"
+    uci set uhttpd.tollgate=uhttpd
+    uci set uhttpd.tollgate.home='/www/tollgate'
+    uci set uhttpd.tollgate.ubus_prefix='/ubus'
+    uci set uhttpd.tollgate.script_timeout='60'
+    uci set uhttpd.tollgate.network_timeout='30'
+    uci set uhttpd.tollgate.max_requests='3'
+    uci set uhttpd.tollgate.tcp_keepalive='1'
+    uci set uhttpd.tollgate.error_page='/admin.html'
+    uci add_list uhttpd.tollgate.listen_http='0.0.0.0:80'
+    uci add_list uhttpd.tollgate.listen_http='[::]:80'
+    uci commit uhttpd
+    log "uhttpd tollgate section added"
+else
+    log "uhttpd tollgate section already exists"
+fi
+
+/etc/init.d/rpcd restart
+/etc/init.d/uhttpd restart
+
+log "tollgate-captive-portal setup completed"
+touch "$SETUP_FLAG"
+exit 0

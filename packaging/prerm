@@ -1,0 +1,15 @@
+#!/bin/sh
+
+echo "Running pre-removal for tollgate-captive-portal..."
+
+echo "Restarting rpcd..."
+/etc/init.d/rpcd restart
+
+echo "Restarting uhttpd..."
+/etc/init.d/uhttpd restart
+
+echo "Restarting NoDogSplash..."
+/etc/init.d/nodogsplash restart 2>/dev/null || true
+
+echo "Pre-removal completed"
+exit 0
