@@ -1,0 +1,367 @@
+name: Build and Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      full_compression:
+        description: "Build all UPX compression variants"
+        type: boolean
+        default: false
+  push:
+  pull_request:
+
+env:
+  PACKAGE_NAME: "tollgate-captive-portal"
+  NODE_VERSION: "22"
+
+jobs:
+  build-spa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build portal + admin
+        run: node scripts/build-all.mjs
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: spa-dist
+          path: dist/
+          retention-days: 5
+
+  define-package-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      ipk_matrix: ${{ steps.set-matrix.outputs.ipk_matrix }}
+      apk_matrix: ${{ steps.set-matrix.outputs.apk_matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          cat > matrix.json << 'EOF'
+          {
+            "include": [
+              { "architecture": "aarch64_cortex-a53", "sdk": "mediatek-filogic", "ipk": true, "apk": true },
+              { "architecture": "aarch64_cortex-a72", "sdk": "bcm27xx-bcm2711",  "ipk": true, "apk": false },
+              { "architecture": "arm_cortex-a7",      "sdk": "bcm27xx-bcm2709",  "ipk": true, "apk": false },
+              { "architecture": "mipsel_24kc",        "sdk": "ramips-mt7621",    "ipk": true, "apk": false },
+              { "architecture": "mips_24kc",          "sdk": "ath79-generic",    "ipk": true, "apk": false },
+              { "architecture": "x86_64",             "sdk": "x86-64",           "ipk": true, "apk": false }
+            ]
+          }
+          EOF
+
+          echo "matrix=$(jq -c '{include: [
+            (.include[] | select(.ipk) | del(.ipk, .apk) + {format: "ipk"}),
+            (.include[] | select(.apk) | del(.ipk, .apk) + {format: "apk"})
+          ]}' matrix.json)" >> $GITHUB_OUTPUT
+          echo "ipk_matrix=$(jq -c '{include: [.include[] | select(.ipk) | del(.ipk, .apk) + {format: "ipk"}]}' matrix.json)" >> $GITHUB_OUTPUT
+          echo "apk_matrix=$(jq -c '{include: [.include[] | select(.apk) | del(.ipk, .apk) + {format: "apk"}]}' matrix.json)" >> $GITHUB_OUTPUT
+
+  determine-versioning:
+    runs-on: ubuntu-latest
+    outputs:
+      package_version: ${{ steps.determine-package-version.outputs.package_version }}
+      release_channel: ${{ steps.determine-release-channel.outputs.release_channel }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: determine-package-version
+        shell: bash
+        run: |
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            echo "package_version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          else
+            SANITIZED_BRANCH_NAME=$(echo "${GITHUB_REF_NAME}" | sed 's/\//-/g')
+            COMMIT_HEIGHT=$(git rev-list --count HEAD)
+            SHORT=$(git rev-parse --short HEAD)
+            echo "package_version=${SANITIZED_BRANCH_NAME}.${COMMIT_HEIGHT}.${SHORT}" >> $GITHUB_OUTPUT
+          fi
+
+      - id: determine-release-channel
+        shell: bash
+        run: |
+          : ${GITHUB_OUTPUT:=/tmp/github_output}
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            if   [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha ]]; then echo "release_channel=alpha"  >> $GITHUB_OUTPUT
+            elif [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta  ]]; then echo "release_channel=beta"   >> $GITHUB_OUTPUT
+            elif [[ $TAG_NAME =~ ^v[0-9]+\.[0-9]+\.[0-9]+$      ]]; then echo "release_channel=stable" >> $GITHUB_OUTPUT
+            else                                                          echo "release_channel=dev"    >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "release_channel=dev" >> $GITHUB_OUTPUT
+          fi
+
+  package-ipk:
+    needs: [build-spa, define-package-matrix, determine-versioning]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.define-package-matrix.outputs.ipk_matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download SPA dist
+        uses: actions/download-artifact@v3
+        with:
+          name: spa-dist
+          path: dist/
+
+      - name: Build .ipk
+        run: |
+          set -euo pipefail
+          PACKAGE_FILENAME=${PACKAGE_NAME}_${{ needs.determine-versioning.outputs.package_version }}_${{ matrix.architecture }}.ipk
+          echo "PACKAGE_FILENAME=$PACKAGE_FILENAME" >> $GITHUB_ENV
+
+          PAYLOAD=$(mktemp -d)
+
+          install -d "$PAYLOAD/etc/tollgate/tollgate-captive-portal-site"
+          cp -r dist/portal/. "$PAYLOAD/etc/tollgate/tollgate-captive-portal-site/"
+
+          install -d "$PAYLOAD/www/tollgate"
+          cp -r dist/admin/. "$PAYLOAD/www/tollgate/"
+
+          install -d "$PAYLOAD/usr/libexec/rpcd"
+          install -m 0755 openwrt/rpcd/tollgate "$PAYLOAD/usr/libexec/rpcd/tollgate"
+
+          install -d "$PAYLOAD/usr/share/rpcd/acl.d"
+          install -m 0644 openwrt/rpcd/tollgate_acl.json "$PAYLOAD/usr/share/rpcd/acl.d/tollgate.json"
+
+          install -d "$PAYLOAD/etc/config"
+          install -m 0644 openwrt/files/etc/config/uhttpd_tollgate "$PAYLOAD/etc/config/"
+
+          install -d "$PAYLOAD/etc/uci-defaults"
+          install -m 0755 packaging/files/etc/uci-defaults/91-tollgate-portal-setup "$PAYLOAD/etc/uci-defaults/"
+
+          install -d "$PAYLOAD/usr/share/doc/${PACKAGE_NAME}"
+          install -m 0644 LICENSE "$PAYLOAD/usr/share/doc/${PACKAGE_NAME}/LICENSE"
+
+          mkdir -p artifacts
+          env \
+            PKG_NAME="$PACKAGE_NAME" \
+            PKG_VERSION="${{ needs.determine-versioning.outputs.package_version }}" \
+            ARCH="${{ matrix.architecture }}" \
+            MAINTAINER="TollGate <tollgate@tollgate.me>" \
+            LICENSE="MIT" \
+            DEPENDS="tollgate-wrt, nodogsplash, luci, jq" \
+            PROVIDES="tollgate-captive-portal-site" \
+            REPLACES="tollgate-wrt" \
+            DESCRIPTION="TollGate Captive Portal and Admin SPA" \
+            packaging/build-ipk.sh "$PAYLOAD" "artifacts/$PACKAGE_FILENAME"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.PACKAGE_FILENAME }}
+          path: artifacts/${{ env.PACKAGE_FILENAME }}
+          retention-days: 5
+
+  package-apk:
+    needs: [build-spa, define-package-matrix, determine-versioning]
+    runs-on: ubuntu-latest
+    container:
+      image: openwrt/sdk:${{ matrix.sdk }}-25.12.0
+      options: --user root
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.define-package-matrix.outputs.apk_matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: src-checkout
+          fetch-depth: 1
+
+      - name: Download SPA dist
+        uses: actions/download-artifact@v3
+        with:
+          name: spa-dist
+          path: dist/
+
+      - name: Stage SDK package tree
+        run: |
+          set -eu
+          PACKAGE_FILENAME=${PACKAGE_NAME}_${{ needs.determine-versioning.outputs.package_version }}_${{ matrix.architecture }}.apk
+          echo "PACKAGE_FILENAME=$PACKAGE_FILENAME" >> $GITHUB_ENV
+
+          STAGE=/builder/package/${PACKAGE_NAME}
+          mkdir -p "$STAGE"
+          cp -r src-checkout/packaging/. "$STAGE/"
+          cp -r src-checkout/dist/ "$STAGE/dist/"
+          cp -r src-checkout/openwrt/ "$STAGE/openwrt/"
+          cp src-checkout/LICENSE "$STAGE/LICENSE"
+
+      - name: Configure SDK
+        run: |
+          cd /builder
+          make defconfig
+          {
+            echo "CONFIG_PACKAGE_${PACKAGE_NAME}=y"
+            echo "CONFIG_PACKAGE_tollgate-wrt=y"
+            echo "CONFIG_PACKAGE_nodogsplash=y"
+            echo "CONFIG_PACKAGE_luci=y"
+            echo "CONFIG_PACKAGE_jq=y"
+            echo "CONFIG_USE_APK=y"
+          } >> .config
+          make defconfig
+
+      - name: Compile package
+        shell: bash
+        run: |
+          cd /builder
+          env \
+            PACKAGE_VERSION=${{ needs.determine-versioning.outputs.package_version }} \
+            make -j$(nproc) package/${PACKAGE_NAME}/compile
+
+      - name: Collect artifact
+        run: |
+          PACKAGE_PATH=$(find /builder/bin/packages -name "*.apk" -type f | head -n1)
+          if [ -z "$PACKAGE_PATH" ]; then
+            echo "No .apk package found" >&2
+            exit 1
+          fi
+          ls -lh "$PACKAGE_PATH"
+          mkdir -p /github/workspace/artifacts
+          cp "$PACKAGE_PATH" "/github/workspace/artifacts/${PACKAGE_FILENAME}"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.PACKAGE_FILENAME }}
+          path: /github/workspace/artifacts/${{ env.PACKAGE_FILENAME }}
+          retention-days: 5
+
+  publish-metadata:
+    needs: [determine-versioning, package-ipk, package-apk, define-package-matrix]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: ubuntu:latest
+      options: --user root
+    defaults:
+      run:
+        shell: bash
+    env:
+      BLOSSOM_SERVER: "https://cmbethpcg000e5el0ehhk5933-blossom.eggstr.com"
+      RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+      PUBLISH_MATRIX: ${{ needs.define-package-matrix.outputs.matrix }}
+      PACKAGE_VERSION: ${{ needs.determine-versioning.outputs.package_version }}
+      RELEASE_CHANNEL: ${{ needs.determine-versioning.outputs.release_channel }}
+    steps:
+      - name: Install required tools
+        run: |
+          apt-get update
+          apt-get install -y curl jq
+          curl -L "https://github.com/fiatjaf/nak/releases/download/v0.16.2/nak-v0.16.2-linux-amd64" -o /usr/local/bin/nak
+          chmod +x /usr/local/bin/nak
+          nak --version
+
+      - name: Download all package artifacts
+        uses: actions/download-artifact@v3
+        with:
+          pattern: "${{ env.PACKAGE_NAME }}_*"
+          path: ./artifacts
+          merge-multiple: true
+
+      - name: Upload to Blossom
+        id: blossom
+        env:
+          NSEC_HEX: ${{ secrets.NSEC_HEX }}
+        run: |
+          set -euo pipefail
+
+          upload_one() {
+            local file="$1"
+            local attempt=1 delay=2
+            while [ $attempt -le 3 ]; do
+              if resp=$(nak blossom upload --server "$BLOSSOM_SERVER" --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
+                local hash
+                hash=$(printf '%s' "$resp" | jq -r '.sha256 // empty' 2>/dev/null || echo "")
+                if [ -n "$hash" ] && [ "$hash" != "null" ]; then
+                  printf '%s' "$hash"
+                  return 0
+                fi
+              fi
+              echo "  attempt ${attempt} failed; retrying in ${delay}s..." >&2
+              sleep $delay
+              delay=$((delay * 2))
+              attempt=$((attempt + 1))
+            done
+            return 1
+          }
+
+          : > manifest.jsonl
+          printf '%s\n' "$PUBLISH_MATRIX" | jq -c '.include[]' | while read -r cell; do
+            arch=$(printf '%s' "$cell" | jq -r '.architecture')
+            fmt=$(printf '%s' "$cell" | jq -r '.format')
+            filename="${PACKAGE_NAME}_${PACKAGE_VERSION}_${arch}.${fmt}"
+            file="./artifacts/${filename}"
+            if [ ! -f "$file" ]; then
+              echo "ERROR: expected artifact missing: $file" >&2
+              exit 1
+            fi
+
+            echo "Uploading $filename..."
+            if ! hash=$(upload_one "$file"); then
+              echo "ERROR: blossom upload failed for $filename" >&2
+              exit 1
+            fi
+            jq -cn \
+              --arg filename "$filename" --arg arch "$arch" --arg fmt "$fmt" \
+              --arg hash "$hash" \
+              '{filename:$filename, architecture:$arch, format:$fmt, compression:"none", hash:$hash, url:("'"$BLOSSOM_SERVER"'/" + $hash + "." + $fmt)}' \
+              >> manifest.jsonl
+            echo "  uploaded: $hash"
+          done
+
+      - name: Build NIP-94 events
+        env:
+          NSEC_HEX: ${{ secrets.NSEC_HEX }}
+        run: |
+          set -euo pipefail
+          : > events.jsonl
+          while read -r entry; do
+            filename=$(printf '%s' "$entry" | jq -r '.filename')
+            arch=$(printf '%s' "$entry" | jq -r '.architecture')
+            fmt=$(printf '%s' "$entry" | jq -r '.format')
+            hash=$(printf '%s' "$entry" | jq -r '.hash')
+            url=$(printf '%s' "$entry" | jq -r '.url')
+
+            nak event --sec "$NSEC_HEX" -k 1063 \
+              -c "TollGate Package: ${PACKAGE_NAME} for ${arch}" \
+              --tag url="$url" \
+              --tag m="application/octet-stream" \
+              --tag x="$hash" \
+              --tag ox="$hash" \
+              --tag filename="$filename" \
+              --tag A="$arch" \
+              --tag v="$PACKAGE_VERSION" \
+              --tag c="$RELEASE_CHANNEL" \
+              --tag n="$PACKAGE_NAME" \
+              --tag compression="none" \
+              --tag format="$fmt" \
+              < /dev/null \
+              | jq -c . >> events.jsonl
+          done < manifest.jsonl
+
+      - name: Publish events
+        run: |
+          set -euo pipefail
+          cat events.jsonl | nak event $RELAYS
+
+      - name: Build summary
+        run: |
+          echo "Published $(wc -l < events.jsonl) NIP-94 events across $(echo $RELAYS | wc -w) relays."
+          jq -r '"  \(.architecture) \(.format): \(.url)"' manifest.jsonl
