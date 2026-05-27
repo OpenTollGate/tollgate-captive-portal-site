@@ -21,6 +21,7 @@ if ! uci -q get uhttpd.tollgate >/dev/null 2>&1; then
     uci set uhttpd.tollgate.max_requests='3'
     uci set uhttpd.tollgate.tcp_keepalive='1'
     uci set uhttpd.tollgate.error_page='/admin.html'
+    uci set uhttpd.tollgate.index_page='admin.html'
     uci add_list uhttpd.tollgate.listen_http='0.0.0.0:80'
     uci add_list uhttpd.tollgate.listen_http='[::]:80'
     uci commit uhttpd
