@@ -244,6 +244,7 @@ jobs:
 
   publish-metadata:
     needs: [determine-versioning, package-ipk, package-apk, define-package-matrix]
+    if: always() && needs.package-ipk.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
