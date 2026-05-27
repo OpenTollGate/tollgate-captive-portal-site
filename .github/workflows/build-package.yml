@@ -286,7 +286,7 @@ jobs:
             local file="$1"
             local attempt=1 delay=2
             while [ $attempt -le 3 ]; do
-              if resp=$(nak blossom upload --server "$BLOSSOM_SERVER" --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
+              if resp=$(nak blossom --server "$BLOSSOM_SERVER" upload --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
                 local hash
                 hash=$(printf '%s' "$resp" | jq -r '.sha256 // empty' 2>/dev/null || echo "")
                 if [ -n "$hash" ] && [ "$hash" != "null" ]; then
@@ -295,6 +295,7 @@ jobs:
                 fi
               fi
               echo "  attempt ${attempt} failed; retrying in ${delay}s..." >&2
+              echo "  response: $resp" >&2
               sleep $delay
               delay=$((delay * 2))
               attempt=$((attempt + 1))
