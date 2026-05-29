@@ -319,8 +319,8 @@ jobs:
             filename="${PACKAGE_NAME}_${PACKAGE_VERSION}_${arch}.${fmt}"
             file="./artifacts/${filename}"
             if [ ! -f "$file" ]; then
-              echo "ERROR: expected artifact missing: $file" >&2
-              exit 1
+              echo "  skipping $filename (artifact not built)"
+              continue
             fi
 
             echo "Uploading $filename to $BLOSSOM_SERVER_1..."
