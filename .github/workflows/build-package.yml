@@ -254,8 +254,9 @@ jobs:
       run:
         shell: bash
     env:
-      BLOSSOM_SERVER: "https://blossom.orangesync.tech"
-      RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me"
+      BLOSSOM_SERVER_1: "https://blossom1.orangesync.tech"
+      BLOSSOM_SERVER_2: "https://blossom2.orangesync.tech"
+      RELAYS: "wss://relay1.orangesync.tech wss://relay2.orangesync.tech wss://ngit1.orangesync.tech wss://ngit2.orangesync.tech"
       PUBLISH_MATRIX: ${{ needs.define-package-matrix.outputs.matrix }}
       PACKAGE_VERSION: ${{ needs.determine-versioning.outputs.package_version }}
       RELEASE_CHANNEL: ${{ needs.determine-versioning.outputs.release_channel }}
@@ -283,10 +284,10 @@ jobs:
           set -euo pipefail
 
           upload_one() {
-            local file="$1"
+            local file="$1" server="$2"
             local attempt=1 delay=2
             while [ $attempt -le 3 ]; do
-              if resp=$(nak blossom --server "$BLOSSOM_SERVER" upload --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
+              if resp=$(nak blossom --server "$server" upload --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
                 local hash
                 hash=$(printf '%s' "$resp" | jq -r '.sha256 // empty' 2>/dev/null || echo "")
                 if [ -n "$hash" ] && [ "$hash" != "null" ]; then
@@ -294,13 +295,21 @@ jobs:
                   return 0
                 fi
               fi
-              echo "  attempt ${attempt} failed; retrying in ${delay}s..." >&2
+              echo "  attempt ${attempt} failed on ${server}; retrying in ${delay}s..." >&2
               echo "  response: $resp" >&2
               sleep $delay
               delay=$((delay * 2))
               attempt=$((attempt + 1))
             done
             return 1
+          }
+
+          mirror_one() {
+            local hash="$1"
+            echo "  mirroring $hash to $BLOSSOM_SERVER_2..."
+            nak blossom --server "$BLOSSOM_SERVER_2" mirror --sec "$NSEC_HEX" "$BLOSSOM_SERVER_1/$hash" < /dev/null 2>&1 || {
+              echo "  WARNING: mirror failed for $hash, continuing" >&2
+            }
           }
 
           : > manifest.jsonl
@@ -314,15 +323,16 @@ jobs:
               exit 1
             fi
 
-            echo "Uploading $filename..."
-            if ! hash=$(upload_one "$file"); then
+            echo "Uploading $filename to $BLOSSOM_SERVER_1..."
+            if ! hash=$(upload_one "$file" "$BLOSSOM_SERVER_1"); then
               echo "ERROR: blossom upload failed for $filename" >&2
               exit 1
             fi
+            mirror_one "$hash"
             jq -cn \
               --arg filename "$filename" --arg arch "$arch" --arg fmt "$fmt" \
               --arg hash "$hash" \
-              '{filename:$filename, architecture:$arch, format:$fmt, compression:"none", hash:$hash, url:("'"$BLOSSOM_SERVER"'/" + $hash + "." + $fmt)}' \
+              '{filename:$filename, architecture:$arch, format:$fmt, compression:"none", hash:$hash, url:("'"$BLOSSOM_SERVER_1"'/" + $hash + "." + $fmt)}' \
               >> manifest.jsonl
             echo "  uploaded: $hash"
           done
