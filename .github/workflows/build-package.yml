@@ -254,9 +254,9 @@ jobs:
       run:
         shell: bash
     env:
-      BLOSSOM_SERVER_1: "https://blossom1.orangesync.tech"
-      BLOSSOM_SERVER_2: "https://blossom2.orangesync.tech"
-      RELAYS: "wss://relay1.orangesync.tech wss://relay2.orangesync.tech wss://ngit1.orangesync.tech wss://ngit2.orangesync.tech"
+      BLOSSOM_SERVERS: "https://blossom.tollgate.me https://blossom.primal.net https://blossom1.orangesync.tech https://blossom2.orangesync.tech"
+      BLOSSOM_MIN_SUCCESS: "2"
+      RELAYS: "wss://relay.damus.io wss://nos.lol wss://nostr.mom wss://relay.tollgate.me wss://relay1.orangesync.tech wss://relay2.orangesync.tech wss://ngit1.orangesync.tech wss://ngit2.orangesync.tech"
       PUBLISH_MATRIX: ${{ needs.define-package-matrix.outputs.matrix }}
       PACKAGE_VERSION: ${{ needs.determine-versioning.outputs.package_version }}
       RELEASE_CHANNEL: ${{ needs.determine-versioning.outputs.release_channel }}
@@ -276,27 +276,26 @@ jobs:
           path: ./artifacts
           merge-multiple: true
 
-      - name: Upload to Blossom
+      - name: Upload to Blossom (batched with retry + backoff)
         id: blossom
         env:
           NSEC_HEX: ${{ secrets.NSEC_HEX }}
         run: |
           set -euo pipefail
 
-          upload_one() {
+          upload_to_server() {
             local file="$1" server="$2"
-            local attempt=1 delay=2
+            local attempt=1 delay=2 resp hash
             while [ $attempt -le 3 ]; do
-              if resp=$(nak blossom --server "$server" upload --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
-                local hash
+              if resp=$(nak blossom upload --server "$server" --sec "$NSEC_HEX" "$file" < /dev/null 2>&1); then
                 hash=$(printf '%s' "$resp" | jq -r '.sha256 // empty' 2>/dev/null || echo "")
                 if [ -n "$hash" ] && [ "$hash" != "null" ]; then
                   printf '%s' "$hash"
                   return 0
                 fi
               fi
-              echo "  attempt ${attempt} failed on ${server}; retrying in ${delay}s..." >&2
-              echo "  response: $resp" >&2
+              echo "    attempt ${attempt} to ${server} failed for $(basename "$file"); retrying in ${delay}s..." >&2
+              echo "    response: $resp" >&2
               sleep $delay
               delay=$((delay * 2))
               attempt=$((attempt + 1))
@@ -304,16 +303,35 @@ jobs:
             return 1
           }
 
-          mirror_one() {
-            local hash="$1"
-            echo "  mirroring $hash to $BLOSSOM_SERVER_2..."
-            nak blossom --server "$BLOSSOM_SERVER_2" mirror --sec "$NSEC_HEX" "$BLOSSOM_SERVER_1/$hash" < /dev/null 2>&1 || {
-              echo "  WARNING: mirror failed for $hash, continuing" >&2
-            }
+          upload_redundant() {
+            local file="$1"
+            local hash="" ok=0
+            local servers_ok=()
+            for server in $BLOSSOM_SERVERS; do
+              if srv_hash=$(upload_to_server "$file" "$server"); then
+                ok=$((ok + 1))
+                echo "    ok: ${server} -> ${srv_hash}" >&2
+                if [ -z "$hash" ]; then hash="$srv_hash"; fi
+                if [ "$srv_hash" != "$hash" ]; then
+                  echo "    WARNING: ${server} returned ${srv_hash}, expected ${hash}" >&2
+                fi
+                servers_ok+=("$server")
+              else
+                echo "    FAILED: ${server} (after retries)" >&2
+              fi
+            done
+            if [ "$ok" -lt "$BLOSSOM_MIN_SUCCESS" ]; then
+              echo "  ERROR: only ${ok} of $(echo $BLOSSOM_SERVERS | wc -w) blossom uploads succeeded (need >= ${BLOSSOM_MIN_SUCCESS})" >&2
+              return 1
+            fi
+            echo "  ${ok}/$(echo $BLOSSOM_SERVERS | wc -w) mirrors ok" >&2
+            printf '%s\n' "$hash"
+            printf '%s\n' "${servers_ok[@]}"
           }
 
           : > manifest.jsonl
-          printf '%s\n' "$PUBLISH_MATRIX" | jq -c '.include[]' | while read -r cell; do
+          mapfile -t cells < <(printf '%s\n' "$PUBLISH_MATRIX" | jq -c '.include[]')
+          for cell in "${cells[@]}"; do
             arch=$(printf '%s' "$cell" | jq -r '.architecture')
             fmt=$(printf '%s' "$cell" | jq -r '.format')
             filename="${PACKAGE_NAME}_${PACKAGE_VERSION}_${arch}.${fmt}"
@@ -323,18 +341,22 @@ jobs:
               continue
             fi
 
-            echo "Uploading $filename to $BLOSSOM_SERVER_1..."
-            if ! hash=$(upload_one "$file" "$BLOSSOM_SERVER_1"); then
+            echo "Uploading $filename to all blossom mirrors..."
+            if ! result=$(upload_redundant "$file"); then
               echo "ERROR: blossom upload failed for $filename" >&2
               exit 1
             fi
-            mirror_one "$hash"
+            hash=$(printf '%s' "$result" | sed -n '1p')
+            urls_json=$(printf '%s' "$result" | sed -n '2,$p' \
+              | jq -R --arg hash "$hash" --arg fmt "$fmt" 'select(length>0) | . + "/" + $hash + "." + $fmt' \
+              | jq -sc '.')
             jq -cn \
               --arg filename "$filename" --arg arch "$arch" --arg fmt "$fmt" \
               --arg hash "$hash" \
-              '{filename:$filename, architecture:$arch, format:$fmt, compression:"none", hash:$hash, url:("'"$BLOSSOM_SERVER_1"'/" + $hash + "." + $fmt)}' \
+              --argjson urls "$urls_json" \
+              '{filename:$filename, architecture:$arch, format:$fmt, compression:"none", hash:$hash, urls:$urls, url:$urls[0]}' \
               >> manifest.jsonl
-            echo "  uploaded: $hash"
+            echo "  uploaded: $hash ($(printf '%s' "$urls_json" | jq -r 'length') mirrors)"
           done
 
       - name: Build NIP-94 events
@@ -348,11 +370,15 @@ jobs:
             arch=$(printf '%s' "$entry" | jq -r '.architecture')
             fmt=$(printf '%s' "$entry" | jq -r '.format')
             hash=$(printf '%s' "$entry" | jq -r '.hash')
-            url=$(printf '%s' "$entry" | jq -r '.url')
+
+            url_tags=()
+            while IFS= read -r u; do
+              url_tags+=(--tag "url=$u")
+            done < <(printf '%s' "$entry" | jq -r '.urls[]')
 
             nak event --sec "$NSEC_HEX" -k 1063 \
               -c "TollGate Package: ${PACKAGE_NAME} for ${arch}" \
-              --tag url="$url" \
+              "${url_tags[@]}" \
               --tag m="application/octet-stream" \
               --tag x="$hash" \
               --tag ox="$hash" \
