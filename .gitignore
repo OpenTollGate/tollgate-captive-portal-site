@@ -1,4 +1,14 @@
 .DS_Store
 build/
 node_modules/
-package-lock.jsondist/
+package-lock.json
+dist/
+
+# LLM planning documents — not for release
+*-plan.md
+PLAN-*.md
+TODO-*.md
+MOCK-*.md
+TEST-COVERAGE-*.md
+PR*-DECOMPOSITION-*.md
+docs/tmp/
