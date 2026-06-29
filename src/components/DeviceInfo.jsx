@@ -6,20 +6,30 @@ export const DeviceInfo = (props) => {
   const { tollgateDetails } = props;
   const { t: i18n } = useTranslation();
 
+  // defensively resolve deviceInfo. the /whoami endpoint may return an error or
+  // an empty/undefined payload, in which case tollgateDetails (or its deviceInfo)
+  // may be null/undefined. accessing .deviceInfo.type without these guards would
+  // throw a TypeError and crash the entire SPA.
+  const deviceInfo = tollgateDetails?.deviceInfo;
+
+  // if no device info is available (e.g. /whoami errored), render the footer
+  // without the device info line instead of crashing
+  if (!deviceInfo) {
+    return null;
+  }
+
   // set default values for device type and value
   let type = 'unkonw_type';
   let value = 'unknown_value';
 
-  // extract device type and value from tollgateDetails if available
-  if (tollgateDetails.deviceInfo) {
-    if (tollgateDetails.deviceInfo.type) {
-      if ('mac' === tollgateDetails.deviceInfo.type) {
-        type = i18n(`device_${tollgateDetails.deviceInfo.type}`);
-      }
+  // extract device type and value from deviceInfo using null-safe access
+  if (deviceInfo?.type) {
+    if ('mac' === deviceInfo.type) {
+      type = i18n(`device_${deviceInfo.type}`);
     }
-    if (tollgateDetails.deviceInfo.value) {
-      value = tollgateDetails.deviceInfo.value;
-    }
+  }
+  if (deviceInfo?.value) {
+    value = deviceInfo.value;
   }
 
   // render a paragraph with the device type and value
