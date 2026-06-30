@@ -7,6 +7,7 @@ import classNames from 'classnames';
 import Background from './components/Background.jsx'
 import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
+import { BalancePage } from './components/BalancePage.jsx'
 import { Error } from './components/Status.jsx';
 import { AccessGrantedIcon, RadioButtonIcon } from './components/Icon.jsx'
 
@@ -105,6 +106,7 @@ export const App = () => {
 
             <div className="tollgate-captive-portal-tabs" aria-label={t('tab_aria_label')}>
               <Tab type="cashu" method={method} setMethod={setMethod} />
+              <Tab type="balance" method={method} setMethod={setMethod} />
               <Tab type="lightning" method={method} setMethod={setMethod} />
             </div>
 
@@ -115,9 +117,10 @@ export const App = () => {
                 <Error label={error.label} code={error.code} message={error.message} />
               </div>}
 
-              {/* show cashu or lightning method based on selection */}
+              {/* show cashu, lightning, or the balance page based on selection */}
               {!loading && !error && method === 'cashu' && <Cashu tollgateDetails={tollgateDetails.value} />}
               {!loading && !error && method === 'lightning' && <Lightning tollgateDetails={tollgateDetails.value} />}
+              {!loading && !error && method === 'balance' && <BalancePage tollgateDetails={tollgateDetails.value} onNavigate={setMethod} />}
             </div>
 
           </div>
