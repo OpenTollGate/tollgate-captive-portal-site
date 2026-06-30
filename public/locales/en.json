@@ -111,5 +111,15 @@
   "QR003_label": "QR code not found",
   "QR003_message": "No QR code found in the selected image.",
   "QR004_label": "Camera error",
-  "QR004_message": "Please make sure you have a camera and that this page has permission to use it."
+  "QR004_message": "Please make sure you have a camera and that this page has permission to use it.",
+
+  "balance_tab": "💰 Balance",
+  "balance_page_title": "Your Internet Balance",
+  "balance_page_subtitle": "Check how much internet access a Cashu token grants before you pay.",
+  "balance_label": "Internet Balance",
+  "balance_input_placeholder": "Paste a Cashu token to check your balance…",
+  "balance_empty": "Enter or scan a Cashu token above to see your internet balance.",
+  "balance_rate": "Rate: {{price}} {{unit}} per {{step}}",
+  "balance_summary": "A {{token}} token grants {{access}} of internet access.",
+  "balance_go_purchase": "Purchase Internet Access"
 }
