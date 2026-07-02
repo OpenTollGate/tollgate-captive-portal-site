@@ -23,7 +23,7 @@ import './Lightning.scss'
 // main component for handling lightning payments
 export const Lightning = (props) => {
   const { t } = useTranslation();
-  const { tollgateDetails } = props;
+  const { tollgateDetails, onNavigate } = props;
   // state for payment flow and user input
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -108,7 +108,7 @@ export const Lightning = (props) => {
       {(!success && processing) && <Processing label={t('processing_invoice_request')} />}
 
       {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
-      {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
+      {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} onViewBalance={onNavigate} />}
 
       {/* unitinput: input field for entering the amount to pay, and selecting access option */}
       {(!success && !processing && accessOptions.length && !invoice) && <UnitInput

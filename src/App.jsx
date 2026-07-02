@@ -118,8 +118,8 @@ export const App = () => {
               </div>}
 
               {/* show cashu, lightning, or the balance page based on selection */}
-              {!loading && !error && method === 'cashu' && <Cashu tollgateDetails={tollgateDetails.value} />}
-              {!loading && !error && method === 'lightning' && <Lightning tollgateDetails={tollgateDetails.value} />}
+              {!loading && !error && method === 'cashu' && <Cashu tollgateDetails={tollgateDetails.value} onNavigate={setMethod} />}
+              {!loading && !error && method === 'lightning' && <Lightning tollgateDetails={tollgateDetails.value} onNavigate={setMethod} />}
               {!loading && !error && method === 'balance' && <BalancePage tollgateDetails={tollgateDetails.value} onNavigate={setMethod} />}
             </div>
 
@@ -184,39 +184,11 @@ export const Processing = ({ label }) => {
 }
 
 // shows access granted message if payment succeeded
-export const AccessGranted = ({ allocation }) => {
+// PORTAL-2: removed the 900ms auto-redirect/window-close behaviour.
+// The success screen now stays put and shows a persistent "View Balance"
+// link so the user can navigate to the Balance tab on their own.
+export const AccessGranted = ({ allocation, onViewBalance }) => {
   const { t } = useTranslation();
-  const [showCloseButton, setShowCloseButton] = useState(false);
-  const [closeButtonClicked, setCloseButtonClicked] = useState(false);
-
-  // Auto-submit form after showing success message
-  useEffect(() => {
-    if (!showCloseButton) {
-      const timer = setTimeout(() => {
-        const form = document.getElementById('auto-close-form');
-        if (form) {
-          form.submit();
-        } else {
-          // Fallback to window.close if form submission fails
-          window.close();
-          // If window.close doesn't work, show close button
-          setTimeout(() => {
-            setShowCloseButton(true);
-          }, 500);
-        }
-      }, 900);
-      return () => clearTimeout(timer);
-    }
-  }, [showCloseButton]);
-
-  const handleClosePage = () => {
-    setCloseButtonClicked(true);
-    try {
-      window.close();
-    } catch (error) {
-      console.error('Failed to close window:', error);
-    }
-  };
 
   return <div className="tollgate-captive-portal-access-granted">
     <div className="tollgate-captive-portal-access-granted-checkmark">
@@ -225,27 +197,10 @@ export const AccessGranted = ({ allocation }) => {
     <div className="tollgate-captive-portal-access-granted-label">
       <h2>{t('access_granted_title')}</h2>
       <p dangerouslySetInnerHTML={{ __html: t('access_granted_subtitle', { purchased: `<strong>${allocation}</strong>` }) }}></p>
-      {!showCloseButton ? (
-        <>
-          <p className="small">{t('auto_close_message', 'This window will close automatically.')}</p>
-          {/* Hidden form for auto-close captive portal */}
-          <form hidden="true" id="auto-close-form" method="GET" action="/" style={{display: "none"}}></form>
-        </>
-      ) : (
-        <>
-          <button
-            onClick={handleClosePage}
-            disabled={closeButtonClicked}
-            className="close-button"
-          >
-            {t('close_window', 'Close This Window')}
-          </button>
-          {closeButtonClicked && (
-            <p className="close-failure-message">
-              {t('close_failure_message', 'Your device doesn\'t allow automatic window closing. Please close this window manually.')}
-            </p>
-          )}
-        </>
+      {onViewBalance && (
+        <button className="btn cta" onClick={() => onViewBalance('balance')}>
+          {t('view_balance')}
+        </button>
       )}
     </div>
   </div>

@@ -21,7 +21,7 @@ import './Cashu.scss'
 // main component for cashu payment method
 export const Cashu = (props) => {
   const { t } = useTranslation();
-  const { tollgateDetails } = props;
+  const { tollgateDetails, onNavigate } = props;
   // state for user input and payment flow
   const [token, setToken] = useState('');
   const [tokenValue, setTokenValue] = useState(null);
@@ -130,7 +130,7 @@ export const Cashu = (props) => {
         {(!success && processing) && <Processing label={t('processing_payment')} />}
 
         {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
-        {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
+        {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} onViewBalance={onNavigate} />}
 
         {/* tokeninput: input field and actions for entering or scanning a cashu token */}
         {(!success && !processing && accessOptions.length) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
