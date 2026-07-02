@@ -59,7 +59,10 @@
   "mint_pricing": "{{price}} / {{unit}}",
 
   "access_granted_title": "Payment successful!",
-  "access_granted_subtitle": "You now have {{purchased}} of internet access. This window should close automatically. If it does not, you can safely leave this page.",
+  "access_granted_subtitle": "You now have {{purchased}} of internet access. Your connection is active.",
+  "access_duration_label": "Access purchased",
+  "view_balance": "💰 View Balance",
+  "balance_link_hint": "You can check your remaining internet balance at any time.",
 
   "TG001_label": "Failed to fetch TollGate details",
   "TG001_message": "Could not fetch TollGate details.",

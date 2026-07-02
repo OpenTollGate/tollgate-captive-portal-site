@@ -12,7 +12,7 @@ import { Error } from './components/Status.jsx';
 import { AccessGrantedIcon, RadioButtonIcon } from './components/Icon.jsx'
 
 // helpers
-import { fetchTollgateData, getStepSizeValues } from './helpers/tollgate.js'
+import { fetchTollgateData, getStepSizeValues, getTollgateBaseUrl } from './helpers/tollgate.js'
 
 // styles and assets
 import './App.scss'
@@ -186,37 +186,24 @@ export const Processing = ({ label }) => {
 // shows access granted message if payment succeeded
 export const AccessGranted = ({ allocation }) => {
   const { t } = useTranslation();
-  const [showCloseButton, setShowCloseButton] = useState(false);
-  const [closeButtonClicked, setCloseButtonClicked] = useState(false);
+  const [authCompleted, setAuthCompleted] = useState(false);
 
-  // Auto-submit form after showing success message
+  // Auto-submit the auth form via fetch to complete captive portal authentication.
+  // Using fetch instead of form.submit() intercepts the redirect to '/' so the
+  // portal UI stays visible — the user is not kicked out and can view their balance.
+  // Internet access was already granted by the payment POST in submitToken(); this
+  // GET request finalises the captive portal detection flow without navigating away.
   useEffect(() => {
-    if (!showCloseButton) {
-      const timer = setTimeout(() => {
-        const form = document.getElementById('auto-close-form');
-        if (form) {
-          form.submit();
-        } else {
-          // Fallback to window.close if form submission fails
-          window.close();
-          // If window.close doesn't work, show close button
-          setTimeout(() => {
-            setShowCloseButton(true);
-          }, 500);
-        }
-      }, 900);
-      return () => clearTimeout(timer);
-    }
-  }, [showCloseButton]);
+    const timer = setTimeout(() => {
+      fetch('/', { method: 'GET' })
+        .then(() => setAuthCompleted(true))
+        .catch(() => setAuthCompleted(true)); // proceed regardless — auth already granted
+    }, 900);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const handleClosePage = () => {
-    setCloseButtonClicked(true);
-    try {
-      window.close();
-    } catch (error) {
-      console.error('Failed to close window:', error);
-    }
-  };
+  // build the persistent portal balance URL from the gateway host
+  const balanceUrl = `${getTollgateBaseUrl()}/portal`;
 
   return <div className="tollgate-captive-portal-access-granted">
     <div className="tollgate-captive-portal-access-granted-checkmark">
@@ -225,28 +212,27 @@ export const AccessGranted = ({ allocation }) => {
     <div className="tollgate-captive-portal-access-granted-label">
       <h2>{t('access_granted_title')}</h2>
       <p dangerouslySetInnerHTML={{ __html: t('access_granted_subtitle', { purchased: `<strong>${allocation}</strong>` }) }}></p>
-      {!showCloseButton ? (
-        <>
-          <p className="small">{t('auto_close_message', 'This window will close automatically.')}</p>
-          {/* Hidden form for auto-close captive portal */}
-          <form hidden="true" id="auto-close-form" method="GET" action="/" style={{display: "none"}}></form>
-        </>
-      ) : (
-        <>
-          <button
-            onClick={handleClosePage}
-            disabled={closeButtonClicked}
-            className="close-button"
-          >
-            {t('close_window', 'Close This Window')}
-          </button>
-          {closeButtonClicked && (
-            <p className="close-failure-message">
-              {t('close_failure_message', 'Your device doesn\'t allow automatic window closing. Please close this window manually.')}
-            </p>
-          )}
-        </>
-      )}
+
+      {/* show the access duration the user purchased */}
+      <div className="tollgate-captive-portal-access-granted-duration">
+        <span className="tollgate-captive-portal-access-granted-duration-label">
+          {t('access_duration_label')}
+        </span>
+        <span className="tollgate-captive-portal-access-granted-duration-value">
+          {allocation}
+        </span>
+      </div>
+
+      {/* link to the persistent balance page so the user can return later */}
+      <a
+        href={balanceUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="cta tollgate-captive-portal-access-granted-balance-link"
+      >
+        {t('view_balance')}
+      </a>
+      <p className="small">{t('balance_link_hint')}</p>
     </div>
   </div>
 }
