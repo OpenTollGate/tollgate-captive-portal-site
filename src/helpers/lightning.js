@@ -1,54 +1,76 @@
+import { getTollgateBaseUrl } from "./tollgate";
+
+const invoiceRequestError = (i18n, message) => ({
+  status: 0,
+  code: "LN003",
+  label: i18n("LN003_label"),
+  message: message || i18n("LN003_message"),
+});
+
+const invoiceStatusError = (i18n, message) => ({
+  status: 0,
+  code: "LN004",
+  label: i18n("LN004_label"),
+  message: message || i18n("LN004_message"),
+});
+
 // request an invoice for a lightning payment
-export const requestInvoice = async (amount, device, i18n) => {
+export const requestInvoice = async (amount, mintUrl, i18n) => {
   try {
-    // for testing return a dummy invoice url (rickroll)
-    return {
-      status: 1,
-      invoice: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ",
-    };
-
-    // to enable real lightning integration, remove the above block and use the code below
-    // the following code is pure poetry and is a discussion topic
-
-    // get the tollgate backend base url
     const baseUrl = getTollgateBaseUrl();
-
-    // send a post request to the backend to request a lightning invoice
     const response = await fetch(`${baseUrl}/ln-invoice`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ amount, device }),
+      body: JSON.stringify({ amount, mint_url: mintUrl }),
     });
 
-    // if the backend returns an error, handle it and return a user-friendly error object
-    if (!response.ok) {
-      console.error("server error:", response);
-      return {
-        status: 0,
-        code: "LN01",
-        label: "invoice request failed",
-        message: "server error. reload the page and try again.",
-      };
+    const payload = await response.json();
+
+    if (!response.ok || !payload.status) {
+      console.error("invoice request failed:", payload);
+      return invoiceRequestError(i18n, payload?.error);
     }
 
-    // parse the invoice string from the response
-    const invoice = await response.text();
-
-    // return the invoice to the caller
     return {
       status: 1,
-      invoice,
+      quote: payload.quote,
+      invoice: payload.invoice,
+      mintUrl: payload.mint_url,
+      amount: payload.amount,
+      expiry: payload.expiry,
+      state: payload.state,
     };
   } catch (error) {
-    // catch any unexpected errors and return a user-friendly error object
-    console.error("error sending token:", error);
+    console.error("error requesting invoice:", error);
+    return invoiceRequestError(i18n);
+  }
+};
+
+export const getInvoiceStatus = async (quote, i18n) => {
+  try {
+    const baseUrl = getTollgateBaseUrl();
+    const response = await fetch(`${baseUrl}/ln-invoice?quote=${encodeURIComponent(quote)}`);
+    const payload = await response.json();
+
+    if (!response.ok || !payload.status) {
+      console.error("invoice status request failed:", payload);
+      return invoiceStatusError(i18n, payload?.error);
+    }
+
     return {
-      status: 0,
-      code: "LN02",
-      label: "invoice request failed",
-      message: "reload the page and try again.",
+      status: 1,
+      quote: payload.quote,
+      mintUrl: payload.mint_url,
+      amount: payload.amount,
+      state: payload.state,
+      accessGranted: payload.access_granted,
+      allotment: payload.allotment,
+      metric: payload.metric,
     };
+  } catch (error) {
+    console.error("error checking invoice status:", error);
+    return invoiceStatusError(i18n);
   }
 };

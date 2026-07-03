@@ -1,19 +1,17 @@
 // external
-import React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
-import classNames from 'classnames';
 
 // internal
 import LanguageSwitcher from './LanguageSwitcher';
 import DeviceInfo from './DeviceInfo';
-import { Error, Success } from './Status';
+import { Error } from './Status';
 import { Processing, AccessGranted, AccessOptions } from '../App'
-import { CancelIcon, SwitchIcon } from './Icon'
+import { CancelIcon } from './Icon'
 
 // helpers
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
-import { requestInvoice } from '../helpers/lightning';
+import { requestInvoice, getInvoiceStatus } from '../helpers/lightning';
 import { createQr } from '../helpers/qr-code';
 import { copyTextToClipboard } from '../helpers/clipboard';
 
@@ -32,7 +30,7 @@ export const Lightning = (props) => {
   const [selectedMint, setSelectedMint] = useState(null)
   const [unitAmount, setUnitAmount] = useState('')
   const [allocation, setAllocation] = useState(null)
-  const [invoice, setInvoice] = useState(null);
+  const [invoiceData, setInvoiceData] = useState(null);
 
   // set accessoptions if tollgateDetails are set
   useEffect(() => {
@@ -48,11 +46,11 @@ export const Lightning = (props) => {
         message: t('LN001_message')
       })
     }
-  }, [tollgateDetails])
+  }, [tollgateDetails, t])
 
   // handle unitAmount change
   useEffect(() => {
-    if (unitAmount) {
+    if (unitAmount && selectedMint) {
       setAllocation(calculateAllocation(unitAmount, selectedMint, t))
       if (unitAmount < selectedMint.price) {
         setError({
@@ -68,7 +66,7 @@ export const Lightning = (props) => {
       setAllocation(null)
       setError(null)
     }
-  }, [unitAmount])
+  }, [unitAmount, selectedMint, t])
 
   // handle mint change
   useEffect(() => {
@@ -79,16 +77,16 @@ export const Lightning = (props) => {
 
   // handle processing change
   useEffect(() => {
-    if (processing && !invoice) {
+    if (processing && !invoiceData && selectedMint) {
       const request = async () => {
-        const response = await requestInvoice(unitAmount, tollgateDetails.deviceInfo, t);
+        const response = await requestInvoice(unitAmount, selectedMint.url, t);
 
         setTimeout(() => {
           setProcessing(false);
-          console.log(response)
 
           if (response.status) {
-            setInvoice(response.invoice)
+            setError(null)
+            setInvoiceData(response)
           } else {
             setError(response)
           }
@@ -97,11 +95,43 @@ export const Lightning = (props) => {
 
       request()
     }
-  }, [processing])
+  }, [invoiceData, processing, selectedMint, t, unitAmount])
+
+  useEffect(() => {
+    if (!invoiceData || success) {
+      return;
+    }
+
+    let active = true;
+
+    const pollStatus = async () => {
+      const response = await getInvoiceStatus(invoiceData.quote, t);
+      if (!active) {
+        return;
+      }
+
+      if (response.status) {
+        if (response.accessGranted) {
+          setError(null)
+          setSuccess(true)
+        }
+      } else {
+        setError(response)
+      }
+    }
+
+    pollStatus()
+    const interval = window.setInterval(pollStatus, 2000)
+
+    return () => {
+      active = false;
+      window.clearInterval(interval)
+    }
+  }, [invoiceData, success, t])
 
   return <div className="tollgate-captive-portal-method-lightning tollgate-captive-portal-method">
     {/* header: shows the portal title and a short description about lightning */}
-    {((!success && !processing) || (invoice && !success)) && <Header />}
+    {((!success && !processing) || (invoiceData && !success)) && <Header />}
 
     <div className="tollgate-captive-portal-method-content">
       {/* processing: displays a loading indicator and message while invoice is being requested */}
@@ -111,7 +141,7 @@ export const Lightning = (props) => {
       {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
       {/* unitinput: input field for entering the amount to pay, and selecting access option */}
-      {(!success && !processing && accessOptions.length && !invoice) && <UnitInput
+      {(!success && !processing && accessOptions.length && !invoiceData) && <UnitInput
         pricingInfo={accessOptions}
         selectedMint={selectedMint}
         unitAmount={unitAmount}
@@ -122,7 +152,7 @@ export const Lightning = (props) => {
       {error && <Error label={error.label} code={error.code} message={error.message} />}
 
       {/* accessoptions: lets the user select from available access/pricing options */}
-      {(!success && !processing && accessOptions.length && !invoice) && <div className="tollgate-captive-portal-method-options">
+      {(!success && !processing && accessOptions.length && !invoiceData) && <div className="tollgate-captive-portal-method-options">
         <h5>{t('access_options')}</h5>
         <AccessOptions
           pricingInfo={accessOptions}
@@ -132,7 +162,7 @@ export const Lightning = (props) => {
       </div>}
 
       {/* invoice: shows the lightning invoice as a qr code and provides copy/open actions */}
-      {!success && !processing && invoice && <div className="tollgate-captive-portal-method-invoice">
+      {!success && !processing && invoiceData && <div className="tollgate-captive-portal-method-invoice">
         <div className="tollgate-captive-portal-method-invoice-header">
           <span dangerouslySetInnerHTML={{
             __html:
@@ -144,33 +174,26 @@ export const Lightning = (props) => {
                 t('purchase')
           }}></span>
           <button onClick={() => {
-            setInvoice(null)
+            setInvoiceData(null)
+            setError(null)
           }}><CancelIcon />{t('cancel')}</button>
         </div>
         <a
-          // testing
-          onClick={() => {
-            setSuccess(true);
-          }}
-          // href={ invoice.startsWith('lnbc') ? `lightning:${invoice}` : invoice }
+          href={invoiceData.invoice.startsWith('ln') ? `lightning:${invoiceData.invoice}` : invoiceData.invoice}
           className="tollgate-captive-portal-method-invoice-svg"
-          dangerouslySetInnerHTML={{ __html: createQr(invoice) }}
+          dangerouslySetInnerHTML={{ __html: createQr(invoiceData.invoice) }}
         ></a>
         <div className="tollgate-captive-portal-method-invoice-actions">
           <a
-            // testing
-            onClick={() => {
-              setSuccess(true);
-            }}
-            // href={ invoice.startsWith('lnbc') ? `lightning:${invoice}` : invoice }
+            href={invoiceData.invoice.startsWith('ln') ? `lightning:${invoiceData.invoice}` : invoiceData.invoice}
             className="btn cta ellipsis"
           >{t('lightning_open_wallet')}</a>
-          <button className="cta ellipsis" onClick={(e) => copyTextToClipboard(e, invoice, t)}>{t('clipboard_copy')}</button>
+          <button className="cta ellipsis" onClick={(e) => copyTextToClipboard(e, invoiceData.invoice, t)}>{t('clipboard_copy')}</button>
         </div>
       </div>}
 
       {/* purchase button: only enabled if amount is valid and no error */}
-      {!success && !processing && !invoice && <div className="tollgate-captive-portal-method-submit">
+      {!success && !processing && !invoiceData && <div className="tollgate-captive-portal-method-submit">
         {(!unitAmount || error) && <button disabled>{t('purchase')}</button>}
         {(allocation && !processing && !error) && (() => {
           return <button
