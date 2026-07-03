@@ -1,0 +1,71 @@
+/**
+* Balance page styles.
+*
+* The centerpiece is the .balance-display card. Per DESIGN-2 the card's header
+* has ONLY its top-left and top-right corners rounded (--border-radius-large);
+* the bottom corners are left square so the header reads as a distinct cap
+* above the content row. The container uses overflow:hidden to clip the header
+* background flush against those rounded top corners.
+**/
+
+.balance-display {
+  border: 0.2rem solid var(--color-green);
+  background: var(--color-green-transparent);
+  color: var(--color-white);
+  display: flex;
+  flex-direction: column;
+  // clip the header's rounded top corners against the outer border
+  overflow: hidden;
+
+  // DESIGN-2: round ONLY the top-left and top-right corners of the balance
+  // display header. Bottom corners stay square.
+  &-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    padding: 0.8rem 1rem;
+    background-color: var(--color-green);
+    border-top-left-radius: var(--border-radius-large);
+    border-top-right-radius: var(--border-radius-large);
+  }
+
+  &-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+    margin: 0;
+
+    .icon {
+      margin-top: 0.175em;
+    }
+  }
+
+  &-amount {
+    font-size: var(--font-size-large);
+    font-weight: 700;
+    text-align: right;
+    margin: 0;
+  }
+
+  &-content {
+    padding: 0.8rem 1rem;
+    border-top: 0.2rem solid var(--color-white);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+
+    p {
+      margin: 0;
+    }
+
+    .small {
+      font-size: var(--font-size-small);
+    }
+
+    .muted {
+      opacity: 0.85;
+    }
+  }
+}

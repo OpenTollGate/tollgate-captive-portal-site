@@ -8,6 +8,7 @@ A captive portal website for [Tollgate](https://tollgate.me). This portal allows
 
 - Pay with Cashu Token
 - Pay with BTC Lightning
+- Check your internet balance (a dedicated "Balance" tab shows how much internet access — time or data — a Cashu token grants before you pay)
 
 ## Contributing
 
@@ -115,6 +116,9 @@ The hardcoded mock data (used for development) should be updated regularly to ma
 
 - [ ] **Captive portals may restrict camera or clipboard permissions**  
   Captive portals often run in restricted network environments, which may prevent browsers from granting camera or clipboard permissions—even if the portal is served over HTTPS. How should the app handle or communicate these limitations to users, and what are possible workarounds or fallback strategies?
+
+- [ ] **Surface the balance page in a first-run config wizard**  
+  The Balance page (`src/components/BalancePage.jsx`) is currently reachable as a standalone tab. It is intentionally self-contained (it only needs `tollgateDetails` and an optional `onNavigate` callback) so it can be reused as a step in a future first-run configuration wizard. When such a wizard is designed, decide where the balance check should sit in the flow and whether it should pre-fill from a detected/stored token.
 
 ### License
 

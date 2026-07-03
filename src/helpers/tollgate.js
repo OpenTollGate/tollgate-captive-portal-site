@@ -91,8 +91,39 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
       },
     };
   } catch (err) {
-    // catch any unexpected errors and return a general error object
+    // catch any unexpected errors
     console.error("error fetching tollgate data:", err);
+
+    // Development fallback: if backend is unreachable (network error),
+    // use mock data so the UI is testable without a real TollGate
+    if (import.meta.env?.DEV || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      console.warn("Backend unreachable — using mock data for development");
+      return {
+        status: 1,
+        value: {
+          detailsEvent: {
+            kind: 10021,
+            id: "298930dc3fbc7d6cd81fa256f75982647a66459870f84df4ab1394c653605b38",
+            pubkey: "dcce4729d4b134d5471a2c699dac1387fd769262ba8cbf183317082a6b612b8a",
+            created_at: 0,
+            tags: [
+              ["metric", "milliseconds"],
+              ["step_size", "600000"],
+              ["step_purchase_limits", "1", "0"],
+              ["tips", "1", "2", "3", "4"],
+              ["price_per_step", "cashu", "210", "sat", "https://mint.minibits.cash", 1],
+            ],
+            content: "",
+            sig: "0f3aed6edd5725865c863c4c2e4e019f8e81370944d1bb9df702102dec95d1e0141bec2ccca6cbf3f1f73aef2a3b6039bf5b0083c04e892c013368d215e19642"
+          },
+          deviceInfo: {
+            type: 'mac',
+            value: '1A:2B:3C:4D:5E'
+          }
+        }
+      };
+    }
+
     return {
       status: 0,
       code: "TG003",
@@ -235,24 +266,31 @@ export const formatTimeInSeconds = (milliseconds, abbreviate, i18n) => {
 };
 
 // helper function to format data size in user-friendly units
-export const formatDataSize = (kibiBytes, i18n) => {
+export const formatDataSize = (Bytes, i18n) => {
   // show value in kib, mb, or gb depending on size
-  if (kibiBytes < 1024) {
+
+    if (Bytes < 1024) {
     // less than 1 mb
     return {
-      value: kibiBytes,
-      unit: i18n("KiB"),
+      value: Bytes,
+      unit: i18n("B"),
     };
-  } else if (kibiBytes < 1048576) {
+  } else if (Bytes < 1048576) {
+    // less than 1 mb
+    return {
+      value: Bytes,
+      unit: i18n("KiB").toFixed(1),
+    };
+  } else if (Bytes < 1073741824) {
     // less than 1 gb
     return {
-      value: (kibiBytes / 1024).toFixed(1),
-      unit: i18n("MB"),
+      value: (Bytes / 1048576).toFixed(2),
+      unit: i18n("MiB"),
     };
   } else {
     return {
-      value: (kibiBytes / 1048576).toFixed(2),
-      unit: i18n("GB"),
+      value: (Bytes / 1073741824).toFixed(3),
+      unit: i18n("GiB"),
     };
   }
 };
