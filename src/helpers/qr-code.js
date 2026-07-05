@@ -7,6 +7,24 @@ import QRCode from "qrcode-svg";
 // internal
 import { ImageIcon, FlipCameraIcon, CancelIcon } from "../components/Icon";
 
+// Detect whether the live camera API is usable in the current context.
+//
+// navigator.mediaDevices.getUserMedia() is only exposed in a *secure context*
+// (HTTPS or localhost). Captive portals serve over plain HTTP, so on
+// Firefox/Brave/Chrome the property is `undefined` and any attempt to scan
+// with the camera throws. Image-file upload, by contrast, has no such
+// restriction — so we use this check to decide whether to even offer the
+// camera scan button, and to fall back to upload-only mode inside the scanner.
+//
+// This is a pure feature detection (it never triggers a permission prompt).
+export function hasCameraSupport() {
+  return !!(
+    typeof navigator !== "undefined" &&
+    navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getUserMedia === "function"
+  );
+}
+
 // request a qr code scan from the user, using camera or file upload
 export const requestScanQr = async (i18n) => {
   try {
@@ -184,29 +202,56 @@ export async function scanQr({ options = {} } = {}, i18n) {
       }
     };
 
+    // Capability check: getUserMedia requires a secure context (HTTPS or
+    // localhost). On a plain-HTTP captive portal, navigator.mediaDevices is
+    // undefined, so the camera cannot be used — but image-file upload still
+    // works. Degrade to upload-only mode rather than showing the misleading
+    // "make sure you have a camera" error.
+    if (!hasCameraSupport()) {
+      videoElem.style.display = "none";
+      flipButton.style.display = "none";
+      overlayInner.classList.add("error");
+      overlayInner.setAttribute("data-error", i18n("qr_camera_unavailable"));
+      return;
+    }
+
     // start camera and qr scanner
     await setupCameras();
-    qrScanner = new QrScanner(
-      videoElem,
-      (result) => {
-        // qr code found, stop scanner and cleanup
-        qrScanner.stop();
-        cleanup();
-        resolve({
-          status: 1,
-          value: result.data || result,
-        });
-      },
-      {
-        returnDetailedScanResult: true,
-        ...options,
-        preferredCamera: cameras[currentCameraIdx]?.id,
-      }
-    );
-    qrScanner.start().catch((err) => {
-      // failed to start camera or scanner
+    try {
+      qrScanner = new QrScanner(
+        videoElem,
+        (result) => {
+          // qr code found, stop scanner and cleanup
+          qrScanner.stop();
+          cleanup();
+          resolve({
+            status: 1,
+            value: result.data || result,
+          });
+        },
+        {
+          returnDetailedScanResult: true,
+          ...options,
+          preferredCamera: cameras[currentCameraIdx]?.id,
+        }
+      );
+    } catch (err) {
+      // some browsers throw synchronously when constructing QrScanner in a
+      // non-secure context — degrade to upload-only mode.
+      videoElem.style.display = "none";
+      flipButton.style.display = "none";
       overlayInner.classList.add("error");
-      overlayInner.setAttribute("data-error", i18n("QR004_message"));
+      overlayInner.setAttribute("data-error", i18n("qr_camera_unavailable"));
+      return;
+    }
+    qrScanner.start().catch((err) => {
+      // camera exists but could not start (permission denied, in use, etc.).
+      // Degrade to upload-only mode instead of blocking the overlay with a
+      // scary error — the upload button is still fully functional.
+      videoElem.style.display = "none";
+      flipButton.style.display = "none";
+      overlayInner.classList.add("error");
+      overlayInner.setAttribute("data-error", i18n("qr_camera_unavailable"));
     });
   });
 }

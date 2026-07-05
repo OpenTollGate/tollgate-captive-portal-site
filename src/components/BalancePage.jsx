@@ -9,7 +9,7 @@ import { Error } from './Status';
 import { SuccessIcon, CancelIcon } from './Icon';
 
 // helpers
-import { requestScanQr } from '../helpers/qr-code';
+import { requestScanQr, hasCameraSupport } from '../helpers/qr-code';
 import { requestPaste } from '../helpers/clipboard';
 import { getAccessOptions, getStepSizeValues } from '../helpers/tollgate';
 import { getInternetBalance, formatBalance } from '../helpers/balance';
@@ -97,8 +97,10 @@ export const BalancePage = (props) => {
                     setError(paste);
                   }
                 }}>{t('paste')}</button>
-                {/* scan qr code */}
-                <button className="ghost cta small ellipsis" onClick={async () => {
+                {/* scan qr code — only shown when the camera API is usable
+                    (requires a secure context). On plain HTTP the paste
+                    button above remains the way to enter a token. */}
+                {hasCameraSupport() && <button className="ghost cta small ellipsis" onClick={async () => {
                   if (scanning) return;
                   setScanning(true);
                   const response = await requestScanQr(t);
@@ -110,7 +112,7 @@ export const BalancePage = (props) => {
                   setScanning(false);
                 }} disabled={scanning}>
                   {scanning ? t('scanning') : t('scan_qr')}
-                </button>
+                </button>}
               </>
             )}
           </div>

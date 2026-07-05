@@ -115,6 +115,7 @@
   "QR003_message": "No QR code found in the selected image.",
   "QR004_label": "Camera error",
   "QR004_message": "Please make sure you have a camera and that this page has permission to use it.",
+  "qr_camera_unavailable": "Camera is not available in this browser (it requires a secure HTTPS connection). Upload a QR image instead, or paste your token.",
 
   "balance_tab": "💰 Balance",
   "balance_page_title": "Your Internet Balance",
