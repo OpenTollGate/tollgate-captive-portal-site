@@ -134,7 +134,7 @@ export const App = () => {
 }
 
 // header component showing tollgate logo above container
-const Header = () => {
+export const Header = () => {
   const { t } = useTranslation();
 
   return <div className="tollgate-captive-portal-header">
@@ -238,7 +238,7 @@ export const AccessGranted = ({ allocation }) => {
 }
 
 // footer component below container
-const Footer = () => {
+export const Footer = () => {
   return <div className="tollgate-captive-portal-footer">
     <p><Trans i18nKey="powered_by" components={{ 1: <a href="https://tollgate.me/" target="_blank" rel="noreferrer"></a> }} /></p>
   </div>

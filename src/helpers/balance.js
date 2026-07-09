@@ -45,3 +45,32 @@ export const formatBalance = (allocation) => {
   }
   return `${allocation.value} ${allocation.unit}`;
 };
+
+export const fetchBalanceData = async (i18n) => {
+  try {
+    const resp = await fetch('/balance');
+    if (!resp.ok) return { status: 0, code: 'network', message: 'Balance unavailable' };
+    const data = await resp.json();
+    return { status: 1, value: data };
+  } catch {
+    return { status: 0, code: 'network', message: 'Balance unavailable' };
+  }
+};
+
+export const formatMetricValue = (amount, metric) => {
+  if (!amount && amount !== 0) return '—';
+  if (metric === 'bytes') {
+    if (amount >= 1073741824) return (amount / 1073741824).toFixed(1) + ' GB';
+    if (amount >= 1048576) return (amount / 1048576).toFixed(1) + ' MB';
+    if (amount >= 1024) return (amount / 1024).toFixed(0) + ' KB';
+    return amount + ' B';
+  }
+  const seconds = Math.floor(amount / 1000);
+  if (seconds >= 3600) return Math.floor(seconds / 3600) + 'h ' + Math.floor((seconds % 3600) / 60) + 'm';
+  if (seconds >= 60) return Math.floor(seconds / 60) + ' min';
+  return seconds + 's';
+};
+
+export const getMetricLabel = (metric, t) => {
+  return metric === 'bytes' ? (t ? t('balance_data') : 'Data') : (t ? t('balance_time') : 'Time');
+};
