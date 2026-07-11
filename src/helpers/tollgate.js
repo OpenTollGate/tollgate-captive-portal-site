@@ -65,7 +65,7 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
     if (!whoamiResponse.ok) {
       // if the request fails, return a specific error object
       return {
-        status: "error",
+        status: 0,
         code: "TG002",
         label: i18n("TG002_label"),
         message: i18n("TG002_message"),
