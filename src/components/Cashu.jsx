@@ -23,7 +23,11 @@ export const Cashu = (props) => {
   const { t } = useTranslation();
   const { tollgateDetails } = props;
   // state for user input and payment flow
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('token') || '';
+  });
+  const _tokenFromUrl = new URLSearchParams(window.location.search).has('token');
   const [tokenValue, setTokenValue] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
@@ -100,6 +104,13 @@ export const Cashu = (props) => {
       setAllocation(calculateAllocation(tokenValue.amount, selectedMint, t))
     }
   }, [selectedMint])
+
+  // TIP-03: auto-submit when token arrives via ?token= URL parameter
+  useEffect(() => {
+    if (_tokenFromUrl && tokenValue && allocation && !processing && !success && !error) {
+      setProcessing(true);
+    }
+  }, [_tokenFromUrl, tokenValue, allocation, processing, success, error])
 
   // handle processing state: submit token and handle result
   useEffect(() => {
