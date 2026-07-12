@@ -64,6 +64,11 @@
   "view_balance": "💰 View Balance",
   "balance_link_hint": "You can check your remaining internet balance at any time.",
 
+  "session_expired_title": "Session ended",
+  "session_expired_message": "Your internet access has expired. To get back online, disconnect from this Wi-Fi network and reconnect — that will reopen this portal so you can purchase more time.",
+  "session_expired_hint": "If reconnecting doesn't reopen this page automatically, open any website in your browser to trigger the portal.",
+  "session_expired_reconnect": "Refresh Portal",
+
   "TG001_label": "Failed to fetch TollGate details",
   "TG001_message": "Could not fetch TollGate details.",
   "TG002_label": "Failed to fetch device information",

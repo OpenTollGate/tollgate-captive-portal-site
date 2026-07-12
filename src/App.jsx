@@ -9,7 +9,7 @@ import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
 import { BalancePage } from './components/BalancePage.jsx'
 import { Error } from './components/Status.jsx';
-import { AccessGrantedIcon, RadioButtonIcon } from './components/Icon.jsx'
+import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon.jsx'
 
 // helpers
 import { fetchTollgateData, getStepSizeValues, getTollgateBaseUrl } from './helpers/tollgate.js'
@@ -187,6 +187,7 @@ export const Processing = ({ label }) => {
 export const AccessGranted = ({ allocation }) => {
   const { t } = useTranslation();
   const [authCompleted, setAuthCompleted] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Auto-submit the auth form via fetch to complete captive portal authentication.
   // Using fetch instead of form.submit() intercepts the redirect to '/' so the
@@ -201,6 +202,51 @@ export const AccessGranted = ({ allocation }) => {
     }, 900);
     return () => clearTimeout(timer);
   }, []);
+
+  // Session-expiry heartbeat.
+  //
+  // NoDogSplash deauthenticates clients when their purchased time/data limit is
+  // reached. At that point the client loses internet access, but the portal page
+  // (if still open) gives no feedback — the user sees mysterious connection errors.
+  //
+  // We poll the /usage endpoint (always reachable on port 2121 even for
+  // unauthenticated clients). It returns "used/total" while the session is
+  // active, and "-1/-1" when the session has expired. After 2 consecutive
+  // failures we show a SessionExpired view telling the user to reconnect.
+  useEffect(() => {
+    if (!authCompleted) return;
+
+    let failures = 0;
+    let cancelled = false;
+
+    const heartbeat = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const resp = await fetch(`${getTollgateBaseUrl()}/usage`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        if (text.includes('-1/-1')) {
+          throw new Error('session not found');
+        }
+        failures = 0;
+      } catch {
+        failures++;
+        if (failures >= 2) {
+          setSessionExpired(true);
+          clearInterval(heartbeat);
+        }
+      }
+    }, 30000); // check every 30s
+
+    return () => {
+      cancelled = true;
+      clearInterval(heartbeat);
+    };
+  }, [authCompleted]);
+
+  if (sessionExpired) {
+    return <SessionExpired />;
+  }
 
   // build the persistent portal balance URL from the gateway host
   const balanceUrl = `${getTollgateBaseUrl()}/portal`;
@@ -233,6 +279,24 @@ export const AccessGranted = ({ allocation }) => {
         {t('view_balance')}
       </a>
       <p className="small">{t('balance_link_hint')}</p>
+    </div>
+  </div>
+}
+
+// shown when the heartbeat detects the session has expired
+const SessionExpired = () => {
+  const { t } = useTranslation();
+  return <div className="tollgate-captive-portal-access-granted">
+    <div className="tollgate-captive-portal-access-granted-checkmark">
+      <ErrorIcon />
+    </div>
+    <div className="tollgate-captive-portal-access-granted-label">
+      <h2>{t('session_expired_title')}</h2>
+      <p>{t('session_expired_message')}</p>
+      <p className="small">{t('session_expired_hint')}</p>
+      <button className="cta" onClick={() => window.location.reload()}>
+        {t('session_expired_reconnect')}
+      </button>
     </div>
   </div>
 }
