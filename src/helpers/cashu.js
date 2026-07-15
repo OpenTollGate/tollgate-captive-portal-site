@@ -154,21 +154,25 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
       };
     }
 
+    // build the event tags. the device-identifier tag is only included when
+    // deviceInfo is available — /whoami may return an error or an empty payload,
+    // and accessing deviceInfo without a guard would throw a TypeError
+    const deviceInfo = tollgateDetails?.deviceInfo;
+    const tags = [
+      ["p", tollgatePubkey],
+      ...(deviceInfo
+        ? [["device-identifier", deviceInfo.type ?? "", deviceInfo.value ?? ""]]
+        : []),
+      ["payment", token],
+    ];
+
     // create the nostr event according to tip-01 spec
     const unsignedEvent = {
       kind: 21000,
       pubkey: pubkey,
       content: "",
       created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ["p", tollgatePubkey],
-        [
-          "device-identifier",
-          tollgateDetails.deviceInfo.type,
-          tollgateDetails.deviceInfo.value,
-        ],
-        ["payment", token],
-      ],
+      tags,
     };
 
     // calculate the event hash (id)
