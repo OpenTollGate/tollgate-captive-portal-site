@@ -133,7 +133,7 @@ export const Cashu = (props) => {
         {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
         {/* tokeninput: input field and actions for entering or scanning a cashu token */}
-        {(!success && !processing && accessOptions.length) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
+        {(!success && !processing && accessOptions.length > 0) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
 
         {/* success: displays a message when a valid cashu token is detected, before purchase */}
         {(!success && !processing && tokenValue) && <Success
@@ -146,7 +146,7 @@ export const Cashu = (props) => {
         {error && <Error label={error.label} code={error.code} message={error.message} />}
 
         {/* accessoptions: lets the user select from available access/pricing options */}
-        {(!success && !processing && accessOptions.length) && <div className="tollgate-captive-portal-method-options">
+        {(!success && !processing && accessOptions.length > 0) && <div className="tollgate-captive-portal-method-options">
           <h5>{t('access_options')}</h5>
           <AccessOptions
             pricingInfo={accessOptions}

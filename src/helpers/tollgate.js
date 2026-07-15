@@ -59,6 +59,24 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
     // parse the tollgate event details from the response
     const detailsEvent = await detailsResponse.json();
 
+    // handle backend notice events (kind 21023) — e.g. degraded mode
+    if (detailsEvent.kind === 21023) {
+      const levelTag = detailsEvent.tags?.find(t => t[0] === "level");
+      const codeTag = detailsEvent.tags?.find(t => t[0] === "code");
+      const level = levelTag ? levelTag[1] : "error";
+      const code = codeTag ? codeTag[1] : "backend-notice";
+      const message = detailsEvent.content || i18n("TG005_message");
+
+      return {
+        status: 0,
+        code,
+        label: i18n(`${code}_label`, i18n("TG005_label")),
+        message,
+        isBackendNotice: true,
+        retryable: level === "warning",
+      };
+    }
+
     // fetch device mac address from the backend
     const whoamiResponse = await fetch(`${baseUrl}/whoami`);
 

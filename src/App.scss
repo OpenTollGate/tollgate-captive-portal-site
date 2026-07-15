@@ -47,6 +47,10 @@
   
   &-tabs {
     display: flex;
+
+    &[data-hidden=true] {
+      display: none;
+    }
   }
   
   &-tabs-tab {
@@ -217,6 +221,16 @@
     align-items: center;
     justify-content: center;
     flex-direction: column;
+  }
+
+  &-retrying {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .6rem;
+    padding-top: .8rem;
+    font-size: var(--font-size-small);
+    color: var(--color-gray);
   }
 
   &-access-granted-label {

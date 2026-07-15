@@ -141,7 +141,7 @@ export const Lightning = (props) => {
       {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
       {/* unitinput: input field for entering the amount to pay, and selecting access option */}
-      {(!success && !processing && accessOptions.length && !invoiceData) && <UnitInput
+      {(!success && !processing && accessOptions.length > 0 && !invoiceData) && <UnitInput
         pricingInfo={accessOptions}
         selectedMint={selectedMint}
         unitAmount={unitAmount}
@@ -152,7 +152,7 @@ export const Lightning = (props) => {
       {error && <Error label={error.label} code={error.code} message={error.message} />}
 
       {/* accessoptions: lets the user select from available access/pricing options */}
-      {(!success && !processing && accessOptions.length && !invoiceData) && <div className="tollgate-captive-portal-method-options">
+      {(!success && !processing && accessOptions.length > 0 && !invoiceData) && <div className="tollgate-captive-portal-method-options">
         <h5>{t('access_options')}</h5>
         <AccessOptions
           pricingInfo={accessOptions}
