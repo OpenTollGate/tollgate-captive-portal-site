@@ -13,6 +13,7 @@ import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon
 
 // helpers
 import { fetchTollgateData, getStepSizeValues, getTollgateBaseUrl } from './helpers/tollgate.js'
+import { parseUsageResponse, formatRemaining } from './helpers/usage.js'
 
 // styles and assets
 import './App.scss'
@@ -200,6 +201,7 @@ export const AccessGranted = ({ allocation }) => {
   const { t } = useTranslation();
   const [authCompleted, setAuthCompleted] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [usageData, setUsageData] = useState(null);
 
   // Auto-submit the auth form via fetch to complete captive portal authentication.
   // Using fetch instead of form.submit() intercepts the redirect to '/' so the
@@ -237,9 +239,11 @@ export const AccessGranted = ({ allocation }) => {
         const resp = await fetch(`${getTollgateBaseUrl()}/usage`);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const text = await resp.text();
-        if (text.includes('-1/-1')) {
+        const parsed = parseUsageResponse(text);
+        if (!parsed) {
           throw new Error('session not found');
         }
+        setUsageData(parsed);
         failures = 0;
       } catch {
         failures++;
@@ -280,6 +284,12 @@ export const AccessGranted = ({ allocation }) => {
           {allocation}
         </span>
       </div>
+
+      {usageData && (
+        <div className="tollgate-captive-portal-access-granted-remaining">
+          {formatRemaining(usageData.used, usageData.total, allocation)}
+        </div>
+      )}
 
       {/* link to the persistent balance page so the user can return later */}
       <a
