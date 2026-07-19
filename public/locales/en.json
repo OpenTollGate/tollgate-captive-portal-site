@@ -62,6 +62,9 @@
   "access_granted_title": "Payment successful!",
   "access_granted_subtitle": "You now have {{purchased}} of internet access. Your connection is active.",
   "access_duration_label": "Access purchased",
+  "usage_remaining": "Remaining",
+  "usage_used": "Used",
+  "usage_total": "Total",
   "view_balance": "💰 View Balance",
   "balance_link_hint": "You can check your remaining internet balance at any time.",
 

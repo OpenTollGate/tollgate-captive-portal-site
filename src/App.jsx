@@ -12,8 +12,8 @@ import { Error } from './components/Status.jsx';
 import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon.jsx'
 
 // helpers
-import { fetchTollgateData, getStepSizeValues, getTollgateBaseUrl } from './helpers/tollgate.js'
-import { parseUsageResponse, formatRemaining } from './helpers/usage.js'
+import { fetchTollgateData, getStepSizeValues, getTollgateBaseUrl, formatTimeInSeconds, formatDataSize } from './helpers/tollgate.js'
+import { parseUsageResponse } from './helpers/usage.js'
 
 // styles and assets
 import './App.scss'
@@ -196,12 +196,26 @@ export const Processing = ({ label }) => {
   </div>
 }
 
+// formats a usage value (used/total/remaining) for display using the metric's native unit
+const formatUsageValue = (value, metric, t) => {
+  if (value == null || isNaN(value)) return '—';
+  if (metric === 'milliseconds') {
+    const formatted = formatTimeInSeconds(value, false, t);
+    return `${formatted.value} ${formatted.unit}`;
+  }
+  if (metric === 'bytes') {
+    const formatted = formatDataSize(value, t);
+    return `${formatted.value} ${formatted.unit}`;
+  }
+  return '—';
+};
+
 // shows access granted message if payment succeeded
-export const AccessGranted = ({ allocation }) => {
+export const AccessGranted = ({ allocation, metric }) => {
   const { t } = useTranslation();
   const [authCompleted, setAuthCompleted] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [usageData, setUsageData] = useState(null);
+  const [usage, setUsage] = useState(null);
 
   // Auto-submit the auth form via fetch to complete captive portal authentication.
   // Using fetch instead of form.submit() intercepts the redirect to '/' so the
@@ -243,7 +257,7 @@ export const AccessGranted = ({ allocation }) => {
         if (!parsed) {
           throw new Error('session not found');
         }
-        setUsageData(parsed);
+        setUsage(parsed);
         failures = 0;
       } catch {
         failures++;
@@ -285,11 +299,20 @@ export const AccessGranted = ({ allocation }) => {
         </span>
       </div>
 
-      {usageData && (
-        <div className="tollgate-captive-portal-access-granted-remaining">
-          {formatRemaining(usageData.used, usageData.total, allocation)}
+      <div className="tollgate-captive-portal-usage-stats" data-state={usage ? 'live' : 'loading'}>
+        <div className="usage-stat usage-stat-remaining">
+          <span className="usage-stat-label">{t('usage_remaining')}</span>
+          <span className="usage-stat-value">{usage ? formatUsageValue(usage.total - usage.used, metric, t) : '—'}</span>
         </div>
-      )}
+        <div className="usage-stat usage-stat-used">
+          <span className="usage-stat-label">{t('usage_used')}</span>
+          <span className="usage-stat-value">{usage ? formatUsageValue(usage.used, metric, t) : '—'}</span>
+        </div>
+        <div className="usage-stat usage-stat-total">
+          <span className="usage-stat-label">{t('usage_total')}</span>
+          <span className="usage-stat-value">{usage ? formatUsageValue(usage.total, metric, t) : '—'}</span>
+        </div>
+      </div>
 
       {/* link to the persistent balance page so the user can return later */}
       <a
