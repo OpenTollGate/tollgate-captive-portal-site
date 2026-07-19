@@ -114,7 +114,7 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DATA) $(PKG_MAKEFILE_DIR)openwrt/files/etc/config/uhttpd_tollgate $(1)/etc/config/
 
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) $(PKG_MAKEFILE_DIR)packaging/files/etc/uci-defaults/91-tollgate-portal-setup $(1)/etc/uci-defaults/
+	$(INSTALL_BIN) $(PKG_MAKEFILE_DIR)files/etc/uci-defaults/91-tollgate-portal-setup $(1)/etc/uci-defaults/
 endef
 
 FILES_$(PKG_NAME) += \
