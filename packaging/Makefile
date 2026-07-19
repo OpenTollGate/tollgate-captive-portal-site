@@ -2,11 +2,10 @@ PKG_MAKEFILE_DIR:=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 include $(TOPDIR)/rules.mk
 
-# NOTE: tollgate-wrt and luci are runtime dependencies but not listed in
-# DEPENDS because they are not in opkg/apk feeds yet. The SDK compile would
-# fail trying to resolve them. Install with:
-#   opkg install tollgate-captive-portal && opkg install --force-depends tollgate-captive-portal
-# Once tollgate-wrt is published to feeds, add +tollgate-wrt +luci back to DEPENDS.
+# NOTE: This is a data-only package (static files + rpcd scripts). It has no
+# build-time dependencies — DEPENDS is empty so the SDK can compile without
+# external feeds. Runtime dependencies (tollgate-wrt, nodogsplash, luci, jq)
+# should be pre-installed on the target router.
 PKG_NAME:=tollgate-captive-portal
 TOLLGATE_DISPLAY_VERSION:=$(if $(strip $(PACKAGE_VERSION)),$(PACKAGE_VERSION),0.0.0)
 
@@ -31,7 +30,7 @@ define Package/$(PKG_NAME)
 	SECTION:=net
 	CATEGORY:=Network
 	TITLE:=TollGate Captive Portal and Admin SPA
-	DEPENDS:=+nodogsplash +jq
+	DEPENDS:=
 	PROVIDES:=tollgate-captive-portal-site
 	CONFLICTS:=configurationwizzard
 	REPLACES:=tollgate-wrt
