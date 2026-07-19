@@ -222,7 +222,7 @@ jobs:
           cd /builder
           env \
             PACKAGE_VERSION=${{ needs.determine-versioning.outputs.package_version }} \
-            make -j1 V=s package/${PACKAGE_NAME}/compile 2>&1 | tail -100
+            make -j$(nproc) package/${PACKAGE_NAME}/compile
 
       - name: Collect artifact
         run: |
