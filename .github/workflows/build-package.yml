@@ -198,7 +198,7 @@ jobs:
           STAGE=/builder/package/${PACKAGE_NAME}
           mkdir -p "$STAGE"
           cp -r src-checkout/packaging/. "$STAGE/"
-          cp -r src-checkout/dist/ "$STAGE/dist/"
+          cp -r dist/ "$STAGE/dist/"
           cp -r src-checkout/openwrt/ "$STAGE/openwrt/"
           cp src-checkout/LICENSE "$STAGE/LICENSE"
 

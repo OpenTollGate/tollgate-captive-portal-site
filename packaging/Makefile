@@ -2,13 +2,11 @@ PKG_MAKEFILE_DIR:=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 include $(TOPDIR)/rules.mk
 
-# NOTE: tollgate-wrt is not yet listed in opkg/apk feeds, so DEPENDS won't
-# resolve during `opkg install`. Two install paths are supported:
-#   1. tollgate-wrt bundles portal files directly (current approach in develop)
-#   2. This standalone package overlays the admin SPA + rpcd plugin on top.
-#      Requires tollgate-wrt pre-installed: `opkg install --force-depends <ipk>`
-# Once tollgate-wrt is published to feeds, the standalone package will install
-# cleanly without --force-depends.
+# NOTE: tollgate-wrt and luci are runtime dependencies but not listed in
+# DEPENDS because they are not in opkg/apk feeds yet. The SDK compile would
+# fail trying to resolve them. Install with:
+#   opkg install tollgate-captive-portal && opkg install --force-depends tollgate-captive-portal
+# Once tollgate-wrt is published to feeds, add +tollgate-wrt +luci back to DEPENDS.
 PKG_NAME:=tollgate-captive-portal
 TOLLGATE_DISPLAY_VERSION:=$(if $(strip $(PACKAGE_VERSION)),$(PACKAGE_VERSION),0.0.0)
 
@@ -33,7 +31,7 @@ define Package/$(PKG_NAME)
 	SECTION:=net
 	CATEGORY:=Network
 	TITLE:=TollGate Captive Portal and Admin SPA
-	DEPENDS:=+tollgate-wrt +nodogsplash +luci +jq
+	DEPENDS:=+nodogsplash +jq
 	PROVIDES:=tollgate-captive-portal-site
 	CONFLICTS:=configurationwizzard
 	REPLACES:=tollgate-wrt
