@@ -112,9 +112,10 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
     // catch any unexpected errors
     console.error("error fetching tollgate data:", err);
 
-    // Development fallback: if backend is unreachable (network error),
-    // use mock data so the UI is testable without a real TollGate
-    if (import.meta.env?.DEV || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    // Development/demo fallback: if backend is unreachable (network error),
+    // use mock data so the UI is testable without a real TollGate.
+    // VITE_MOCK=true enables this in production builds (e.g. GitHub Pages demo).
+    if (import.meta.env?.DEV || import.meta.env?.VITE_MOCK || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
       console.warn("Backend unreachable — using mock data for development");
       return {
         status: 1,
