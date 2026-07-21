@@ -3,7 +3,7 @@ import { setupMockBackend, TEST_TOKEN } from './helpers/mock-backend.mjs';
 
 const HYDRATE_TIMEOUT = 15000;
 
-test.describe('Captive portal smoke', () => {
+test.describe('Captive portal — functional', () => {
 
   test('page loads with TollGate branding', async ({ page }) => {
     await page.goto('/');
@@ -25,17 +25,6 @@ test.describe('Captive portal smoke', () => {
     await page.waitForSelector('.tollgate-captive-portal-footer', { timeout: HYDRATE_TIMEOUT });
     const text = await page.locator('.tollgate-captive-portal-footer').textContent();
     expect(text).toMatch(/TollGate/i);
-  });
-
-  test('visual snapshot — portal loaded (desktop)', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'Visual snapshots only on Chromium');
-    await page.goto('/');
-    await page.waitForSelector('.tollgate-captive-portal-content-container', { timeout: HYDRATE_TIMEOUT });
-    await page.waitForTimeout(2000);
-    const container = page.locator('.tollgate-captive-portal-content-container');
-    await expect(container).toHaveScreenshot('portal-loaded.png', {
-      animations: 'disabled',
-    });
   });
 
   test('AccessGranted shows after manual payment', async ({ page, browserName }) => {
@@ -62,16 +51,11 @@ test.describe('Captive portal smoke', () => {
     }
   });
 
-  test('Balance tab renders lookup form', async ({ page, browserName }) => {
-    test.skip(browserName !== 'chromium', 'Visual snapshots only on Chromium');
+  test('Balance tab renders lookup form', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#tab-cashu', { timeout: HYDRATE_TIMEOUT });
     await page.locator('#tab-balance').click();
     await page.waitForSelector('#balance-token', { timeout: HYDRATE_TIMEOUT });
-    await page.waitForTimeout(1000);
-    const container = page.locator('.tollgate-captive-portal-content-container');
-    await expect(container).toHaveScreenshot('balance-tab.png', {
-      animations: 'disabled',
-    });
+    await expect(page.locator('#balance-token')).toBeVisible();
   });
 });
