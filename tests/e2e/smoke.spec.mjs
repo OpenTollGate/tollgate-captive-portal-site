@@ -32,8 +32,8 @@ test.describe('Captive portal smoke', () => {
     await page.goto('/');
     await page.waitForSelector('.tollgate-captive-portal-content-container', { timeout: HYDRATE_TIMEOUT });
     await page.waitForTimeout(2000);
-    await expect(page).toHaveScreenshot('portal-loaded.png', {
-      fullPage: true,
+    const container = page.locator('.tollgate-captive-portal-content-container');
+    await expect(container).toHaveScreenshot('portal-loaded.png', {
       animations: 'disabled',
     });
   });
@@ -69,8 +69,8 @@ test.describe('Captive portal smoke', () => {
     await page.locator('#tab-balance').click();
     await page.waitForSelector('#balance-token', { timeout: HYDRATE_TIMEOUT });
     await page.waitForTimeout(1000);
-    await expect(page).toHaveScreenshot('balance-tab.png', {
-      fullPage: true,
+    const container = page.locator('.tollgate-captive-portal-content-container');
+    await expect(container).toHaveScreenshot('balance-tab.png', {
       animations: 'disabled',
     });
   });
