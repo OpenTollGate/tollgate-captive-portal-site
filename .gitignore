@@ -1,5 +1,6 @@
 .DS_Store
 build/
 node_modules/
-package-lock.jsontest-results/
-Playwright trace, video, and output artifacts
+test-results/
+.playwright-mcp/
+.omo/
