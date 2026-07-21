@@ -65,13 +65,18 @@ jobs:
       - name: Post screenshots link to PR
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           script: |
+            const status = process.env.JOB_STATUS === 'success'
+              ? '✅ All tests passed.'
+              : '⚠️ Some tests failed — check the visual diffs artifact.';
             const artifactName = `screenshots-${context.issue.number}`;
             const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `## 📸 Test results\n\nPlaywright e2e tests + visual snapshots completed.\n\n**[Download screenshots →](${runUrl})**\n\nLook for the \`${artifactName}\` artifact at the bottom of the run page.\n\n${{ job.status == 'success' ? '✅ All tests passed.' : '⚠️ Some tests failed — check the visual diffs artifact.' }}`
+              body: `## 📸 Test results\n\nPlaywright e2e tests + visual snapshots completed.\n\n**[Download screenshots →](${runUrl})**\n\nLook for the \`${artifactName}\` artifact at the bottom of the run page.\n\n${status}`
             });
