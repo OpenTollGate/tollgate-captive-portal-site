@@ -28,7 +28,7 @@ i18n
     supportedLngs: supportedLanguages,
     // backend config: where to load translation files from
     backend: {
-      loadPath: "/locales/{{lng}}.json",
+      loadPath: `${import.meta.env.BASE_URL}locales/{{lng}}.json`,
     },
     // interpolation config: don't escape values (react does it)
     interpolation: {
