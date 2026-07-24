@@ -11,7 +11,7 @@ import { CancelIcon } from './Icon'
 
 // helpers
 import { requestScanQr, hasCameraSupport } from '../helpers/qr-code';
-import { requestPaste } from '../helpers/clipboard';
+import { requestPaste, hasClipboardSupport } from '../helpers/clipboard';
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
 import { validateToken, submitToken } from '../helpers/cashu';
 
@@ -22,8 +22,13 @@ import './Cashu.scss'
 export const Cashu = (props) => {
   const { t } = useTranslation();
   const { tollgateDetails } = props;
-  // state for user input and payment flow
-  const [token, setToken] = useState('');
+  // state for user input and payment flow.
+  // Read the prehydrated token (set by index.html before the bundle loaded)
+  // if present — covers TIP-03 URL-param delivery. Falls through to '' for
+  // manual entry.
+  const initialToken = (typeof window !== 'undefined' && window.__INITIAL_TOKEN__) || '';
+  const [token, setToken] = useState(initialToken);
+  const _tokenFromUrl = !!initialToken;
   const [tokenValue, setTokenValue] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
@@ -32,6 +37,15 @@ export const Cashu = (props) => {
   const [accessOptions, setAccessOptions] = useState([])
   const [allocation, setAllocation] = useState(null)
   const [selectedMint, setSelectedMint] = useState(null)
+
+  // TIP-03: auto-submit when the token arrived via ?token= URL parameter and
+  // validation has produced both a tokenValue and an allocation. Manual entry
+  // (where _tokenFromUrl is false) never auto-submits — the user must click.
+  useEffect(() => {
+    if (_tokenFromUrl && tokenValue && allocation && !processing && !success && !error) {
+      setProcessing(true);
+    }
+  }, [_tokenFromUrl, tokenValue, allocation, processing, success, error])
 
   // set access options if tollgate details are set
   useEffect(() => {
@@ -65,16 +79,18 @@ export const Cashu = (props) => {
         setTokenValue(null)
       } else {
         setTokenValue(validation.value)
-        setAllocation(calculateAllocation(validation.value.amount, selectedMint, t))
-        if (validation.value.amount < selectedMint.price) {
-          setError({
-            status: 0,
-            code: 'CU002',
-            label: t('CU002_label'),
-            message: t('CU002_message')
-          })
-        } else {
-          setError(null)
+        if (selectedMint) {
+          setAllocation(calculateAllocation(validation.value.amount, selectedMint, t))
+          if (validation.value.amount < selectedMint.price) {
+            setError({
+              status: 0,
+              code: 'CU002',
+              label: t('CU002_label'),
+              message: t('CU002_message')
+            })
+          } else {
+            setError(null);
+          }
         }
       }
     } else {
@@ -130,13 +146,13 @@ export const Cashu = (props) => {
         {(!success && processing) && <Processing label={t('processing_payment')} />}
 
         {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
-        {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
+        {(success && !processing && allocation) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} metric={selectedMint?.metric} />}
 
         {/* tokeninput: input field and actions for entering or scanning a cashu token */}
         {(!success && !processing && accessOptions.length > 0) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
 
         {/* success: displays a message when a valid cashu token is detected, before purchase */}
-        {(!success && !processing && tokenValue) && <Success
+        {(!success && !processing && tokenValue && allocation) && <Success
           label={t('valid_cashu_token')}
           info={tokenValue.amount !== 1 ? t('sat_plural', { count: tokenValue.amount }) : t('sat', { count: tokenValue.amount })}
           message={t('valid_cashu_token_message', { purchased: `${allocation.value} ${allocation.unit}` })}
@@ -158,7 +174,7 @@ export const Cashu = (props) => {
         {/* purchase button: only enabled if token is valid and no error */}
         {!success && !processing && <div className="tollgate-captive-portal-method-submit">
           {(!tokenValue || error) && <button disabled>{t('purchase')}</button>}
-          {(tokenValue && !processing && !error) && (() => {
+          {(tokenValue && !processing && !error && allocation) && (() => {
             return <button
               className="cta"
               dangerouslySetInnerHTML={{
@@ -212,15 +228,16 @@ const TokenInput = ({ token, setToken, scanning, setScanning, setError }) => {
             setToken('')
           }}><CancelIcon /></button>
         </> : <>
-          {/* paste from clipboard button */}
-          <button className="ghost cta small ellipsis" onClick={async (input) => {
+          {/* paste from clipboard button — hidden when Clipboard API is
+              unavailable (plain-HTTP captive portal WebViews) */}
+          {hasClipboardSupport() && <button className="ghost cta small ellipsis" onClick={async (input) => {
             const paste = await requestPaste(t);
             if (paste.status) {
               setToken(paste.value)
             } else {
               setError(paste)
             }
-          }}>{t('paste')}</button>
+          }}>{t('paste')}</button>}
           {/* scan qr code button — only shown when the camera API is usable
               (requires a secure context). On a plain-HTTP captive portal the
               paste input above remains the primary way to enter a token. */}

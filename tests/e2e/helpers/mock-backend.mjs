@@ -37,7 +37,12 @@ export async function setupMockBackend(page, options = {}) {
     usageResponse = '60000/600000',
     usageExpired = false,
     usageHang = false,
+    metricOverride = null,
   } = options;
+
+  const details = metricOverride
+    ? { ...MOCK_TOLLGATE_DETAILS, tags: MOCK_TOLLGATE_DETAILS.tags.map(t => t[0] === 'metric' ? ['metric', metricOverride] : t) }
+    : MOCK_TOLLGATE_DETAILS;
 
   await page.route('**/*', async (route, request) => {
     const url = new URL(request.url());
@@ -71,7 +76,7 @@ export async function setupMockBackend(page, options = {}) {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(MOCK_TOLLGATE_DETAILS),
+          body: JSON.stringify(details),
         });
       }
       if (path === '/usage') {

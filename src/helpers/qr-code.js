@@ -1,7 +1,6 @@
 // external
 import React from "react";
 import { createRoot } from "react-dom/client";
-import QrScanner from "qr-scanner";
 import QRCode from "qrcode-svg";
 
 // internal
@@ -70,6 +69,7 @@ export const requestScanQr = async (i18n) => {
 
 // opens the camera and scans a qr code. returns a promise that resolves with the qr code text.
 export async function scanQr({ options = {} } = {}, i18n) {
+  const QrScanner = (await import("qr-scanner")).default;
   return new Promise(async (resolve, reject) => {
     // create container for video and buttons
     const container = document.createElement("div");
