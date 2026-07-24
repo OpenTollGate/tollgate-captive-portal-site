@@ -36,6 +36,7 @@ const app = process.env.VITE_APP || 'portal';
 const configs = {
   portal: {
     base: process.env.VITE_BASE_PATH || '/',
+    cacheDir: 'node_modules/.vite-portal',
     plugins: [react(), generateAssetManifestPlugin()],
     build: {
       outDir: 'build',
@@ -45,6 +46,7 @@ const configs = {
   admin: {
     plugins: [react()],
     base: '/tollgate/',
+    cacheDir: 'node_modules/.vite-admin',
     build: {
       outDir: 'dist/admin',
       emptyOutDir: true,

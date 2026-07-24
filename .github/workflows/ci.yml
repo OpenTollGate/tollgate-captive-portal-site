@@ -35,11 +35,11 @@ jobs:
       - run: npm run build
 
       - name: Start portal dev server
-        run: npx vite --cacheDir node_modules/.vite-portal &
+        run: npm run dev &
       - name: Wait for portal server
         run: npx wait-on http://localhost:5173 --timeout 30000
       - name: Start admin dev server
-        run: VITE_APP=admin npx vite --port 5174 --cacheDir node_modules/.vite-admin &
+        run: npm run dev:admin -- --port 5174 &
       - name: Wait for admin server
         run: npx wait-on http://localhost:5174/tollgate/admin.html --timeout 30000
 
