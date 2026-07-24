@@ -244,7 +244,6 @@ const UnitInput = ({ pricingInfo, selectedMint, unitAmount, setUnitAmount }) => 
       id="lightning-unit-amount"
       onChange={(e) => {
         if (e.target.value.length) {
-          console.log(typeof e.target.value, e.target.value.length, e.target.value)
           // if is a number and not 0
           if (!isNaN(Number(e.target.value)) && Number(e.target.value)) {
             setUnitAmount(Number(e.target.value))
