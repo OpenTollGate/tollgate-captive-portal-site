@@ -9,6 +9,7 @@ import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
 import { BalancePage } from './components/BalancePage.jsx'
 import { Error } from './components/Status.jsx';
+import DemoBanner from './components/DemoBanner.jsx';
 import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon.jsx'
 
 // helpers
@@ -96,6 +97,7 @@ export const App = () => {
   // main render
   return (
     <div id="tollgate-captive-portal" className="tollgate-captive-portal">
+      <DemoBanner />
       <Background />
 
       <div className="tollgate-captive-portal-interface">
