@@ -36,10 +36,12 @@ jobs:
 
       - name: Start portal dev server
         run: npm run dev &
+      - name: Wait for portal server
+        run: npx wait-on http://localhost:5173 --timeout 30000
       - name: Start admin dev server
         run: npm run dev:admin -- --port 5174 &
-      - name: Wait for servers
-        run: npx wait-on http://localhost:5173 http://localhost:5174 --timeout 30000
+      - name: Wait for admin server
+        run: npx wait-on http://localhost:5174/tollgate/admin.html --timeout 30000
 
       - name: Run functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs tests/e2e/admin.spec.mjs --project=desktop
