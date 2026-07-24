@@ -1,0 +1,48 @@
+.admin-wallet {
+  h2 {
+    font-size: var(--font-size-large);
+    margin-bottom: 1.6rem;
+  }
+
+  &-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+  }
+
+  &-section {
+    background: #0d1326;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--border-radius);
+    padding: 1.4rem;
+    margin-bottom: 1.2rem;
+
+    h3 {
+      font-size: var(--font-size-medium);
+      margin-bottom: 1rem;
+    }
+  }
+
+  &-fund {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 40rem;
+
+    textarea {
+      font-family: source-code-pro, Menlo, Monaco, Consolas, monospace;
+      font-size: var(--font-size-small);
+    }
+
+    button {
+      max-width: 14rem;
+    }
+  }
+
+  &-desc {
+    font-size: var(--font-size-small);
+    color: var(--color-negative);
+    margin-bottom: 1rem;
+  }
+}

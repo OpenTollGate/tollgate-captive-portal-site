@@ -34,13 +34,19 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build
 
-      - name: Start dev server
+      - name: Start portal dev server
         run: npm run dev &
-      - name: Wait for server
+      - name: Wait for portal server
         run: npx wait-on http://localhost:5173 --timeout 30000
+      - name: Start admin dev server
+        run: npm run dev:admin -- --port 5174 &
+      - name: Wait for admin server
+        run: npx wait-on http://localhost:5174/tollgate/admin.html --timeout 30000
 
-      - name: Run functional tests (mandatory)
+      - name: Run portal functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop
+      - name: Run admin tests (mandatory)
+        run: npx playwright test tests/e2e/admin.spec.mjs --project=desktop
 
       - name: Run visual tests (informational — allowed to fail)
         run: npx playwright test tests/e2e/visual.spec.mjs --project=desktop || true
