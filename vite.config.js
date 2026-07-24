@@ -45,7 +45,7 @@ const configs = {
   },
   admin: {
     plugins: [react()],
-    base: '/tollgate/',
+    base: process.env.VITE_BASE_PATH ? process.env.VITE_BASE_PATH + 'tollgate/' : '/tollgate/',
     cacheDir: 'node_modules/.vite-admin',
     build: {
       outDir: 'dist/admin',
