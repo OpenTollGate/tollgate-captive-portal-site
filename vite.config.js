@@ -45,6 +45,7 @@ function generateAssetManifestPlugin() {
 }
 
 export default defineConfig({
+  base: process.env.VITE_BASE_PATH || '/',
   plugins: [react(), generateAssetManifestPlugin()],
   build: {
     outDir: "build",
