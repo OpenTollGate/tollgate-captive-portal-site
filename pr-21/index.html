@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/tollgate-captive-portal-site/pr-21/favicon.ico" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Tollgate Captive Portal" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: ws:; font-src 'self' data:; media-src 'self';" />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+    <link rel="manifest" href="/tollgate-captive-portal-site/pr-21/manifest.json" />
+    <title>Tollgate Captive Portal</title>
+    <!--
+      TIP-03 prehydrate: read ?token= BEFORE the SPA bundle downloads so the
+      payment flow can start without waiting for React to mount. Also strips
+      the token from the URL immediately (Cashu tokens are bearer instruments
+      and would otherwise leak via browser history, server logs, and Referer
+      headers on any subsequent navigation).
+      Matches the curl-equivalent path used by `pay_direct()` in the test
+      framework: the SPA reads this global synchronously on first render.
+    -->
+    <script>
+      (function () {
+        try {
+          var params = new URLSearchParams(window.location.search);
+          var token = params.get('token');
+          if (token) {
+            window.__INITIAL_TOKEN__ = token;
+            // Strip the bearer token from the address bar (security)
+            var clean = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, document.title, clean);
+          }
+        } catch (e) {
+          // URLSearchParams or history API may be unavailable in very old
+          // embedded WebViews — fail silently, the SPA will fall through
+          // to the manual token-entry UI.
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/tollgate-captive-portal-site/pr-21/assets/portal-CtTMYuU5.js"></script>
+    <link rel="modulepreload" crossorigin href="/tollgate-captive-portal-site/pr-21/assets/index-DURw2K1z.js">
+    <link rel="stylesheet" crossorigin href="/tollgate-captive-portal-site/pr-21/assets/index-DAA4ah0O.css">
+  </head>
+  <body>
+    <noscript>
+      <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 1.5rem; background: #0a0a0a; color: #fff; border-radius: 0.5rem;">
+        <h2 style="margin-top: 0;">JavaScript Required</h2>
+        <p style="color: #888;">This portal requires JavaScript to process Cashu payments.</p>
+        <p style="color: #888;">If your browser doesn't support JavaScript, you can pay directly from a terminal:</p>
+        <pre style="background: #111; padding: 0.75rem; border-radius: 0.25rem; overflow-x: auto; font-size: 0.8rem; color: #0f0;">curl -X POST -d 'YOUR_CASHU_TOKEN' http://192.168.1.1:2121/</pre>
+      </div>
+    </noscript>
+    <div id="root"></div>
+  </body>
+</html>
