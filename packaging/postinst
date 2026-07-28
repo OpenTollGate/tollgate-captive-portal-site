@@ -1,0 +1,7 @@
+#!/bin/sh
+
+echo "Restarting NoDogSplash with TollGate portal..."
+/etc/init.d/nodogsplash restart 2>/dev/null || true
+
+echo "TollGate captive portal installed."
+exit 0
