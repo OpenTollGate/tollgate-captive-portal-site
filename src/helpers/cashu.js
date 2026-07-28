@@ -65,6 +65,7 @@ export const validateToken = (token = "", mint, i18n) => {
       };
     }
 
+    // NUT #00: cashu[version][token] — `cashu` is the Cashu token prefix. `[version]` is a single `base64_urlsafe` character to denote the token format version.
     // attempt to decode the token using the getDecodedToken method
     let decodedToken = null;
     try {
@@ -129,6 +130,7 @@ export const validateToken = (token = "", mint, i18n) => {
 };
 
 // submit a cashu token to the tollgate backend for payment
+// NUT #00: `Carol` can send `(x, C)` to `Bob` who then checks that `k*hash_to_curve(x) == C` (**verification**), and if so treats it as a valid spend of a token, adding `x` to the list of spent secrets.
 export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
   try {
     // get tollgate pubkey from event
