@@ -107,6 +107,8 @@
   "CU107_message": "Server error. Please reload the page and try again.",
   "CU108_label": "Payment failed",
   "CU108_message": "Please reload the page and try again.",
+  "CU109_label": "E-cash note expired",
+  "CU109_message": "This e-cash note uses an outdated mint key. The mint has rotated its security keys since this token was created. Please obtain a fresh token from the mint and try again.",
 
   "LN001_label": "No access options available",
   "LN001_message": "Could not parse TollGate access options.",
