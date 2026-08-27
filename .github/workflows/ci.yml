@@ -10,6 +10,22 @@ permissions:
   pull-requests: write
 
 jobs:
+  anti-leak:
+    name: Anti-leak gate (no company branding references)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on company branding references
+        run: |
+          # Pattern uses a character-class split so this workflow file's own
+          # grep string does not match the anti-leak check itself. Human-facing
+          # messages below deliberately avoid the banned tokens too.
+          if grep -rIni 'net4[s]ats\|felix[f]elix' . --exclude-dir=.git --exclude-dir=node_modules; then
+            echo "::error::company branding reference found. TollGate is a protocol and must not depend on any company branding."
+            exit 1
+          fi
+          echo "Anti-leak gate passed: zero company branding references."
+
   unit-tests:
     name: Unit tests (vitest)
     runs-on: ubuntu-latest
