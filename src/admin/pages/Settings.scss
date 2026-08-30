@@ -1,0 +1,122 @@
+.admin-settings {
+  h2 {
+    font-size: var(--font-size-large);
+    margin-bottom: 1.6rem;
+  }
+
+  &-actions {
+    margin-top: 2rem;
+    max-width: 20rem;
+  }
+}
+
+.schema-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  max-width: 60rem;
+}
+
+.schema-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+
+  > label {
+    font-size: var(--font-size-small);
+    color: var(--color-negative);
+    font-weight: 600;
+  }
+
+  &-readonly {
+    opacity: 0.7;
+
+    &-value {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.6rem 1rem;
+      border-radius: var(--border-radius);
+      font-size: var(--font-size);
+    }
+  }
+
+  &-bool {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+
+    > label:first-child {
+      flex: 1;
+    }
+  }
+
+  &-collapsible {
+    &-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      padding: 0.6rem 0;
+
+      label {
+        cursor: pointer;
+      }
+    }
+  }
+
+  &-collapse-icon {
+    font-size: var(--font-size-medium);
+    color: var(--color-negative);
+    font-weight: bold;
+    width: 2rem;
+    text-align: center;
+  }
+
+  textarea {
+    min-height: 8rem;
+    font-family: source-code-pro, Menlo, Monaco, Consolas, monospace;
+    font-size: var(--font-size-small);
+  }
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 4.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
+
+  input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  &-slider {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2.4rem;
+    transition: 0.2s;
+    cursor: pointer;
+
+    &::before {
+      content: '';
+      position: absolute;
+      height: 1.8rem;
+      width: 1.8rem;
+      left: 0.3rem;
+      bottom: 0.3rem;
+      background: var(--color-white);
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+  }
+
+  input:checked + &-slider {
+    background: var(--color-cta);
+  }
+
+  input:checked + &-slider::before {
+    transform: translateX(2rem);
+  }
+}

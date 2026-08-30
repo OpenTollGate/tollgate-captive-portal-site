@@ -53,6 +53,13 @@ jobs:
         env:
           VITE_MOCK: "true"
           VITE_BASE_PATH: /tollgate-captive-portal-site/pr-${{ github.event.pull_request.number }}/
+      - name: Build admin SPA (if admin.html exists)
+        run: |
+          if [ -f admin.html ]; then
+            VITE_APP=admin VITE_BASE_PATH=/tollgate-captive-portal-site/pr-${{ github.event.pull_request.number }}/ npx vite build
+            mkdir -p build/tollgate
+            cp -r dist/admin/* build/tollgate/
+          fi
       - name: Deploy to gh-pages (pr-${{ github.event.pull_request.number }})
         uses: peaceiris/actions-gh-pages@v4
         with:
@@ -66,7 +73,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const url = `https://opentollgate.github.io/tollgate-captive-portal-site/pr-${context.issue.number}/`;
+            const fs = require('fs');
+            const hasAdmin = fs.existsSync('admin.html');
+            const portalUrl = `https://opentollgate.github.io/tollgate-captive-portal-site/pr-${context.issue.number}/`;
+            const adminUrl = `${portalUrl}tollgate/admin.html`;
+            const body = hasAdmin
+              ? `## 🔗 Preview demo deployed\n\n**Portal:** ${portalUrl}\n**Admin SPA:** ${adminUrl}\n\nBuilt with mock data (\`VITE_MOCK=true\`). No router required.`
+              : `## 🔗 Preview demo deployed\n\n${portalUrl}\n\nBuilt with mock data (\`VITE_MOCK=true\`). No router required.`;
             const comments = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -76,7 +89,6 @@ jobs:
               c.user.login === 'github-actions[bot]' &&
               c.body.includes('Preview demo deployed')
             );
-            const body = `## 🔗 Preview demo deployed\n\n${url}\n\nBuilt with mock data (\`VITE_MOCK=true\`). No router required.`;
             if (existing) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,

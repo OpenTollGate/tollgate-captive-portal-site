@@ -11,7 +11,10 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:visual": "playwright test --update-snapshots",
-    "rename-html": "node -e \"const fs = require('fs'); const path = require('path'); const buildDir = path.join(__dirname, 'build'); const indexHtml = path.join(buildDir, 'index.html'); const splashHtml = path.join(buildDir, 'splash.html'); const manifestPath = path.join(buildDir, 'asset-manifest.json'); fs.renameSync(indexHtml, splashHtml); if (fs.existsSync(manifestPath)) { const manifest = fs.readFileSync(manifestPath, 'utf8').replace(/index\\.html/g, 'splash.html'); fs.writeFileSync(manifestPath, manifest); }\""
+    "rename-html": "node -e \"const fs = require('fs'); const path = require('path'); const buildDir = path.join(__dirname, 'build'); const indexHtml = path.join(buildDir, 'index.html'); const splashHtml = path.join(buildDir, 'splash.html'); const manifestPath = path.join(buildDir, 'asset-manifest.json'); fs.renameSync(indexHtml, splashHtml); if (fs.existsSync(manifestPath)) { const manifest = fs.readFileSync(manifestPath, 'utf8').replace(/index\\.html/g, 'splash.html'); fs.writeFileSync(manifestPath, manifest); }\"",
+    "dev:admin": "VITE_APP=admin vite",
+    "build:admin": "VITE_APP=admin vite build",
+    "build:all": "node scripts/build-all.mjs"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^2.2.2",

@@ -1,0 +1,57 @@
+.admin-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+
+  &-card {
+    width: 36rem;
+    max-width: 100%;
+    background: #0d1326;
+    border-radius: var(--border-radius-large);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+
+  &-header {
+    padding: 2rem 2rem 0;
+    text-align: center;
+
+    h1 {
+      font-size: var(--font-size-large);
+      margin-bottom: 0.4rem;
+    }
+
+    p {
+      color: var(--color-negative);
+      font-size: var(--font-size-small);
+    }
+  }
+
+  &-form {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  &-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+
+    label {
+      font-size: var(--font-size-small);
+      color: var(--color-negative);
+    }
+  }
+
+  &-error {
+    background: var(--color-red-transparent);
+    color: var(--color-white);
+    padding: 0.6rem 1rem;
+    border-radius: var(--border-radius);
+    font-size: var(--font-size-small);
+  }
+}
