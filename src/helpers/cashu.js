@@ -203,8 +203,57 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
     });
 
     if (!response.ok) {
+      // Parse the error response body — the backend rejects a payment with a
+      // kind 21023 nostr event whose tags carry the error code and whose
+      // content carries the human-readable message.
+      let backendCode = null;
+      let backendMessage = null;
+      try {
+        const errorBody = await response.clone().json();
+        if (errorBody && errorBody.kind === 21023) {
+          // Extract error code from tags: ["code", "payment-error-xxx"]
+          if (errorBody.tags && Array.isArray(errorBody.tags)) {
+            for (const tag of errorBody.tags) {
+              if (Array.isArray(tag) && tag[0] === "code" && tag[1]) {
+                backendCode = tag[1];
+                break;
+              }
+            }
+          }
+          // Use content for the error message
+          if (
+            typeof errorBody.content === "string" &&
+            errorBody.content.trim().length > 0
+          ) {
+            backendMessage = errorBody.content;
+          }
+        }
+      } catch (e) {
+        console.error("failed to parse error response body:", e);
+      }
+
       if (response.status === 402) {
-        // payment required: token was not accepted
+        // payment required: the backend rejected the token
+        if (backendCode === "payment-error-dleq-keyset-rotation") {
+          // the mint rotated its keyset — the e-cash note is no longer spendable
+          console.error("DLEQ keyset rotation error:", backendCode, backendMessage);
+          return {
+            status: 0,
+            code: "CU109",
+            label: i18n("CU109_label"),
+            message: i18n("CU109_message"),
+          };
+        } else if (backendMessage) {
+          // use the actual backend error message instead of the generic CU106
+          console.error("backend error:", backendCode, backendMessage);
+          return {
+            status: 0,
+            code: "CU106",
+            label: i18n("CU106_label"),
+            message: backendMessage,
+          };
+        }
+        // fallback if the body wasn't a parseable kind 21023
         console.error("error processing token:", response);
         return {
           status: 0,
@@ -213,7 +262,16 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
           message: i18n("CU106_message"),
         };
       } else {
-        // other server error
+        // other server error — surface the backend message if one was parsed
+        if (backendMessage) {
+          console.error("server error:", backendCode, backendMessage);
+          return {
+            status: 0,
+            code: "CU107",
+            label: i18n("CU107_label"),
+            message: backendMessage,
+          };
+        }
         console.error("server error:", response);
         return {
           status: 0,

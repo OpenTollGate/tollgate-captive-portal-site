@@ -77,6 +77,7 @@ The hardcoded mock data (used for development) should be updated regularly to ma
 | `CU106` | Triggered when the backend (TollGate) rejects the token with a 402 (payment required) response, meaning the token was not accepted. |
 | `CU107` | Triggered when the backend returns a general server error (not 402) during token submission. |
 | `CU108` | Triggered when there is a client-side error sending the token to the backend (e.g., network failure or unexpected error during submission). |
+| `CU109` | Triggered when the backend returns a DLEQ keyset-rotation error (kind 21023, code `payment-error-dleq-keyset-rotation`), meaning the mint rotated its security keys since the token was created and the e-cash note is no longer spendable. |
 
 #### Lightning Error Codes
 
