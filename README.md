@@ -124,3 +124,19 @@ The hardcoded mock data (used for development) should be updated regularly to ma
 
 This project is licensed under the GPLv3 License.
 
+
+## cashu-ts dependency policy (2026-09-05)
+
+Pin here: `@cashu/cashu-ts ^2.2.2`. Before ANY major bump (4→5; also applies
+to any 2/3→4 straggler work): read the upstream migration guide for the
+target major — https://github.com/cashubtc/cashu-ts/blob/main/migration-X.0.0.md
+— AND the agent-oriented step-by-step skill shipped INSIDE the package
+(`node_modules/@cashu/cashu-ts/migration-X.0.0.SKILL.md`) AND the release
+notes. v4 break classes that already cost Amperstrand sessions: Amount
+value objects (JSON.stringify emits decimal STRINGS — wire/DB amounts stay
+plain integers; convert only at library boundaries), ESM-only,
+getDecodedToken requires keysetids (guard #1084), melt-change strictness =
+fund-loss class on paid melts (fixed upstream #1081; v4 backport #1083
+pending release as of 2026-09-05 — 4.10.1 does NOT contain it). v5 is at
+RC — expect migration-5.0.0.md before any 5.x adoption. Details:
+hackathon-tooling patterns/cashu/client-gotchas.md.
