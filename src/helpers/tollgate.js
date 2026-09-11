@@ -59,13 +59,31 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
     // parse the tollgate event details from the response
     const detailsEvent = await detailsResponse.json();
 
+    // handle backend notice events (kind 21023) — e.g. degraded mode
+    if (detailsEvent.kind === 21023) {
+      const levelTag = detailsEvent.tags?.find(t => t[0] === "level");
+      const codeTag = detailsEvent.tags?.find(t => t[0] === "code");
+      const level = levelTag ? levelTag[1] : "error";
+      const code = codeTag ? codeTag[1] : "backend-notice";
+      const message = detailsEvent.content || i18n("TG005_message");
+
+      return {
+        status: 0,
+        code,
+        label: i18n(`${code}_label`, i18n("TG005_label")),
+        message,
+        isBackendNotice: true,
+        retryable: level === "warning",
+      };
+    }
+
     // fetch device mac address from the backend
     const whoamiResponse = await fetch(`${baseUrl}/whoami`);
 
     if (!whoamiResponse.ok) {
       // if the request fails, return a specific error object
       return {
-        status: "error",
+        status: 0,
         code: "TG002",
         label: i18n("TG002_label"),
         message: i18n("TG002_message"),
@@ -94,9 +112,10 @@ export const fetchTollgateData = async (i18n = (k, v) => k) => {
     // catch any unexpected errors
     console.error("error fetching tollgate data:", err);
 
-    // Development fallback: if backend is unreachable (network error),
-    // use mock data so the UI is testable without a real TollGate
-    if (import.meta.env?.DEV || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    // Development/demo fallback: if backend is unreachable (network error),
+    // use mock data so the UI is testable without a real TollGate.
+    // VITE_MOCK=true enables this in production builds (e.g. GitHub Pages demo).
+    if (import.meta.env?.DEV || import.meta.env?.VITE_MOCK || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
       console.warn("Backend unreachable — using mock data for development");
       return {
         status: 1,

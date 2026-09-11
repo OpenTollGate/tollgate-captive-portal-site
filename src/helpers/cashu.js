@@ -5,60 +5,6 @@ import { getPublicKey, getEventHash, getSignature } from "nostr-tools";
 // helpers
 import { getTollgateBaseUrl } from "./tollgate";
 
-// fallback decoder for token formats the installed cashu-ts version can't handle
-// (V2 keyset IDs, V4 CBOR, multi-mint). The portal only needs to extract
-// proofs and sum amounts — full verification happens in the backend (gonuts).
-const fallbackDecodeToken = (token) => {
-  const trimmed = token.trim();
-
-  // V3 format: "cashuA" + base64(JSON)
-  if (trimmed.startsWith("cashuA")) {
-    const b64 = trimmed.slice(6);
-    const decoded = JSON.parse(atob(b64));
-    // normalize: could be {token: [{mint, proofs}]} or {proofs: [...]}
-    if (decoded.token && Array.isArray(decoded.token)) {
-      return decoded;
-    }
-    if (decoded.proofs) {
-      return { token: [{ mint: "", proofs: decoded.proofs }] };
-    }
-    return decoded;
-  }
-
-  // V4 format: "cashuB" + base64 — different structure but proofs are still extractable
-  if (trimmed.startsWith("cashuB")) {
-    try {
-      const b64 = trimmed.slice(6);
-      const decoded = JSON.parse(atob(b64));
-      // V4 uses {m: mintUrl, u: unit, t: [proofs]} — normalize to V3-like structure
-      if (decoded.t && Array.isArray(decoded.t)) {
-        return { token: [{ mint: decoded.m || "", proofs: decoded.t }] };
-      }
-      return decoded;
-    } catch {
-      // V4 might use CBOR encoding — try extracting raw proof data
-      // For now, return what we can parse; the backend will do full verification
-      throw new Error("Unable to decode V4 token (CBOR not supported by fallback)");
-    }
-  }
-
-  throw new Error("Unknown token format");
-};
-
-// try the library decoder first, fall back to raw parsing for modern formats
-const decodeTokenSafely = (token) => {
-  try {
-    return getDecodedToken(token.trim());
-  } catch (libraryError) {
-    try {
-      return fallbackDecodeToken(token);
-    } catch (fallbackError) {
-      // Both failed — rethrow the library error for consistent error reporting
-      throw libraryError;
-    }
-  }
-};
-
 // safely extract proofs from a decoded token, handling different possible token formats
 export const extractProofsFromToken = (decodedToken) => {
   const proofs = [];
@@ -119,10 +65,11 @@ export const validateToken = (token = "", mint, i18n) => {
       };
     }
 
-    // attempt to decode the token (library first, fallback for modern formats)
+    // NUT #00: cashu[version][token] — `cashu` is the Cashu token prefix. `[version]` is a single `base64_urlsafe` character to denote the token format version.
+    // attempt to decode the token using the getDecodedToken method
     let decodedToken = null;
     try {
-      decodedToken = decodeTokenSafely(token.trim());
+      decodedToken = getDecodedToken(token.trim());
       if (!decodedToken) {
         return {
           status: 0,
@@ -183,6 +130,7 @@ export const validateToken = (token = "", mint, i18n) => {
 };
 
 // submit a cashu token to the tollgate backend for payment
+// NUT #00: `Carol` can send `(x, C)` to `Bob` who then checks that `k*hash_to_curve(x) == C` (**verification**), and if so treats it as a valid spend of a token, adding `x` to the list of spent secrets.
 export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
   try {
     // get tollgate pubkey from event
@@ -208,21 +156,25 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
       };
     }
 
+    // build the event tags. the device-identifier tag is only included when
+    // deviceInfo is available — /whoami may return an error or an empty payload,
+    // and accessing deviceInfo without a guard would throw a TypeError
+    const deviceInfo = tollgateDetails?.deviceInfo;
+    const tags = [
+      ["p", tollgatePubkey],
+      ...(deviceInfo
+        ? [["device-identifier", deviceInfo.type ?? "", deviceInfo.value ?? ""]]
+        : []),
+      ["payment", token],
+    ];
+
     // create the nostr event according to tip-01 spec
     const unsignedEvent = {
       kind: 21000,
       pubkey: pubkey,
       content: "",
       created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ["p", tollgatePubkey],
-        [
-          "device-identifier",
-          tollgateDetails.deviceInfo.type,
-          tollgateDetails.deviceInfo.value,
-        ],
-        ["payment", token],
-      ],
+      tags,
     };
 
     // calculate the event hash (id)
@@ -251,8 +203,57 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
     });
 
     if (!response.ok) {
+      // Parse the error response body — the backend rejects a payment with a
+      // kind 21023 nostr event whose tags carry the error code and whose
+      // content carries the human-readable message.
+      let backendCode = null;
+      let backendMessage = null;
+      try {
+        const errorBody = await response.clone().json();
+        if (errorBody && errorBody.kind === 21023) {
+          // Extract error code from tags: ["code", "payment-error-xxx"]
+          if (errorBody.tags && Array.isArray(errorBody.tags)) {
+            for (const tag of errorBody.tags) {
+              if (Array.isArray(tag) && tag[0] === "code" && tag[1]) {
+                backendCode = tag[1];
+                break;
+              }
+            }
+          }
+          // Use content for the error message
+          if (
+            typeof errorBody.content === "string" &&
+            errorBody.content.trim().length > 0
+          ) {
+            backendMessage = errorBody.content;
+          }
+        }
+      } catch (e) {
+        console.error("failed to parse error response body:", e);
+      }
+
       if (response.status === 402) {
-        // payment required: token was not accepted
+        // payment required: the backend rejected the token
+        if (backendCode === "payment-error-dleq-keyset-rotation") {
+          // the mint rotated its keyset — the e-cash note is no longer spendable
+          console.error("DLEQ keyset rotation error:", backendCode, backendMessage);
+          return {
+            status: 0,
+            code: "CU109",
+            label: i18n("CU109_label"),
+            message: i18n("CU109_message"),
+          };
+        } else if (backendMessage) {
+          // use the actual backend error message instead of the generic CU106
+          console.error("backend error:", backendCode, backendMessage);
+          return {
+            status: 0,
+            code: "CU106",
+            label: i18n("CU106_label"),
+            message: backendMessage,
+          };
+        }
+        // fallback if the body wasn't a parseable kind 21023
         console.error("error processing token:", response);
         return {
           status: 0,
@@ -261,7 +262,16 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
           message: i18n("CU106_message"),
         };
       } else {
-        // other server error
+        // other server error — surface the backend message if one was parsed
+        if (backendMessage) {
+          console.error("server error:", backendCode, backendMessage);
+          return {
+            status: 0,
+            code: "CU107",
+            label: i18n("CU107_label"),
+            message: backendMessage,
+          };
+        }
         console.error("server error:", response);
         return {
           status: 0,

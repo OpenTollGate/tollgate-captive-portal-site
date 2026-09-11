@@ -1,3 +1,18 @@
+// Detect whether the clipboard read API is usable in the current context.
+//
+// navigator.clipboard.readText() is only available in a *secure context*
+// (HTTPS or localhost). Captive portals serve over plain HTTP, so on most
+// Android captive-portal WebViews navigator.clipboard is undefined and the
+// paste button silently fails with a confusing error. This pure feature
+// detection lets us hide the button instead of showing a broken one.
+export function hasClipboardSupport() {
+  return !!(
+    typeof navigator !== "undefined" &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.readText === "function"
+  );
+}
+
 // request text from the user's clipboard
 export const requestPaste = async (i18n) => {
   try {

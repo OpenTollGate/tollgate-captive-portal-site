@@ -10,7 +10,7 @@ import { Processing, AccessGranted, AccessOptions } from '../App'
 import { CancelIcon } from './Icon'
 
 // helpers
-import { requestScanQr } from '../helpers/qr-code';
+import { requestScanQr, hasCameraSupport } from '../helpers/qr-code';
 import { requestPaste } from '../helpers/clipboard';
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
 import { validateToken, submitToken } from '../helpers/cashu';
@@ -133,7 +133,7 @@ export const Cashu = (props) => {
         {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
         {/* tokeninput: input field and actions for entering or scanning a cashu token */}
-        {(!success && !processing && accessOptions.length) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
+        {(!success && !processing && accessOptions.length > 0) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
 
         {/* success: displays a message when a valid cashu token is detected, before purchase */}
         {(!success && !processing && tokenValue) && <Success
@@ -146,7 +146,7 @@ export const Cashu = (props) => {
         {error && <Error label={error.label} code={error.code} message={error.message} />}
 
         {/* accessoptions: lets the user select from available access/pricing options */}
-        {(!success && !processing && accessOptions.length) && <div className="tollgate-captive-portal-method-options">
+        {(!success && !processing && accessOptions.length > 0) && <div className="tollgate-captive-portal-method-options">
           <h5>{t('access_options')}</h5>
           <AccessOptions
             pricingInfo={accessOptions}
@@ -221,8 +221,10 @@ const TokenInput = ({ token, setToken, scanning, setScanning, setError }) => {
               setError(paste)
             }
           }}>{t('paste')}</button>
-          {/* scan qr code button */}
-          <button className="ghost cta small ellipsis" onClick={async () => {
+          {/* scan qr code button — only shown when the camera API is usable
+              (requires a secure context). On a plain-HTTP captive portal the
+              paste input above remains the primary way to enter a token. */}
+          {hasCameraSupport() && <button className="ghost cta small ellipsis" onClick={async () => {
             if (scanning) return;
             setScanning(true);
             const response = await requestScanQr(t);
@@ -237,7 +239,7 @@ const TokenInput = ({ token, setToken, scanning, setScanning, setError }) => {
             setScanning(false);
           }} disabled={scanning}>
             {scanning ? t('scanning') : t('scan_qr')}
-          </button>
+          </button>}
         </>}
       </div>
     </div>

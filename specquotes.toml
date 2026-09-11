@@ -1,0 +1,20 @@
+# greatspectations spec-quote drift config for tollgate-captive-portal-site
+#
+# Tool: https://github.com/rustyrussell/greatspectations
+# Spec: https://github.com/cashubtc/nuts (Cashu NUT specifications)
+#
+# Comment marker syntax in JavaScript/JSX source:
+#   // NUT #00: <verbatim spec quote>
+#
+# Setup (one-time, local):
+#   git clone --depth=1 https://github.com/cashubtc/nuts.git nuts
+#   pip install git+https://github.com/rustyrussell/greatspectations.git
+#
+# Run:
+#   spectate check --config specquotes.toml --comment-start '//' --comment-continue '//' 'src/**/*.{js,jsx,ts,tsx}'
+#   spectate coverage --config specquotes.toml
+
+[sources.NUT]
+format = "markdown"
+dir = "nuts"
+pattern = "{id:02d}.md"

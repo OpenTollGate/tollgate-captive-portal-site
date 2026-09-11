@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  anti-leak:
+    name: Anti-leak gate (no company branding references)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on company branding references
+        run: |
+          # Pattern uses a character-class split so this workflow file's own
+          # grep string does not match the anti-leak check itself. Human-facing
+          # messages below deliberately avoid the banned tokens too.
+          if grep -rIni 'net4[s]ats\|felix[f]elix' . --exclude-dir=.git --exclude-dir=node_modules; then
+            echo "::error::company branding reference found. TollGate is a protocol and must not depend on any company branding."
+            exit 1
+          fi
+          echo "Anti-leak gate passed: zero company branding references."
+
+  unit-tests:
+    name: Unit tests (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  e2e-tests:
+    name: E2E tests + screenshots (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+
+      - name: Start dev server
+        run: npm run dev &
+      - name: Wait for server
+        run: npx wait-on http://localhost:5173 --timeout 30000
+
+      - name: Run functional tests (mandatory)
+        run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop
+
+      - name: Run visual tests (informational — allowed to fail)
+        run: npx playwright test tests/e2e/visual.spec.mjs --project=desktop || true
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ github.event.pull_request.number || github.run_id }}
+          path: |
+            test-results/output/
+            test-results/report/
+          retention-days: 30
+
+      - name: Upload visual diffs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diffs-${{ github.event.pull_request.number || github.run_id }}
+          path: |
+            tests/e2e/**/*.png
+            test-results/output/*-diff.png
+          retention-days: 30
+
+      - name: Post screenshots link to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const status = process.env.JOB_STATUS === 'success'
+              ? '✅ All tests passed.'
+              : '⚠️ Some tests failed — check the visual diffs artifact.';
+            const artifactName = `screenshots-${context.issue.number}`;
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📸 Test results\n\nPlaywright e2e tests + visual snapshots completed.\n\n**[Download screenshots →](${runUrl})**\n\nLook for the \`${artifactName}\` artifact at the bottom of the run page.\n\n${status}`
+            });
