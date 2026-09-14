@@ -198,10 +198,11 @@ export const Processing = ({ label }) => {
 }
 
 // shows access granted message if payment succeeded
-export const AccessGranted = ({ allocation }) => {
+export const AccessGranted = ({ allocation, metric }) => {
   const { t } = useTranslation();
   const [authCompleted, setAuthCompleted] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [liveUsage, setLiveUsage] = useState(null);
 
   // Auto-submit the auth form via fetch to complete captive portal authentication.
   // Using fetch instead of form.submit() intercepts the redirect to '/' so the
@@ -241,6 +242,14 @@ export const AccessGranted = ({ allocation }) => {
         const text = await resp.text();
         if (text.includes('-1/-1')) {
           throw new Error('session not found');
+        }
+        const parts = text.trim().split('/');
+        if (parts.length === 2) {
+          const used = Number(parts[0]);
+          const total = Number(parts[1]);
+          if (!isNaN(used) && !isNaN(total) && total > 0 && used >= 0) {
+            setLiveUsage({ used, total, remaining: total - used });
+          }
         }
         failures = 0;
       } catch {
@@ -282,6 +291,33 @@ export const AccessGranted = ({ allocation }) => {
           {allocation}
         </span>
       </div>
+
+      {/* live usage display — updates every 30s from GET /usage */}
+      {liveUsage && (() => {
+        const pct = Math.min(100, Math.round((liveUsage.used / liveUsage.total) * 100));
+        const remainingPct = 100 - pct;
+        const fmtValue = (v) => {
+          if (metric === 'milliseconds') {
+            if (v >= 3600000) return Math.round(v / 3600000) + ' hours';
+            if (v >= 60000) return Math.round(v / 60000) + ' min';
+            return Math.round(v / 1000) + ' sec';
+          }
+          if (v < 1024) return `${v} B`;
+          if (v < 1048576) return `${(v / 1024).toFixed(1)} KiB`;
+          if (v < 1073741824) return `${(v / 1048576).toFixed(1)} MiB`;
+          return `${(v / 1073741824).toFixed(2)} GiB`;
+        };
+        return (
+          <div className="tollgate-captive-portal-access-granted-usage">
+            <div className="tollgate-captive-portal-access-granted-usage-bar">
+              <div className="tollgate-captive-portal-access-granted-usage-bar-fill" style={{ width: `${remainingPct}%` }} />
+            </div>
+            <div className="tollgate-captive-portal-access-granted-usage-text">
+              {fmtValue(liveUsage.remaining)} remaining of {fmtValue(liveUsage.total)}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* link to the persistent balance page so the user can return later */}
       <a
