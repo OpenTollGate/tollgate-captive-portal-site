@@ -8,8 +8,8 @@
   align-items: center;
   justify-content: center;
   gap: .6rem;
-  background-color: rgba(255, 181, 76, 0.14);
-  border-bottom: .1rem solid rgba(255, 181, 76, 0.3);
+  background-color: rgba(255, 105, 97, 0.14);
+  border-bottom: .1rem solid rgba(255, 105, 97, 0.3);
   color: var(--color-negative);
   font-size: var(--font-size-xsmall);
   font-weight: 600;
@@ -22,7 +22,7 @@
     width: .6rem;
     height: .6rem;
     border-radius: 50%;
-    background-color: #FFB54C;
+    background-color: #FF6961;
     animation: demo-pulse 2s ease-in-out infinite;
   }
 }

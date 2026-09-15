@@ -18,17 +18,17 @@
   --color: #171D35;
   --color-negative: #959CB1;
   
-  --color-cta: #FFB54C;
-  --color-cta-transparent: rgba(255, 181, 76, .8);
+  --color-cta: #FF6961;
+  --color-cta-transparent: rgba(255, 105, 97, .8);
 
   --color-white: #ffffff;
   --color-white-transparent: rgba(255,255,255,0.90);
 
-  --color-red: #c32222;
-  --color-red-transparent: rgba(220,33,33,0.53);
+  --color-red: #FF6961;
+  --color-red-transparent: rgba(255,105,97,0.53);
 
-  --color-green: #4AA922;
-  --color-green-transparent: rgba(74,169,34,0.55);
+  --color-green: #7ABD7E;
+  --color-green-transparent: rgba(122,189,126,0.55);
 
   --color-gray: #DBDBDB;
   --color-gray-darken: #C4C4C4;
@@ -242,7 +242,7 @@ select {
 }
 
 .checkmark-circle {
-  stroke: var(--color-green, #4AA922);
+  stroke: var(--color-green, #7ABD7E);
   stroke-width: 4;
   stroke-miterlimit: 10;
   fill: none;
@@ -252,7 +252,7 @@ select {
 }
 
 .checkmark-check {
-  stroke: var(--color-green, #4AA922);
+  stroke: var(--color-green, #7ABD7E);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;

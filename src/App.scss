@@ -301,8 +301,8 @@
         aspect-ratio: 1 / 1;
         border-radius: var(--border-radius);
 
-        // qr code rectangle appearance
-        background-image: url("data:image/svg+xml,%3csvg width='100%' height='100%' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%' height='100%' fill='none' rx='.4rem' ry='.4rem' stroke='rgba(255, 181, 76, .8)' stroke-width='.3rem' stroke-dasharray='66% 33%' stroke-dashoffset='33%' /%3e%3c/svg%3e");
+        // qr code rectangle appearance (brand green = ready/valid)
+        background-image: url("data:image/svg+xml,%3csvg width='100%' height='100%' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%' height='100%' fill='none' rx='.4rem' ry='.4rem' stroke='rgba(122, 189, 126, .8)' stroke-width='.3rem' stroke-dasharray='66% 33%' stroke-dashoffset='33%' /%3e%3c/svg%3e");
         
         /*
           Calculate the available width and height for the square:
@@ -314,7 +314,7 @@
         width: min(calc(100vw - 6rem), calc(100vh - 15rem));
 
         &.error {
-          background-image: url("data:image/svg+xml,%3csvg width='100%' height='100%' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%' height='100%' fill='none' rx='.4rem' ry='.4rem' stroke='rgba(220,33,33,0.53)' stroke-width='.3rem' stroke-dasharray='66% 33%' stroke-dashoffset='33%' /%3e%3c/svg%3e");
+          background-image: url("data:image/svg+xml,%3csvg width='100%' height='100%' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%' height='100%' fill='none' rx='.4rem' ry='.4rem' stroke='rgba(255,105,97,0.53)' stroke-width='.3rem' stroke-dasharray='66% 33%' stroke-dashoffset='33%' /%3e%3c/svg%3e");
         }
 
         &:after {
