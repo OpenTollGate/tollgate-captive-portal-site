@@ -9,6 +9,11 @@ export const getTollgateBaseUrl = () => {
   return `http://${currentHost}:2121`;
 };
 
+// the captive portal SPA itself is served on port 2051 (nodogsplash htdocs)
+export const getPortalBaseUrl = () => {
+  return `http://${currentHost}:2051`;
+};
+
 // function to fetch the tollgate details and device info
 export const fetchTollgateData = async (i18n = (k, v) => k) => {
   try {

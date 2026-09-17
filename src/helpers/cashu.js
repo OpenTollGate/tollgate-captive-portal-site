@@ -1,5 +1,5 @@
 // external
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { getPublicKey, getEventHash, getSignature } from "nostr-tools";
 
 // helpers
@@ -66,19 +66,13 @@ export const validateToken = (token = "", mint, i18n) => {
     }
 
     // NUT #00: cashu[version][token] — `cashu` is the Cashu token prefix. `[version]` is a single `base64_urlsafe` character to denote the token format version.
-    // attempt to decode the token using the getDecodedToken method
-    let decodedToken = null;
+    // getTokenMetadata decodes both v2 (cashuA) and v4 (cashuB/CBOR) tokens and
+    // needs no mint keyset id list, so it also works for short-keyset tokens.
+    let metadata = null;
     try {
-      decodedToken = getDecodedToken(token.trim());
-      if (!decodedToken) {
-        return {
-          status: 0,
-          code: "CU102",
-          label: i18n("CU102_label"),
-          message: i18n("CU102_message"),
-        };
-      }
+      metadata = getTokenMetadata(token.trim());
     } catch (err) {
+      console.error("error decoding token:", err);
       return {
         status: 0,
         code: "CU102",
@@ -87,9 +81,9 @@ export const validateToken = (token = "", mint, i18n) => {
       };
     }
 
-    // extract proofs from the token
-    const proofs = extractProofsFromToken(decodedToken);
-    if (!proofs || proofs.length === 0) {
+    // a decodable token must still carry at least one proof
+    const proofAmounts = Array.isArray(metadata?.proofAmounts) ? metadata.proofAmounts : [];
+    if (!metadata || proofAmounts.length === 0) {
       return {
         status: 0,
         code: "CU103",
@@ -98,10 +92,13 @@ export const validateToken = (token = "", mint, i18n) => {
       };
     }
 
-    // calculate the sum of proof values
-    const totalAmount = proofs.reduce((sum, proof) => {
-      const proofAmount = Number(proof.amount || 0);
-      return sum + proofAmount;
+    // sum the proof amounts — v4 returns Amount objects (bigint-backed) while v2
+    // returns plain numbers, so accept both shapes.
+    const totalAmount = proofAmounts.reduce((sum, proofAmount) => {
+      const value = proofAmount?.toNumber
+        ? proofAmount.toNumber()
+        : Number(proofAmount?.value ?? proofAmount ?? 0);
+      return sum + (Number.isFinite(value) ? value : 0);
     }, 0);
 
     // todo: check if token unit matches mint unit
@@ -113,8 +110,8 @@ export const validateToken = (token = "", mint, i18n) => {
         isValid: true,
         hasProofs: true,
         amount: totalAmount,
-        proofCount: proofs.length,
-        unit: "sat",
+        proofCount: proofAmounts.length,
+        unit: metadata.unit || "sat",
       },
     };
   } catch (error) {

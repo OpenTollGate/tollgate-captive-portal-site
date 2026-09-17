@@ -1,5 +1,34 @@
 import { getTollgateBaseUrl } from "./tollgate";
 
+// runtime capability probe for the lightning payment method.
+//
+// The lightning tab must not be offered on gateways whose backend build has no
+// /ln-invoice route (older builds), so we ask the backend once and only enable
+// the tab when it answers with our JSON envelope. A GET without a quote is
+// side-effect free: the backend replies 400 {"status":0,"error":"quote is
+// required"} when the route exists, and a non-JSON 404 when it does not.
+export const probeLightningCapability = async () => {
+  try {
+    const baseUrl = getTollgateBaseUrl();
+    const response = await fetch(`${baseUrl}/ln-invoice`, { method: "GET" });
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      return { supported: false };
+    }
+
+    const payload = await response.json().catch(() => null);
+    if (!payload || typeof payload !== "object" || !("status" in payload)) {
+      return { supported: false };
+    }
+
+    return { supported: true };
+  } catch (error) {
+    console.error("lightning capability probe failed:", error);
+    return { supported: false };
+  }
+};
+
 const invoiceRequestError = (i18n, message) => ({
   status: 0,
   code: "LN003",

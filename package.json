@@ -18,7 +18,7 @@
     "rename-html": "node -e \"const fs = require('fs'); const path = require('path'); const buildDir = path.join(__dirname, 'build'); const indexHtml = path.join(buildDir, 'index.html'); const splashHtml = path.join(buildDir, 'splash.html'); const manifestPath = path.join(buildDir, 'asset-manifest.json'); fs.renameSync(indexHtml, splashHtml); if (fs.existsSync(manifestPath)) { const manifest = fs.readFileSync(manifestPath, 'utf8').replace(/index\\.html/g, 'splash.html'); fs.writeFileSync(manifestPath, manifest); }\""
   },
   "dependencies": {
-    "@cashu/cashu-ts": "^2.2.2",
+    "@cashu/cashu-ts": "^4.10.2",
     "@iconify/react": "^6.0.0",
     "ajv": "^6.12.6",
     "classnames": "^2.5.1",
