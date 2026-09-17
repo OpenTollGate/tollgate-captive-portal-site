@@ -10,7 +10,7 @@
 
 // helpers (real implementations)
 import { validateToken } from './cashu';
-import { calculateAllocation } from './tollgate';
+import { calculateAllocation, getTollgateBaseUrl } from './tollgate';
 
 // Compute the internet balance a Cashu token represents for a given mint.
 //
@@ -48,7 +48,9 @@ export const formatBalance = (allocation) => {
 
 export const fetchBalanceData = async (i18n) => {
   try {
-    const resp = await fetch('/balance');
+    // the balance endpoint lives on the tollgate backend (:2121), not on the
+    // portal origin (:2051), so resolve it through the shared base-url helper
+    const resp = await fetch(`${getTollgateBaseUrl()}/balance`);
     if (!resp.ok) return { status: 0, code: 'network', message: 'Balance unavailable' };
     const data = await resp.json();
     return { status: 1, value: data };

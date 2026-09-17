@@ -10,6 +10,7 @@
   "tab_aria_label": "Tab Navigation",
   "cashu_tab": "🥜 Cashu",
   "lightning_tab": "⚡️ Lightning",
+  "lightning_unavailable": "unavailable",
 
   "loading": "Loading",
   "retrying": "Retrying…",
