@@ -1,0 +1,889 @@
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font);
+  font-size: var(--font-size);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* ─── Captive Portal ──────────────────────────────────── */
+
+.tollgate-captive-portal {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  margin: 0 1.5rem;
+  justify-content: center;
+}
+
+.tollgate-captive-portal-header {
+  padding: clamp(2rem, 4.8vw + 0.08rem, 5rem) 0 clamp(1.5rem, 3vw + 0.05rem, 3rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tollgate-captive-portal-header img {
+  width: clamp(10rem, 30vw, 16rem);
+  max-width: 100%;
+}
+
+.tollgate-captive-portal-header .powered-by {
+  font-size: var(--font-size-small);
+  color: var(--color-negative);
+}
+
+.tollgate-captive-portal-content {
+  display: flex;
+  justify-content: center;
+}
+
+.tollgate-captive-portal-content-container {
+  width: 500px;
+  max-width: 100%;
+}
+
+.tollgate-captive-portal-tabs {
+  display: flex;
+}
+
+.tollgate-captive-portal-tabs-tab {
+  flex: 1;
+  padding: 1rem;
+  text-align: center;
+  border: none;
+  font-weight: 600;
+  font-size: var(--font-size);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  font-family: inherit;
+  color: #0a0a0a;
+}
+
+.tollgate-captive-portal-tabs-tab-cashu {
+  background: #fff;
+  border-top-right-radius: var(--border-radius-large);
+}
+
+.tollgate-captive-portal-tabs-tab-lightning {
+  background: #fff;
+  border-top-left-radius: var(--border-radius-large);
+}
+
+.tollgate-captive-portal-tabs-tab[data-active="false"] {
+  opacity: 0.7;
+}
+
+.tollgate-captive-portal-tabs-tab[data-active="false"]:hover {
+  opacity: 0.85;
+}
+
+/* Lightning tab greyed-out when the selected mint has no working LN backend
+   (supports_ln tag absent on a new backend — PR #181 / TIP-02). The tab is
+   still visible so the user understands Lightning exists but is unavailable
+   for this mint right now; Cashu remains fully usable. */
+.tollgate-captive-portal-tabs-tab[data-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: rgba(10, 10, 10, 0.45);
+}
+
+.tollgate-captive-portal-tabs-tab[data-disabled="true"]:hover {
+  opacity: 0.4;
+}
+
+.tollgate-captive-portal-view {
+  padding: 1.2rem 1rem;
+  background: #fff;
+  border-bottom-left-radius: var(--border-radius-large);
+  border-bottom-right-radius: var(--border-radius-large);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tollgate-captive-portal-method-header {
+  text-align: center;
+  padding: 0.5rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tollgate-captive-portal-method-header h1 {
+  font-size: var(--font-size-large);
+  color: #0a0a0a;
+}
+
+.tollgate-captive-portal-method-header h2 {
+  font-size: var(--font-size);
+  font-weight: 400;
+  color: rgba(0,0,0,0.5);
+}
+
+.tollgate-captive-portal-method-header h2 a {
+  color: var(--color-cta);
+  text-decoration: none;
+}
+
+.tollgate-captive-portal-method-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #fff;
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(0,0,0,0.1);
+  padding: 0.6rem;
+}
+
+.tollgate-captive-portal-method-input input {
+  width: 100%;
+  border: none;
+  outline: none;
+  font-size: var(--font-size);
+  color: #0a0a0a;
+  font-family: inherit;
+  background: transparent;
+}
+
+.tollgate-captive-portal-method-input input::placeholder {
+  color: rgba(0,0,0,0.3);
+}
+
+.tollgate-captive-portal-method-input-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.tollgate-captive-portal-method-input-actions button {
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--border-radius-small);
+  border: 1px solid rgba(0,0,0,0.15);
+  background: transparent;
+  font-size: var(--font-size-xsmall);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.tollgate-captive-portal-method-input-actions button.ghost {
+  background: rgba(0,0,0,0.06);
+}
+
+.tollgate-captive-portal-method-input-actions button.ghost:hover {
+  background: rgba(0,0,0,0.1);
+}
+
+.tollgate-captive-portal-method-input-actions button.cancel {
+  color: var(--color-red);
+  border-color: rgba(255,59,48,0.3);
+}
+
+.success-msg,
+.error-msg {
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-small);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.success-msg {
+  background: var(--color-green-transparent);
+  color: #1a7a30;
+}
+
+.error-msg {
+  background: var(--color-red-transparent);
+  color: var(--color-red);
+}
+
+.success-msg .dot,
+.error-msg .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.success-msg .dot {
+  background: var(--color-green);
+}
+
+.error-msg .dot {
+  background: var(--color-red);
+}
+
+.tollgate-captive-portal-method-submit {
+  display: flex;
+  justify-content: center;
+}
+
+.tollgate-captive-portal-method-submit button,
+.cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 2rem;
+  border-radius: var(--border-radius);
+  border: none;
+  font-size: var(--font-size);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, transform 0.1s;
+  text-decoration: none;
+}
+
+.tollgate-captive-portal-method-submit button:not(:disabled) {
+  background: var(--color-cta);
+  color: #fff;
+}
+
+.tollgate-captive-portal-method-submit button:not(:disabled):hover {
+  background: var(--color-cta-hover);
+  transform: scale(1.02);
+}
+
+.tollgate-captive-portal-method-submit button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tollgate-captive-portal-loading {
+  padding: 3rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: #0a0a0a;
+}
+
+.cp-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(0,0,0,0.1);
+  border-top-color: var(--color-cta);
+  border-radius: 50%;
+  animation: cp-spin 0.8s linear infinite;
+}
+
+.cp-spinner.big {
+  width: 40px;
+  height: 40px;
+  border-width: 4px;
+}
+
+@keyframes cp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tollgate-captive-portal-access-granted {
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+  color: #0a0a0a;
+}
+
+.tollgate-captive-portal-access-granted-checkmark {
+  width: 64px;
+  height: 64px;
+  background: var(--color-green-transparent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: cp-pop 0.4s ease-out;
+}
+
+@keyframes cp-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.tollgate-captive-portal-access-granted-checkmark svg {
+  width: 36px;
+  height: 36px;
+  color: var(--color-green);
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: cp-draw 0.5s 0.2s ease-out forwards;
+}
+
+@keyframes cp-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.tollgate-captive-portal-access-granted-label {
+  animation: cp-fade-up 0.5s 0.3s ease-out backwards;
+}
+
+@keyframes cp-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tollgate-captive-portal-access-granted-label h2 {
+  font-size: var(--font-size-large);
+  color: #0a0a0a;
+}
+
+.tollgate-captive-portal-access-granted-label p {
+  font-size: var(--font-size-small);
+  color: rgba(0,0,0,0.5);
+}
+
+.tollgate-captive-portal-access-granted-label p.small {
+  font-size: var(--font-size-xsmall);
+  opacity: 0.6;
+}
+
+.tollgate-captive-portal-footer {
+  padding: clamp(1.5rem, 3vw + 0.5rem, 3.5rem) 0 clamp(1rem, 2vw + 0.3rem, 2rem);
+  text-align: center;
+  font-size: var(--font-size-small);
+  color: var(--color-negative);
+}
+
+.tollgate-captive-portal-footer a {
+  color: var(--color-negative);
+  text-decoration: underline;
+}
+
+/* ─── Size Selector ───────────────────────────────────── */
+
+.size-choices {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.size-btn {
+  padding: 0.65rem 1.4rem;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.size-btn.active {
+  border-color: #f60;
+  background: #f60;
+  color: #fff;
+  font-weight: 700;
+}
+
+.more-input-wrap {
+  display: none;
+  margin: 1rem 1.5rem 1.25rem;
+  text-align: center;
+}
+
+.more-input-wrap.visible {
+  display: block;
+}
+
+.more-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.more-input-row input {
+  width: 160px;
+  padding: 0.65rem 1rem;
+  font-size: 1rem;
+  border-radius: 10px 0 0 10px;
+  border: 1.5px solid #f60;
+  border-right: none;
+  background: #f60;
+  color: #fff;
+  text-align: center;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.more-input-row input::placeholder {
+  color: rgba(255,255,255,0.6);
+}
+
+.more-input-row .suffix {
+  padding: 0.65rem 1rem;
+  font-size: 1rem;
+  border-radius: 0 10px 10px 0;
+  border: 1.5px solid #f60;
+  border-left: none;
+  background: #f60;
+  color: #fff;
+  font-weight: 700;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+/* ─── PWA Modal ───────────────────────────────────────── */
+
+.pwa-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 24px;
+}
+
+.pwa-modal-box {
+  background: #1a1a1a;
+  border-radius: var(--border-radius-large);
+  padding: 36px 28px;
+  max-width: 360px;
+  width: 100%;
+  position: relative;
+  text-align: center;
+}
+
+.pwa-modal-box .close-btn {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.pwa-modal-box .close-btn:hover {
+  color: #fff;
+}
+
+.pwa-modal-box .icon-wrap {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 28px;
+}
+
+.pwa-modal-box .icon-wrap img {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+
+.pwa-modal-box h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+}
+
+.pwa-modal-box p {
+  font-size: 0.95rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.55;
+  margin-bottom: 32px;
+}
+
+.pwa-modal-box .steps {
+  text-align: left;
+  margin-bottom: 36px;
+}
+
+.pwa-modal-box .step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.pwa-modal-box .step-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.pwa-modal-box .step-num {
+  width: 26px;
+  height: 26px;
+  background: var(--color-cta);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.pwa-modal-box .step-text {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.7);
+}
+
+/* ─── Loading Spinner (legacy) ───────────────────────── */
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: cp-spin 0.6s linear infinite;
+}
+
+.loading-spinner-lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Scrollbar ─────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+/* ─── Balance / Dashboard ─────────────────────────────── */
+
+.balance-page {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 1.5rem;
+  padding: clamp(1.5rem, 4vw, 3rem) 0 clamp(1rem, 2vw, 2rem);
+  gap: 1.25rem;
+}
+
+.balance-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.balance-header img {
+  width: clamp(8rem, 24vw, 12rem);
+  max-width: 100%;
+}
+
+.balance-header .powered-by {
+  font-size: var(--font-size-xsmall);
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.balance-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.balance-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border-radius: var(--border-radius-large);
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+
+.balance-error,
+.balance-no-session {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  color: var(--text-muted);
+}
+
+.balance-error .cta-btn,
+.balance-no-session .cta-btn {
+  background: var(--accent);
+  color: #fff;
+  padding: 0.7rem 2rem;
+}
+
+.balance-stats {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border-radius: var(--border-radius-large);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-row .pulse-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.status-row .pulse-dot.active {
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.6);
+  animation: balance-pulse 2s infinite;
+}
+
+@keyframes balance-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(50, 215, 75, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(50, 215, 75, 0); }
+}
+
+.status-label {
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-row .updated {
+  margin-left: auto;
+  font-size: var(--font-size-xsmall);
+  color: var(--text-dim);
+}
+
+.stat-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+}
+
+.stat-hero-value {
+  font-size: clamp(2.2rem, 9vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.stat-hero-label {
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.85rem 0.5rem;
+  background: var(--bg);
+  border-radius: var(--border-radius);
+}
+
+.stat-cell-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stat-cell-label {
+  font-size: var(--font-size-xsmall);
+  color: var(--text-muted);
+}
+
+.usage-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: var(--bg);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.usage-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 10px;
+  transition: width 0.4s ease;
+}
+
+.balance-venue {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border-radius: var(--border-radius-large);
+  padding: 0.5rem 1rem;
+}
+
+.balance-venue h3 {
+  color: var(--text);
+  margin-bottom: 0.4rem;
+}
+
+.balance-venue p {
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.balance-venue a {
+  color: var(--accent);
+}
+
+.balance-links {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.link-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.85rem 1.5rem;
+  border-radius: var(--border-radius);
+  font-size: var(--font-size);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+  border: 1.5px solid transparent;
+}
+
+.link-btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.link-btn.primary:hover {
+  background: var(--accent-hover);
+  transform: scale(1.02);
+}
+
+.link-btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.link-btn.ghost:hover {
+  background: var(--card-hover);
+  border-color: var(--accent);
+}
+
+.balance-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: auto;
+  padding-top: 1.5rem;
+  font-size: var(--font-size-xsmall);
+  color: var(--text-dim);
+}

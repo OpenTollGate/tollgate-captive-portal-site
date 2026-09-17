@@ -1,0 +1,42 @@
+:root {
+  --bg: #111;
+  --card: #1a1a1a;
+  --card-hover: #222;
+  --border: #2a2a2a;
+  --text: #fff;
+  --text-muted: rgba(255, 255, 255, 0.45);
+  --text-dim: rgba(255, 255, 255, 0.25);
+  --accent: #f60;
+  --accent-hover: #e55a00;
+  --accent-dim: rgba(255, 102, 0, 0.15);
+  --success: #32d74b;
+  --error: #ff453a;
+
+  /* Captive portal tokens */
+  --color: #fff;
+  --color-black: #111;
+  --color-white: #fff;
+  --color-white-transparent: rgba(255,255,255,0.9);
+  --color-gray-darken: rgba(0,0,0,0.4);
+  --color-cta: #f60;
+  --color-cta-hover: #e55a00;
+  --color-negative: rgba(255,255,255,0.35);
+  --color-green: #32d74b;
+  --color-green-transparent: rgba(50,215,75,0.15);
+  --color-red: #ff3b30;
+  --color-red-transparent: rgba(255,59,48,0.15);
+  --border-radius: 12px;
+  --border-radius-large: 20px;
+  --border-radius-small: 8px;
+
+  --radius: 14px;
+  --radius-sm: 8px;
+  --font-size: 0.9rem;
+  --font-size-small: 0.8rem;
+  --font-size-xsmall: 0.72rem;
+  --font-size-large: 1.4rem;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --header-h: 54px;
+  --nav-h: 64px;
+  --content-max: 520px;
+}

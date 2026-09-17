@@ -1,0 +1,41 @@
+#!/bin/sh
+# TollGate admin board setup: create the dedicated uhttpd instance on :8090 and
+# make sure rpcd (which serves the `tollgate` ubus object) is running.
+#
+# The admin SPA is installed at /www/tollgate (base /tollgate/). The captive
+# portal SPA stays on uhttpd.portal (:2051) and LuCI on uhttpd.main (:8080);
+# neither is touched here.
+#
+# Idempotent: only creates the section if missing.
+
+if ! uci -q get uhttpd.admin >/dev/null 2>&1; then
+    echo "Creating uhttpd admin instance on :8090"
+    uci set uhttpd.admin=uhttpd
+    uci -q delete uhttpd.admin.listen_http
+    uci add_list uhttpd.admin.listen_http='0.0.0.0:8090'
+    uci add_list uhttpd.admin.listen_http='[::]:8090'
+    uci set uhttpd.admin.home='/www'
+    uci set uhttpd.admin.ubus_prefix='/ubus'
+    uci set uhttpd.admin.script_timeout='60'
+    uci set uhttpd.admin.network_timeout='30'
+    uci set uhttpd.admin.max_requests='3'
+    uci set uhttpd.admin.tcp_keepalive='1'
+    uci set uhttpd.admin.no_dirlists='1'
+    uci set uhttpd.admin.error_page='/tollgate/index.html'
+    uci commit uhttpd
+else
+    # keep the error page pointed at the admin SPA (older setups set /index.html)
+    [ "$(uci -q get uhttpd.admin.error_page)" = "/index.html" ] && {
+        uci set uhttpd.admin.error_page='/tollgate/index.html'
+        uci commit uhttpd
+    }
+fi
+
+# Resolve .apk-new files left by apk when existing files were modified.
+find /www/tollgate -name '*.apk-new' \
+    -exec sh -c 'mv "$1" "${1%.apk-new}"' _ {} \; 2>/dev/null
+
+/etc/init.d/rpcd restart
+/etc/init.d/uhttpd restart
+
+exit 0
