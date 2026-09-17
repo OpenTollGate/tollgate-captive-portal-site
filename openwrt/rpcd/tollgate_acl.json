@@ -1,0 +1,56 @@
+{
+  "tollgate": {
+    "description": "Tollgate management",
+    "read": {
+      "ubus": {
+        "tollgate": [
+          "config_schema",
+          "config_get",
+          "wallet_balance",
+          "wallet_info",
+          "status",
+          "health",
+          "pricing",
+          "sessions",
+          "upstream_scan",
+          "upstream_list"
+        ],
+        "system": ["info", "board"],
+        "network.interface": ["dump"],
+        "network.wireless": ["status"],
+        "dhcp": ["ipv4leases", "ipv6leases"],
+        "uci": ["get", "state"],
+        "file": ["read"]
+      },
+      "uci": ["tollgate", "wireless", "system", "network", "dhcp"]
+    },
+    "write": {
+      "ubus": {
+        "tollgate": [
+          "config_set",
+          "config_save",
+          "config_save_identities",
+          "wallet_fund",
+          "wallet_drain_cashu",
+          "activate",
+          "upstream_connect",
+          "upstream_remove"
+        ],
+        "network.wireless": ["reload"],
+        "system": ["password_set"],
+        "uci": [
+          "set",
+          "add",
+          "delete",
+          "commit",
+          "apply",
+          "confirm",
+          "rollback",
+          "reorder"
+        ],
+        "file": ["exec"]
+      },
+      "uci": ["wireless", "system", "network"]
+    }
+  }
+}
