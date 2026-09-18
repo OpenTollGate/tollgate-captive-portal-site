@@ -2,7 +2,7 @@
   "name": "TollGate",
   "short_name": "TollGate",
   "description": "TollGate Router Admin Dashboard",
-  "start_url": "/tollgate/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#111111",
   "theme_color": "#FF6961",

@@ -4,9 +4,10 @@
 //   2. the Preact admin board                 -> build/admin/
 //
 // One build ships exactly one brand. The default is TollGate; net4sats builds
-// set VITE_BRAND=net4sats (and VITE_BASE_PATH=/net4sats/). The brand also drives
-// the generated PWA manifest, so a TollGate build can never ship the net4sats
-// skin and vice versa.
+// set VITE_BRAND=net4sats. The admin is served at the ROOT of :8090, so the
+// base path is always '/'; the brand drives the generated PWA manifest and the
+// on-router webroot (/www/<brand>), so a TollGate build can never ship the
+// net4sats skin and vice versa.
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +17,7 @@ const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
 
 const brand = process.env.VITE_BRAND || 'tollgate';
-const base = process.env.VITE_BASE_PATH || `/${brand}/`;
+const base = process.env.VITE_BASE_PATH || '/';
 
 const name = brand === 'net4sats' ? 'net4sats' : 'TollGate';
 const themeColor = brand === 'net4sats' ? '#111111' : '#FF6961';

@@ -5,7 +5,9 @@ const adminDir = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const PORT = process.env.ADMIN_TEST_PORT || '5199';
 const BRAND = process.env.VITE_BRAND || 'tollgate';
-const base = `/${BRAND}/`;
+// The admin is served at the root of :8090 in production; the README explains
+// VITE_BRAND. The dev/test server uses base '/' too.
+const base = '/';
 
 // Runs the admin board in VITE_MOCK mode (no router/ubus needed) and exercises
 // the real Preact app end-to-end: auth gate, layout, routing.
