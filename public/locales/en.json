@@ -51,6 +51,7 @@
   "lightning_open_wallet": "Open Wallet",
   "valid_cashu_token": "Valid Cashu token",
   "valid_cashu_token_message": "You will receive {{purchased}} of internet access.",
+  "mint_fee_note": "Mint swap fee: {{fee}} sat · you receive {{net}} sat",
 
   "access_options": "Select access option",
   "price": "1 sat per 10 minutes",
@@ -110,6 +111,10 @@
   "CU108_message": "Please reload the page and try again.",
   "CU109_label": "E-cash note expired",
   "CU109_message": "This e-cash note uses an outdated mint key. The mint has rotated its security keys since this token was created. Please obtain a fresh token from the mint and try again.",
+  "CU110_label": "Token too small for this mint",
+  "CU110_message": "This token is {{amount}} sat, but the mint charges a {{fee}} sat swap fee — there is nothing left to spend. Use a larger token, or a mint without fees.",
+  "CU111_label": "Mint unavailable",
+  "CU111_message": "The mint is temporarily unavailable. Please try again, or use a token from another mint.",
 
   "LN001_label": "No access options available",
   "LN001_message": "Could not parse TollGate access options.",
