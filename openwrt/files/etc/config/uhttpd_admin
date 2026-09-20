@@ -1,7 +1,10 @@
 # Reference snapshot of the uhttpd "admin" instance created by
 # packaging/files/etc/uci-defaults/92-tollgate-admin-setup.
 #
-# The admin board is a second (Preact) SPA served at the ROOT of :8090. It
+# The admin board is a second (Preact) SPA served over HTTPS at the ROOT of
+# :8090 (browsers flag any password field on an http:// origin — the board has
+# login/WiFi/Settings password fields — so it is TLS-only, reusing the router's
+# self-signed /etc/uhttpd.crt; LuCI uses the same cert on :443). It
 # binds the same ubus socket as the rest of the system (`ubus_prefix /ubus`),
 # so the SPA can drive `tollgate --json` through the rpcd plugin.
 #
@@ -22,9 +25,11 @@
 # (:2051); those are NOT touched here.
 
 config uhttpd 'admin'
-    list listen_http '0.0.0.0:8090'
-    list listen_http '[::]:8090'
+    list listen_https '0.0.0.0:8090'
+    list listen_https '[::]:8090'
     option home '/www/tollgate'
+    option cert '/etc/uhttpd.crt'
+    option key '/etc/uhttpd.key'
     option ubus_prefix '/ubus'
     option script_timeout '60'
     option network_timeout '30'

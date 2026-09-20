@@ -30,10 +30,19 @@ case "$ADMIN_HOME" in
 esac
 
 # Create or repair the admin instance.
+#
+# HTTPS-only on :8090: browsers flag ANY password field on an http:// origin
+# ("Password fields present on an insecure (http://) page") and password managers
+# refuse to autofill / clear storage. The board legitimately has password fields
+# (login, WiFi, Settings), so it MUST be served over TLS. Reuse the router's
+# self-signed cert (uhttpd generates /etc/uhttpd.crt on first start; LuCI uses it).
 uci -q get uhttpd.admin >/dev/null 2>&1 || uci set uhttpd.admin=uhttpd
 uci -q delete uhttpd.admin.listen_http
-uci add_list uhttpd.admin.listen_http='0.0.0.0:8090'
-uci add_list uhttpd.admin.listen_http='[::]:8090'
+uci -q delete uhttpd.admin.listen_https
+uci add_list uhttpd.admin.listen_https='0.0.0.0:8090'
+uci add_list uhttpd.admin.listen_https='[::]:8090'
+[ -f /etc/uhttpd.crt ] && uci set uhttpd.admin.cert='/etc/uhttpd.crt'
+[ -f /etc/uhttpd.key ] && uci set uhttpd.admin.key='/etc/uhttpd.key'
 uci set uhttpd.admin.ubus_prefix='/ubus'
 uci set uhttpd.admin.script_timeout='60'
 uci set uhttpd.admin.network_timeout='30'
@@ -52,6 +61,8 @@ for sec in $(uci show uhttpd 2>/dev/null | sed -n 's/^uhttpd\.\([^.]*\)=uhttpd$/
     [ "$sec" = "admin" ] && continue
     uci -q del_list "uhttpd.$sec.listen_http=0.0.0.0:8090" 2>/dev/null
     uci -q del_list "uhttpd.$sec.listen_http=[::]:8090" 2>/dev/null
+    uci -q del_list "uhttpd.$sec.listen_https=0.0.0.0:8090" 2>/dev/null
+    uci -q del_list "uhttpd.$sec.listen_https=[::]:8090" 2>/dev/null
 done
 
 # Rebrand: a TollGate build must not serve a leftover net4sats skin. Drop a
