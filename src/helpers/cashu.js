@@ -229,54 +229,64 @@ export const submitToken = async (token, tollgateDetails, allocation, i18n) => {
         console.error("failed to parse error response body:", e);
       }
 
-      if (response.status === 402) {
-        // payment required: the backend rejected the token
-        if (backendCode === "payment-error-dleq-keyset-rotation") {
-          // the mint rotated its keyset — the e-cash note is no longer spendable
-          console.error("DLEQ keyset rotation error:", backendCode, backendMessage);
-          return {
-            status: 0,
-            code: "CU109",
-            label: i18n("CU109_label"),
-            message: i18n("CU109_message"),
-          };
-        } else if (backendMessage) {
-          // use the actual backend error message instead of the generic CU106
-          console.error("backend error:", backendCode, backendMessage);
-          return {
-            status: 0,
-            code: "CU106",
-            label: i18n("CU106_label"),
-            message: backendMessage,
-          };
+      // Map the backend's machine code to a friendly CU code regardless of the
+      // HTTP status: backend kind 21023 notices are sent with 400 (not 402), so
+      // keying off 402 alone missed every coded error.
+      const byCode = {
+        "payment-error-below-swap-fee": "CU110",
+        "payment-error-mint-unreachable": "CU111",
+        "payment-error-dleq-keyset-rotation": "CU109",
+      };
+      let friendlyCode = byCode[backendCode] || null;
+
+      if (!friendlyCode && backendMessage) {
+        const text = String(backendMessage).toLowerCase();
+        if (text.includes("swap fee") || text.includes("nothing to swap") || text.includes("no outputs")) {
+          friendlyCode = "CU110";
+        } else if (text.includes("keyset")) {
+          friendlyCode = "CU109";
+        } else if (
+          text.includes("unreachable") ||
+          text.includes("connection refused") ||
+          text.includes("temporarily unavailable") ||
+          text.includes("no such host")
+        ) {
+          friendlyCode = "CU111";
         }
-        // fallback if the body wasn't a parseable kind 21023
-        console.error("error processing token:", response);
+      }
+
+      if (friendlyCode) {
+        console.error("backend payment error:", backendCode, backendMessage);
+        // CU110/CU111 carry precise, user-facing backend messages (amount/fee);
+        // CU109 keeps its dedicated localized copy.
+        const message = friendlyCode !== "CU109" && backendMessage
+          ? backendMessage
+          : i18n(`${friendlyCode}_message`);
+        return {
+          status: 0,
+          code: friendlyCode,
+          label: i18n(`${friendlyCode}_label`),
+          message,
+        };
+      }
+
+      // Fall back to the previous generic behavior: 402 -> CU106, other -> CU107.
+      if (response.status === 402) {
+        console.error("backend error:", backendCode, backendMessage);
         return {
           status: 0,
           code: "CU106",
           label: i18n("CU106_label"),
-          message: i18n("CU106_message"),
-        };
-      } else {
-        // other server error — surface the backend message if one was parsed
-        if (backendMessage) {
-          console.error("server error:", backendCode, backendMessage);
-          return {
-            status: 0,
-            code: "CU107",
-            label: i18n("CU107_label"),
-            message: backendMessage,
-          };
-        }
-        console.error("server error:", response);
-        return {
-          status: 0,
-          code: "CU107",
-          label: i18n("CU107_label"),
-          message: i18n("CU107_message"),
+          message: backendMessage || i18n("CU106_message"),
         };
       }
+      console.error("server error:", backendCode, backendMessage, response);
+      return {
+        status: 0,
+        code: "CU107",
+        label: i18n("CU107_label"),
+        message: backendMessage || i18n("CU107_message"),
+      };
     }
 
     // payment was successful
