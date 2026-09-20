@@ -8,8 +8,10 @@ portal share one codebase and one release.
 ## Stack
 
 - **Preact + TypeScript**, built with `@preact/preset-vite`.
-- Served from a dedicated **uhttpd instance on `:8090`** (see
-  `../openwrt/` + `../packaging/files/etc/uci-defaults/92-tollgate-admin-setup`).
+- Served at the **root of a dedicated uhttpd instance on `:8090`** (webroot
+  `/www/<brand>`; see `../openwrt/` +
+  `../packaging/files/etc/uci-defaults/92-tollgate-admin-setup`). LuCI stays on
+  `:8080`; the admin instance never exposes LuCI's `/www`.
 - Talks to the router through **ubus** (`/ubus`) via the `tollgate` rpcd plugin
   (`../openwrt/rpcd/tollgate`), which maps 1:1 to `tollgate --json …` CLI
   commands. Auth is `session.login` with the router root password.
@@ -23,11 +25,12 @@ One build ships **one** skin (`src/brand.ts`), selected with `VITE_BRAND`:
 | | TollGate (default) | net4sats |
 |---|---|---|
 | `VITE_BRAND` | `tollgate` | `net4sats` |
-| base path | `/tollgate/` | `/net4sats/` |
+| webroot | `/www/tollgate` | `/www/net4sats` |
 | domain | `tollgate.lan` | `net4sats.lan` |
 | accent | `#FF6961` | `#111111` |
 
-Logos/icons live in `public/assets/brand/<brand>/`.
+Both are served at the root of `:8090` (base `/`); the brand only selects the
+webroot, manifest, and skin. Logos/icons live in `public/assets/brand/<brand>/`.
 
 ## Build
 
@@ -37,7 +40,7 @@ npm run build
 
 # admin only
 npm run build:admin
-VITE_BRAND=net4sats npm run build:admin   # net4sats skin, base /net4sats/
+VITE_BRAND=net4sats npm run build:admin   # net4sats skin
 
 # dev (mock ubus, no router needed)
 npm run dev:admin

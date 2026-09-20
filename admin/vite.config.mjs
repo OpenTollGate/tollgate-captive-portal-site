@@ -18,13 +18,13 @@ const brandFavicon = () => ({
   },
 });
 
-// The admin board is a second (Preact) app in this repo. It is served from a
-// dedicated uhttpd instance on :8090 (home: /www, files at /www/<brand>), so the
-// base path is brand-scoped: /tollgate/ by default, /net4sats/ for net4sats
-// builds. Routing is hash-based, so it works under any subpath.
+// The admin board is a second (Preact) app in this repo. It is served at the
+// ROOT of its own uhttpd instance on :8090 (home: /www/<brand>, files at
+// /www/<brand>), so the base path is always '/'. LuCI stays on :8080.
+// Routing is hash-based.
 export default defineConfig({
   root: rootDir,
-  base: process.env.VITE_BASE_PATH || `/${brand}/`,
+  base: process.env.VITE_BASE_PATH || '/',
   plugins: [brandFavicon(), preact()],
   build: {
     outDir: fileURLToPath(new URL('../build/admin', import.meta.url)),
