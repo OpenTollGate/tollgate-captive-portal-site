@@ -280,7 +280,7 @@ export const AccessGranted = ({ allocation }) => {
   const balanceUrl = `${getPortalBaseUrl()}/balance.html`;
 
   return <div className="tollgate-captive-portal-access-granted">
-    <div className="tollgate-captive-portal-access-granted-checkmark">
+    <div id="captive-portal-access-granted-checkmark" className="tollgate-captive-portal-access-granted-checkmark">
       <AccessGrantedIcon />
     </div>
     <div className="tollgate-captive-portal-access-granted-label">
