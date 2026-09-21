@@ -22,6 +22,9 @@
         "uci": ["get", "state"],
         "file": ["read"]
       },
+      "file": {
+        "/tmp/dhcp.leases": ["read"]
+      },
       "uci": ["tollgate", "wireless", "system", "network", "dhcp"]
     },
     "write": {
