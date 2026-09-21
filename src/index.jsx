@@ -4,6 +4,8 @@ import ReactDOM from 'react-dom/client';
 
 // internal
 import App from './App.jsx';
+import { ToastProvider } from './components/ToastContext';
+import ToastContainer from './components/Toast';
 
 // helpers
 import './helpers/i18n';
@@ -15,6 +17,9 @@ import './index.scss';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+      <ToastContainer />
+    </ToastProvider>
   </React.StrictMode>
-); 
+);
