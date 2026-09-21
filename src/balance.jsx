@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import BalancePage from './BalancePage.jsx';
+import { ErrorBoundary } from './components/ErrorBoundary.jsx';
 
 import './helpers/i18n';
 import './index.scss';
@@ -9,6 +10,8 @@ import './index.scss';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <BalancePage />
+    <ErrorBoundary>
+      <BalancePage />
+    </ErrorBoundary>
   </React.StrictMode>
 );

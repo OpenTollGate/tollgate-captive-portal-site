@@ -138,7 +138,7 @@ export const Lightning = (props) => {
       {(!success && processing) && <Processing label={t('processing_invoice_request')} />}
 
       {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
-      {(success && !processing) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
+      {(success && !processing && allocation) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
 
       {/* unitinput: input field for entering the amount to pay, and selecting access option */}
       {(!success && !processing && accessOptions.length > 0 && !invoiceData) && <UnitInput
