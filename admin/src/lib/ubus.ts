@@ -18,6 +18,52 @@ if (saved) sessionId = saved;
 
 let rpcId = 0;
 
+const UBUS_ZERO = '00000000000000000000000000000000';
+
+// ubus status results we surface by name (rpcd returns these in result[0]).
+const UBUS_STATUS: Record<number, string> = {
+  2: 'not-found',
+  3: 'not-found',
+  4: 'no-data',
+  5: 'invalid-argument',
+  6: 'permission-denied',
+};
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+  sessionId = UBUS_ZERO;
+}
+
+// probeSessionValid asks the daemon whether the current session can call
+// session.access, WITHOUT throwing. Used to tell a genuinely dead session
+// (rpcd -32002 that is not an ACL denial) from a plain access-denied, so we
+// stop mislabeling permission errors as SESSION_EXPIRED.
+async function probeSessionValid(): Promise<boolean> {
+  if (MOCK) return true;
+  if (sessionId === UBUS_ZERO) return false;
+  try {
+    const res = await fetch(UBUS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: ++rpcId,
+        method: 'call',
+        params: [
+          sessionId,
+          'session',
+          'access',
+          { scope: 'ubus', object: 'session', function: 'login' },
+        ],
+      }),
+    });
+    const json = await res.json();
+    return !json.error && !!json.result && json.result[0] === 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function ubusCall(
   obj: string,
   method: string,
@@ -39,22 +85,29 @@ export async function ubusCall(
   });
   const json = await res.json();
   if (json.error) {
+    // rpcd returns -32002 ("access denied") for BOTH an invalid/expired
+    // session and an ACL denial. Confirm with a session probe before
+    // declaring the session dead; otherwise it is an access/permission error.
     if (json.error.code === -32002) {
-      localStorage.removeItem(SESSION_KEY);
-      sessionId = '00000000000000000000000000000000';
-      throw new Error('SESSION_EXPIRED');
+      if (!(await probeSessionValid())) {
+        clearSession();
+        // Let the app redirect to login regardless of which route noticed.
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('tollgate:session-expired'));
+        }
+        throw new Error('SESSION_EXPIRED');
+      }
+      throw new Error('ACCESS_DENIED');
     }
     throw new Error(`ubus error: ${json.error.message || 'unknown'}`);
   }
   if (!json.result) throw new Error('No result from ubus');
   if (json.result[0] !== 0) {
-    if (json.result[0] === 6) {
-      localStorage.removeItem(SESSION_KEY);
-      sessionId = '00000000000000000000000000000000';
-      throw new Error('SESSION_EXPIRED');
-    }
+    // result codes are object-level errors (3 not-found, 5 invalid-arg,
+    // 6 permission-denied). None of these mean the session expired.
+    const code = json.result[0];
     throw new Error(
-      `ubus error ${json.result[0]}: ${json.result[1] || 'unknown'}`
+      `ubus error ${code}: ${json.result[1] || UBUS_STATUS[code] || 'unknown'}`
     );
   }
   return json.result[1];
@@ -106,24 +159,12 @@ export async function login(
 }
 
 export function logout() {
-  localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(SESSION_USER);
-  sessionId = '00000000000000000000000000000000';
+  clearSession();
 }
 
 export async function checkSession(): Promise<boolean> {
-  if (MOCK) return true;
-  if (sessionId === '00000000000000000000000000000000') return false;
-  try {
-    await ubusCall('session', 'access', {
-      scope: 'ubus',
-      object: 'session',
-      function: 'login',
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return probeSessionValid();
 }
 
 export function isLoggedIn(): boolean {

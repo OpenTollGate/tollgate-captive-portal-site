@@ -42,6 +42,15 @@ function AdminApp() {
     })();
   }, []);
 
+  // A genuine session expiry can be noticed by ANY route; drop auth so the
+  // effect below redirects to login instead of leaving a raw SESSION_EXPIRED.
+  useEffect(() => {
+    const onExpired = () => setAuthed(false);
+    window.addEventListener('tollgate:session-expired', onExpired);
+    return () =>
+      window.removeEventListener('tollgate:session-expired', onExpired);
+  }, []);
+
   useEffect(() => {
     if (!ready) return;
     if (route === 'login' && authed) {

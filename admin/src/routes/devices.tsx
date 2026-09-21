@@ -14,35 +14,54 @@ export default function Devices() {
   const [error, setError] = useState('');
 
   const fetchLeases = useCallback(async () => {
-    try {
-      let allLeases: DhcpLease[] = [];
-      try {
-        const data = await ubusCall('dhcp', 'ipv4leases');
-        if (data && data.device) {
-          for (const dev of Object.values(data.device) as any[]) {
-            if (dev.leases) {
-              allLeases.push(...dev.leases);
-            }
-          }
-        }
-      } catch {
-        const raw = await ubusCall('file', 'read', { path: '/tmp/dhcp.leases' });
-        if (raw && raw.data) {
-          allLeases = (raw.data as string).trim().split('\n').filter(Boolean).map(line => {
-            const parts = line.split(/\s+/);
-            return {
-              expires: parts[0] ? Math.max(0, parseInt(parts[0]) - Math.floor(Date.now() / 1000)) : 0,
-              macaddr: parts[1] || '',
-              ipaddr: parts[2] || '',
-              hostname: parts[3] || '',
-            };
-          });
+    // OpenWrt 25.x: the `dhcp` ubus object has no `ipv4leases` method, so read
+    // the leases file first; keep the ubus call as a fallback for older builds.
+    const fromFile = async (): Promise<DhcpLease[]> => {
+      const raw = await ubusCall('file', 'read', { path: '/tmp/dhcp.leases' });
+      const text = raw && typeof raw.data === 'string' ? raw.data : '';
+      return text
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const parts = line.split(/\s+/);
+          return {
+            expires: parts[0]
+              ? Math.max(0, parseInt(parts[0]) - Math.floor(Date.now() / 1000))
+              : 0,
+            macaddr: parts[1] || '',
+            ipaddr: parts[2] || '',
+            hostname: parts[3] || '',
+          };
+        });
+    };
+    const fromUbus = async (): Promise<DhcpLease[]> => {
+      const data = await ubusCall('dhcp', 'ipv4leases');
+      const out: DhcpLease[] = [];
+      if (data && data.device) {
+        for (const dev of Object.values(data.device) as any[]) {
+          if (dev.leases) out.push(...dev.leases);
         }
       }
-      setLeases(allLeases);
+      return out;
+    };
+
+    try {
+      let leases: DhcpLease[] = [];
+      try {
+        leases = await fromFile();
+      } catch {
+        leases = await fromUbus();
+      }
+      setLeases(leases);
       setError('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to load device list');
+    } catch {
+      // "No leases" is a normal state: no DHCP clients, or an empty/absent
+      // leases file (rpcd reports reading a 0-byte file as an error). Show the
+      // empty state instead of a raw error; a genuine expired session is
+      // redirected by the global handler in ubus.ts.
+      setLeases([]);
+      setError('');
     } finally {
       setLoading(false);
     }
