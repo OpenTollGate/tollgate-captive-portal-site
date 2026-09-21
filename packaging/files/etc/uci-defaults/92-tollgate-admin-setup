@@ -86,6 +86,22 @@ fi
 
 uci commit uhttpd
 
+# Ensure the admin board is reachable from the captive LAN without
+# authentication. The module's 99-tollgate-setup also adds these, but that runs
+# only on a FULL setup pass (first boot or a setup-version change), which is
+# skipped on an apk upgrade — so re-assert here, on every install/upgrade.
+# Section-guarded: the nodogsplash section may not exist yet, depending on
+# install ordering (99 runs full setup and creates it when this is a first boot).
+if uci -q get nodogsplash.@nodogsplash[0] >/dev/null 2>&1; then
+    nds_users=$(uci -q get nodogsplash.@nodogsplash[0].users_to_router 2>/dev/null)
+    for port in 8090 8443; do
+        if ! echo "$nds_users" | grep -q "port $port"; then
+            uci add_list nodogsplash.@nodogsplash[0].users_to_router="allow tcp port $port"
+        fi
+    done
+    uci commit nodogsplash
+fi
+
 # Resolve .apk-new files left by apk when existing files were modified.
 find "$ADMIN_HOME" -name '*.apk-new' \
     -exec sh -c 'mv "$1" "${1%.apk-new}"' _ {} \; 2>/dev/null
