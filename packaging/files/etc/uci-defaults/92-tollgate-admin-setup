@@ -8,18 +8,27 @@
 # feed Makefile), so a TollGate build can never point at a leftover net4sats
 # webroot — and vice versa. Do NOT guess the webroot by directory existence.
 #
+# Scheme: the board is served over plain HTTP on :8090 — the URL people type
+# (http://<router>:8090/) and the same scheme as LuCI on :8080. When a cert/key
+# pair exists, an OPT-IN HTTPS listener is added on :8443, because one uhttpd
+# instance cannot serve HTTP and HTTPS on the same port (bind: Address already
+# in use) and an HTTPS-only :8090 would make http://<router>:8090/ fail outright.
+# Never advertise a TLS listener without a cert — uhttpd would fail to start it.
+#
 # LuCI stays on uhttpd.main (:8080; webroot /www) and the captive portal on
-# uhttpd.portal (:2051). :8090 belongs to the admin instance ALONE, so it is
-# removed from any other section.
+# uhttpd.portal (:2051). :8090 (and :8443) belong to the admin instance ALONE,
+# so they are removed from any other section.
 #
 # The admin instance must NEVER expose LuCI. With home=/www/<brand>, a request to
 # /cgi-bin/luci resolves to /www/<brand>/cgi-bin/luci (absent) -> 404 ->
 # error_page (/index.html = the board). This is why home must never be /www:
 # with home=/www, uhttpd's default cgi_prefix=/cgi-bin served the real LuCI CGI on
-# :8090 (see the MT3000 incident, 2026-09-20).
+# :8090 (see the MT3000 incident, 2026-09-20). The cgi/lua prefixes are deleted
+# outright as belt-and-braces.
 #
-# Idempotent: creates the section if missing, ALWAYS re-asserts every option, and
-# migrates the older home=/www + /tollgate/ scheme.
+# Idempotent: creates the section if missing, ALWAYS re-asserts every option, so
+# it also repairs the older home=/www + /tollgate/ scheme and a stale
+# HTTPS-only :8090 left behind by an earlier build.
 
 # Brand webroot. __ADMIN_HOME__ is substituted at package build time
 # (TollGate feed -> /www/tollgate; net4sats feed -> /www/net4sats). Fall back to
@@ -30,19 +39,19 @@ case "$ADMIN_HOME" in
 esac
 
 # Create or repair the admin instance.
-#
-# HTTPS-only on :8090: browsers flag ANY password field on an http:// origin
-# ("Password fields present on an insecure (http://) page") and password managers
-# refuse to autofill / clear storage. The board legitimately has password fields
-# (login, WiFi, Settings), so it MUST be served over TLS. Reuse the router's
-# self-signed cert (uhttpd generates /etc/uhttpd.crt on first start; LuCI uses it).
 uci -q get uhttpd.admin >/dev/null 2>&1 || uci set uhttpd.admin=uhttpd
 uci -q delete uhttpd.admin.listen_http
 uci -q delete uhttpd.admin.listen_https
-uci add_list uhttpd.admin.listen_https='0.0.0.0:8090'
-uci add_list uhttpd.admin.listen_https='[::]:8090'
-[ -f /etc/uhttpd.crt ] && uci set uhttpd.admin.cert='/etc/uhttpd.crt'
-[ -f /etc/uhttpd.key ] && uci set uhttpd.admin.key='/etc/uhttpd.key'
+uci add_list uhttpd.admin.listen_http='0.0.0.0:8090'
+uci add_list uhttpd.admin.listen_http='[::]:8090'
+uci -q delete uhttpd.admin.cert
+uci -q delete uhttpd.admin.key
+if [ -f /etc/uhttpd.crt ] && [ -f /etc/uhttpd.key ]; then
+    uci add_list uhttpd.admin.listen_https='0.0.0.0:8443'
+    uci add_list uhttpd.admin.listen_https='[::]:8443'
+    uci set uhttpd.admin.cert='/etc/uhttpd.crt'
+    uci set uhttpd.admin.key='/etc/uhttpd.key'
+fi
 uci set uhttpd.admin.ubus_prefix='/ubus'
 uci set uhttpd.admin.script_timeout='60'
 uci set uhttpd.admin.network_timeout='30'
@@ -55,14 +64,16 @@ uci set uhttpd.admin.error_page='/index.html'
 uci -q delete uhttpd.admin.cgi_prefix
 uci -q delete uhttpd.admin.lua_prefix
 
-# :8090 belongs to the admin instance only — strip it from any other section
-# (a stale net4sats/`luci` section must not own the admin port).
+# :8090 / :8443 belong to the admin instance only — strip them from any other
+# section (a stale net4sats/`luci` section must not own the admin port).
 for sec in $(uci show uhttpd 2>/dev/null | sed -n 's/^uhttpd\.\([^.]*\)=uhttpd$/\1/p'); do
     [ "$sec" = "admin" ] && continue
     uci -q del_list "uhttpd.$sec.listen_http=0.0.0.0:8090" 2>/dev/null
     uci -q del_list "uhttpd.$sec.listen_http=[::]:8090" 2>/dev/null
     uci -q del_list "uhttpd.$sec.listen_https=0.0.0.0:8090" 2>/dev/null
     uci -q del_list "uhttpd.$sec.listen_https=[::]:8090" 2>/dev/null
+    uci -q del_list "uhttpd.$sec.listen_https=0.0.0.0:8443" 2>/dev/null
+    uci -q del_list "uhttpd.$sec.listen_https=[::]:8443" 2>/dev/null
 done
 
 # Rebrand: a TollGate build must not serve a leftover net4sats skin. Drop a
