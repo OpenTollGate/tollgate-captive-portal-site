@@ -103,12 +103,31 @@ if uci -q get nodogsplash.@nodogsplash[0] >/dev/null 2>&1; then
 fi
 
 # LuCI (uhttpd.main :8080) presents a login over plain HTTP, which browsers
-# flag as an insecure password field. Redirect it to the TLS listener when a
-# cert/key exist; the board's own :8090 stays HTTP by design. Guarded so a
-# router without a cert keeps working over HTTP instead of redirecting to a
-# dead port.
-if [ -f /etc/uhttpd.crt ] && [ -f /etc/uhttpd.key ]; then
-    uci set uhttpd.main.redirect_https='1'
+# flag as an insecure password field. Redirect it to the TLS listener when one
+# is actually configured on uhttpd.main; the board's own :8090 stays HTTP by
+# design.
+#
+# The redirect target is uhttpd.main's OWN listen_https. "A cert/key exists" is
+# NOT a sufficient guard for it: uhttpd.main.listen_https is configured by the
+# module's 99-tollgate-setup, which only runs a FULL setup pass (first boot or a
+# setup-version change) - an apk upgrade takes its narrow branch. A router whose
+# certs appeared after its last full setup therefore has certs but no :443
+# listener, and enabling the redirect there sends every :8080 LuCI request to a
+# dead port (the 2026-09-21 pre13 LuCI lockout). Require a readable, non-empty
+# cert/key pair AND a configured listener, and always write an explicit value so
+# a stale '1' left by an earlier install is repaired rather than kept.
+#
+# Keep this rule identical to the module's 99-tollgate-setup: both scripts write
+# uhttpd.main.redirect_https, install order decides which lands last, so the two
+# must agree on the value.
+if uci -q get uhttpd.main >/dev/null 2>&1; then
+    if [ -r /etc/uhttpd.crt ] && [ -s /etc/uhttpd.crt ] &&
+       [ -r /etc/uhttpd.key ] && [ -s /etc/uhttpd.key ] &&
+       [ -n "$(uci -q get uhttpd.main.listen_https 2>/dev/null)" ]; then
+        uci set uhttpd.main.redirect_https='1'
+    else
+        uci set uhttpd.main.redirect_https='0'
+    fi
     uci commit uhttpd
 fi
 
@@ -118,5 +137,21 @@ find "$ADMIN_HOME" -name '*.apk-new' \
 
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
+
+# Fail open: the redirect is only safe if the TLS listener it targets actually
+# came up - uhttpd can accept listen_https in config and still fail to bind :443
+# (unusable cert, port conflict), which would lock LuCI behind a dead redirect
+# again. Verify a LISTEN socket on :443 and, if it is missing, drop the redirect
+# and restart once. This only ever turns the redirect OFF.
+if uci -q get uhttpd.main >/dev/null 2>&1 &&
+   [ "$(uci -q get uhttpd.main.redirect_https 2>/dev/null)" = "1" ]; then
+    sleep 1
+    if ! awk '$2 ~ /:01BB$/ && $4 == "0A" { f = 1 } END { exit !f }' \
+             /proc/net/tcp /proc/net/tcp6 2>/dev/null; then
+        uci set uhttpd.main.redirect_https='0'
+        uci commit uhttpd
+        /etc/init.d/uhttpd restart
+    fi
+fi
 
 exit 0
