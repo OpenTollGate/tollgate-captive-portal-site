@@ -102,6 +102,16 @@ if uci -q get nodogsplash.@nodogsplash[0] >/dev/null 2>&1; then
     uci commit nodogsplash
 fi
 
+# LuCI (uhttpd.main :8080) presents a login over plain HTTP, which browsers
+# flag as an insecure password field. Redirect it to the TLS listener when a
+# cert/key exist; the board's own :8090 stays HTTP by design. Guarded so a
+# router without a cert keeps working over HTTP instead of redirecting to a
+# dead port.
+if [ -f /etc/uhttpd.crt ] && [ -f /etc/uhttpd.key ]; then
+    uci set uhttpd.main.redirect_https='1'
+    uci commit uhttpd
+fi
+
 # Resolve .apk-new files left by apk when existing files were modified.
 find "$ADMIN_HOME" -name '*.apk-new' \
     -exec sh -c 'mv "$1" "${1%.apk-new}"' _ {} \; 2>/dev/null
