@@ -7,13 +7,13 @@ import classNames from 'classnames';
 import Background from './components/Background.jsx'
 import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
-import { BalancePage } from './components/BalancePage.jsx'
 import { Error } from './components/Status.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon.jsx'
 
 // helpers
-import { fetchTollgateData, getStepSizeValues, getTollgateBaseUrl } from './helpers/tollgate.js'
+import { fetchTollgateData, getStepSizeValues, getTollgateBaseUrl, getPortalBaseUrl } from './helpers/tollgate.js'
+import { probeLightningCapability } from './helpers/lightning.js'
 
 // styles and assets
 import './App.scss'
@@ -30,7 +30,20 @@ export const App = () => {
   const [error, setError] = useState(false);
   const [deviceInfo, setDeviceInfo] = useState(null);
   const [retrying, setRetrying] = useState(false);
+  const [lightningAvailable, setLightningAvailable] = useState(null);
   const retryIntervalRef = useRef(null);
+
+  // probe the backend once for lightning support; the tab stays disabled until
+  // the probe confirms the gateway exposes a working /ln-invoice endpoint
+  useEffect(() => {
+    let active = true;
+    probeLightningCapability().then((result) => {
+      if (active) setLightningAvailable(!!result.supported);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // initial data fetch on translation ready
   useEffect(() => {
@@ -108,8 +121,7 @@ export const App = () => {
 
             <div className="tollgate-captive-portal-tabs" aria-label={t('tab_aria_label')} data-hidden={!loading && !!error}>
               <Tab type="cashu" method={method} setMethod={setMethod} />
-              <Tab type="balance" method={method} setMethod={setMethod} />
-              <Tab type="lightning" method={method} setMethod={setMethod} />
+              <Tab type="lightning" method={method} setMethod={setMethod} available={lightningAvailable} />
             </div>
 
             <div className="tollgate-captive-portal-view">
@@ -131,10 +143,9 @@ export const App = () => {
                 </div>}
               </div>}
 
-              {/* show cashu, lightning, or the balance page based on selection */}
+              {/* show cashu or lightning based on selection */}
               {!loading && !error && method === 'cashu' && <Cashu tollgateDetails={tollgateDetails.value} />}
               {!loading && !error && method === 'lightning' && <Lightning tollgateDetails={tollgateDetails.value} />}
-              {!loading && !error && method === 'balance' && <BalancePage tollgateDetails={tollgateDetails.value} onNavigate={setMethod} />}
             </div>
 
           </div>
@@ -157,10 +168,11 @@ export const Header = () => {
 }
 
 // tab component for the container header
-const Tab = ({ type, method, setMethod }) => {
+const Tab = ({ type, method, setMethod, available }) => {
   const { t } = useTranslation();
   const isLightning = type === 'lightning';
-  const isDisabled = isLightning; // Lightning is disabled
+  // lightning is gated on the backend capability probe (null = still probing)
+  const isDisabled = isLightning && available !== true;
 
   return <button
     onClick={() => !isDisabled && setMethod(type)}
@@ -171,7 +183,7 @@ const Tab = ({ type, method, setMethod }) => {
     id={`tab-${type}`}
     aria-controls={`tab-${type}`}
     disabled={isDisabled}>
-    {isLightning ? `${t(`${type}_tab`)} (Coming Soon)` : t(`${type}_tab`)}
+    {isLightning && available === false ? `${t(`${type}_tab`)} (${t('lightning_unavailable')})` : t(`${type}_tab`)}
   </button>
 }
 
@@ -271,11 +283,13 @@ export const AccessGranted = ({ allocation, metric }) => {
     return <SessionExpired />;
   }
 
-  // build the persistent portal balance URL from the gateway host
-  const balanceUrl = `${getTollgateBaseUrl()}/portal`;
+  // build the persistent standalone balance-page URL from the gateway host.
+  // the balance page is served by the portal on :2051 (not the :2121 backend,
+  // which has no /portal route).
+  const balanceUrl = `${getPortalBaseUrl()}/balance.html`;
 
   return <div className="tollgate-captive-portal-access-granted">
-    <div className="tollgate-captive-portal-access-granted-checkmark">
+    <div id="captive-portal-access-granted-checkmark" className="tollgate-captive-portal-access-granted-checkmark">
       <AccessGrantedIcon />
     </div>
     <div className="tollgate-captive-portal-access-granted-label">

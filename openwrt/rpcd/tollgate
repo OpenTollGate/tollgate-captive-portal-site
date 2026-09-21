@@ -1,0 +1,141 @@
+#!/bin/sh
+# rpcd plugin for tollgate --json commands
+# Methods map 1:1 to tollgate --json CLI commands
+. /usr/share/libubox/jshn.sh
+
+case "$1" in
+  list)
+    echo '{
+      "config_schema":{},
+      "config_get":{},
+      "config_set":{"key":"string","value":"string"},
+      "config_save":{"json":"string"},
+      "config_save_identities":{"json":"string"},
+      "wallet_balance":{},
+      "wallet_info":{},
+      "wallet_fund":{"token":"string"},
+      "wallet_drain_cashu":{},
+      "status":{},
+      "health":{},
+      "upstream_scan":{},
+      "upstream_connect":{"ssid":"string","passphrase":"string"},
+      "upstream_list":{},
+      "upstream_remove":{"ssid":"string"}
+    }'
+    ;;
+  call)
+    case "$2" in
+      config_schema)
+        tollgate --json config schema 2>/dev/null
+        ;;
+      config_get)
+        tollgate --json config get 2>/dev/null
+        ;;
+      config_set)
+        INPUT=$(cat)
+        KEY=$(echo "$INPUT" | jsonfilter -e '@.key' 2>/dev/null)
+        VAL=$(echo "$INPUT" | jsonfilter -e '@.value' 2>/dev/null)
+        if [ -z "$KEY" ]; then
+          json_init
+          json_add_boolean "success" 0
+          json_add_string "error" "key is required"
+          json_dump
+          exit 0
+        fi
+        tollgate --json config set "$KEY" "$VAL" 2>/dev/null
+        ;;
+      config_save)
+        INPUT=$(cat)
+        JSON=$(echo "$INPUT" | jsonfilter -e '@.json' 2>/dev/null)
+        if [ -z "$JSON" ]; then
+          json_init
+          json_add_boolean "success" 0
+          json_add_string "error" "json is required"
+          json_dump
+          exit 0
+        fi
+        echo "$JSON" | tollgate --json config save 2>/dev/null
+        ;;
+      config_save_identities)
+        INPUT=$(cat)
+        JSON=$(echo "$INPUT" | jsonfilter -e '@.json' 2>/dev/null)
+        if [ -z "$JSON" ]; then
+          json_init
+          json_add_boolean "success" 0
+          json_add_string "error" "json is required"
+          json_dump
+          exit 0
+        fi
+        echo "$JSON" | tollgate --json config save-identities 2>/dev/null
+        ;;
+      wallet_balance)
+        tollgate --json wallet balance 2>/dev/null
+        ;;
+      wallet_info)
+        tollgate --json wallet info 2>/dev/null
+        ;;
+      wallet_fund)
+        INPUT=$(cat)
+        TOKEN=$(echo "$INPUT" | jsonfilter -e '@.token' 2>/dev/null)
+        if [ -z "$TOKEN" ]; then
+          json_init
+          json_add_boolean "success" 0
+          json_add_string "error" "token is required"
+          json_dump
+          exit 0
+        fi
+        tollgate --json wallet fund "$TOKEN" 2>/dev/null
+        ;;
+      wallet_drain_cashu)
+        tollgate --json wallet drain cashu 2>/dev/null
+        ;;
+      status)
+        tollgate --json status 2>/dev/null
+        ;;
+      health)
+        tollgate --json health 2>/dev/null
+        ;;
+      upstream_scan)
+        tollgate --json upstream scan 2>/dev/null
+        ;;
+      upstream_connect)
+        INPUT=$(cat)
+        SSID=$(echo "$INPUT" | jsonfilter -e '@.ssid' 2>/dev/null)
+        PASS=$(echo "$INPUT" | jsonfilter -e '@.passphrase' 2>/dev/null)
+        if [ -z "$SSID" ]; then
+          json_init
+          json_add_boolean "success" 0
+          json_add_string "error" "ssid is required"
+          json_dump
+          exit 0
+        fi
+        if [ -n "$PASS" ]; then
+          tollgate --json upstream connect "$SSID" "$PASS" 2>/dev/null
+        else
+          tollgate --json upstream connect "$SSID" 2>/dev/null
+        fi
+        ;;
+      upstream_list)
+        tollgate --json upstream list 2>/dev/null
+        ;;
+      upstream_remove)
+        INPUT=$(cat)
+        SSID=$(echo "$INPUT" | jsonfilter -e '@.ssid' 2>/dev/null)
+        if [ -z "$SSID" ]; then
+          json_init
+          json_add_boolean "success" 0
+          json_add_string "error" "ssid is required"
+          json_dump
+          exit 0
+        fi
+        tollgate --json upstream remove "$SSID" 2>/dev/null
+        ;;
+      *)
+        json_init
+        json_add_boolean "success" 0
+        json_add_string "error" "unknown method"
+        json_dump
+        ;;
+    esac
+    ;;
+esac

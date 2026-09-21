@@ -108,6 +108,29 @@ export async function setupMockBackend(page, options = {}) {
           }),
         });
       }
+      if (path === '/ln-invoice') {
+        // capability probe is a GET without a quote; a real purchase is a POST
+        if (method === 'POST') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              status: 1,
+              quote: 'test-quote',
+              invoice: 'lnbc1mockinvoice',
+              mint_url: 'https://mint.minibits.cash/Bitcoin',
+              amount: 210,
+              expiry: 0,
+              state: 'UNPAID',
+            }),
+          });
+        }
+        return route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ status: 0, error: 'quote is required' }),
+        });
+      }
     }
 
     return route.continue();

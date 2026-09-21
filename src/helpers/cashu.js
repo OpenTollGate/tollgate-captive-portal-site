@@ -1,5 +1,6 @@
 // external
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
+import { getPublicKey, getEventHash, getSignature } from "nostr-tools";
 
 // helpers
 import { getTollgateBaseUrl } from "./tollgate";
@@ -65,19 +66,13 @@ export const validateToken = (token = "", mint, i18n) => {
     }
 
     // NUT #00: cashu[version][token] — `cashu` is the Cashu token prefix. `[version]` is a single `base64_urlsafe` character to denote the token format version.
-    // attempt to decode the token using the getDecodedToken method
-    let decodedToken = null;
+    // getTokenMetadata decodes both v2 (cashuA) and v4 (cashuB/CBOR) tokens and
+    // needs no mint keyset id list, so it also works for short-keyset tokens.
+    let metadata = null;
     try {
-      decodedToken = getDecodedToken(token.trim());
-      if (!decodedToken) {
-        return {
-          status: 0,
-          code: "CU102",
-          label: i18n("CU102_label"),
-          message: i18n("CU102_message"),
-        };
-      }
+      metadata = getTokenMetadata(token.trim());
     } catch (err) {
+      console.error("error decoding token:", err);
       return {
         status: 0,
         code: "CU102",
@@ -86,9 +81,9 @@ export const validateToken = (token = "", mint, i18n) => {
       };
     }
 
-    // extract proofs from the token
-    const proofs = extractProofsFromToken(decodedToken);
-    if (!proofs || proofs.length === 0) {
+    // a decodable token must still carry at least one proof
+    const proofAmounts = Array.isArray(metadata?.proofAmounts) ? metadata.proofAmounts : [];
+    if (!metadata || proofAmounts.length === 0) {
       return {
         status: 0,
         code: "CU103",
@@ -97,10 +92,13 @@ export const validateToken = (token = "", mint, i18n) => {
       };
     }
 
-    // calculate the sum of proof values
-    const totalAmount = proofs.reduce((sum, proof) => {
-      const proofAmount = Number(proof.amount || 0);
-      return sum + proofAmount;
+    // sum the proof amounts — v4 returns Amount objects (bigint-backed) while v2
+    // returns plain numbers, so accept both shapes.
+    const totalAmount = proofAmounts.reduce((sum, proofAmount) => {
+      const value = proofAmount?.toNumber
+        ? proofAmount.toNumber()
+        : Number(proofAmount?.value ?? proofAmount ?? 0);
+      return sum + (Number.isFinite(value) ? value : 0);
     }, 0);
 
     // verify token unit matches the selected mint's unit
@@ -126,8 +124,8 @@ export const validateToken = (token = "", mint, i18n) => {
         isValid: true,
         hasProofs: true,
         amount: totalAmount,
-        proofCount: proofs.length,
-        unit: "sat",
+        proofCount: proofAmounts.length,
+        unit: metadata.unit || "sat",
       },
     };
   } catch (error) {
@@ -188,34 +186,55 @@ export const submitToken = async (token, _tollgateDetails, allocation, i18n) => 
         console.error("failed to parse error response body:", e);
       }
 
-      if (response.status === 402) {
-        // payment required: the backend rejected the token
-        if (backendCode === "payment-error-dleq-keyset-rotation") {
-          // the mint rotated its keyset — the e-cash note is no longer spendable
-          console.error("DLEQ keyset rotation error:", backendCode, backendMessage);
-          return {
-            status: 0,
-            code: "CU109",
-            label: i18n("CU109_label"),
-            message: i18n("CU109_message"),
-          };
-        } else if (backendMessage) {
-          // use the actual backend error message instead of the generic CU106
-          console.error("backend error:", backendCode, backendMessage);
-          return {
-            status: 0,
-            code: "CU106",
-            label: i18n("CU106_label"),
-            message: backendMessage,
-          };
+      // Map the backend's machine code to a friendly CU code regardless of the
+      // HTTP status: backend kind 21023 notices are sent with 400 (not 402), so
+      // keying off 402 alone missed every coded error.
+      const byCode = {
+        "payment-error-below-swap-fee": "CU110",
+        "payment-error-mint-unreachable": "CU111",
+        "payment-error-dleq-keyset-rotation": "CU109",
+      };
+      let friendlyCode = byCode[backendCode] || null;
+
+      if (!friendlyCode && backendMessage) {
+        const text = String(backendMessage).toLowerCase();
+        if (text.includes("swap fee") || text.includes("nothing to swap") || text.includes("no outputs")) {
+          friendlyCode = "CU110";
+        } else if (text.includes("keyset")) {
+          friendlyCode = "CU109";
+        } else if (
+          text.includes("unreachable") ||
+          text.includes("connection refused") ||
+          text.includes("temporarily unavailable") ||
+          text.includes("no such host")
+        ) {
+          friendlyCode = "CU111";
         }
-        // fallback if the body wasn't a parseable kind 21023
-        console.error("error processing token:", response);
+      }
+
+      if (friendlyCode) {
+        console.error("backend payment error:", backendCode, backendMessage);
+        // CU110/CU111 carry precise, user-facing backend messages (amount/fee);
+        // CU109 keeps its dedicated localized copy.
+        const message = friendlyCode !== "CU109" && backendMessage
+          ? backendMessage
+          : i18n(`${friendlyCode}_message`);
+        return {
+          status: 0,
+          code: friendlyCode,
+          label: i18n(`${friendlyCode}_label`),
+          message,
+        };
+      }
+
+      // Fall back to the previous generic behavior: 402 -> CU106, other -> CU107.
+      if (response.status === 402) {
+        console.error("backend error:", backendCode, backendMessage);
         return {
           status: 0,
           code: "CU106",
           label: i18n("CU106_label"),
-          message: i18n("CU106_message"),
+          message: backendMessage || i18n("CU106_message"),
         };
       }
       // other server error — surface the backend message if one was parsed
@@ -228,12 +247,12 @@ export const submitToken = async (token, _tollgateDetails, allocation, i18n) => 
           message: backendMessage,
         };
       }
-      console.error("server error:", response);
+      console.error("server error:", backendCode, backendMessage, response);
       return {
         status: 0,
         code: "CU107",
         label: i18n("CU107_label"),
-        message: i18n("CU107_message"),
+        message: backendMessage || i18n("CU107_message"),
       };
     }
 

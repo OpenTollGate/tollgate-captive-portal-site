@@ -1,0 +1,39 @@
+# Reference snapshot of the uhttpd "admin" instance created by
+# packaging/files/etc/uci-defaults/92-tollgate-admin-setup.
+#
+# The admin board is a second (Preact) SPA served over HTTPS at the ROOT of
+# :8090 (browsers flag any password field on an http:// origin — the board has
+# login/WiFi/Settings password fields — so it is TLS-only, reusing the router's
+# self-signed /etc/uhttpd.crt; LuCI uses the same cert on :443). It
+# binds the same ubus socket as the rest of the system (`ubus_prefix /ubus`),
+# so the SPA can drive `tollgate --json` through the rpcd plugin.
+#
+# NOTE: home is the brand webroot (/www/tollgate for TollGate builds,
+# /www/net4sats for net4sats), substituted into the setup script as
+# __ADMIN_HOME__ at package build time, so uhttpd maps http://<gw>:8090/ ->
+# /www/<brand>/index.html and /assets/... -> /www/<brand>/assets/.... Only one
+# brand is ever installed, so only one of those directories exists. LuCI is NOT
+# served here (its webroot is /www on uhttpd.main, :8080) — the admin instance
+# never exposes /www. `home` MUST NOT be /www: uhttpd's default cgi_prefix
+# (/cgi-bin) would then resolve /cgi-bin/luci to the real LuCI CGI on :8090.
+#
+# :8090 belongs to the admin instance alone: the setup script removes it from any
+# other section, and (TollGate builds) deletes a leftover `uhttpd.net4sats`
+# section + /www/net4sats webroot so a foreign skin can never shadow the board.
+#
+# LuCI stays on uhttpd.main (:8080) and the captive portal on uhttpd.portal
+# (:2051); those are NOT touched here.
+
+config uhttpd 'admin'
+    list listen_https '0.0.0.0:8090'
+    list listen_https '[::]:8090'
+    option home '/www/tollgate'
+    option cert '/etc/uhttpd.crt'
+    option key '/etc/uhttpd.key'
+    option ubus_prefix '/ubus'
+    option script_timeout '60'
+    option network_timeout '30'
+    option max_requests '3'
+    option tcp_keepalive '1'
+    option no_dirlists '1'
+    option error_page '/index.html'

@@ -175,4 +175,51 @@ describe("submitToken backend error parsing", () => {
     expect(result.status).toBe(1);
     expect(result.label).toBe("access_granted_title");
   });
+
+  it("maps a below-swap-fee code to CU110 on a 400 notice", async () => {
+    const errorBody = {
+      kind: 21023,
+      content: "This e-cash note is 1 sat but mint x charges a 1 sat swap fee",
+      tags: [["code", "payment-error-below-swap-fee"]],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 400, clone: () => ({ json: async () => errorBody }) }))
+    );
+
+    const result = await submitToken("cashuA", tollgateDetails, "30m", i18n);
+    expect(result.status).toBe(0);
+    expect(result.code).toBe("CU110");
+    expect(result.message).toContain("swap fee");
+  });
+
+  it("maps a mint-unreachable code to CU111", async () => {
+    const errorBody = {
+      kind: 21023,
+      content: "Mint https://mint.example is temporarily unavailable.",
+      tags: [["code", "payment-error-mint-unreachable"]],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 400, clone: () => ({ json: async () => errorBody }) }))
+    );
+
+    const result = await submitToken("cashuA", tollgateDetails, "30m", i18n);
+    expect(result.code).toBe("CU111");
+  });
+
+  it("maps an uncoded 'no outputs provided' message to CU110", async () => {
+    const errorBody = {
+      kind: 21023,
+      content: "could not swap proofs: no outputs provided",
+      tags: [],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 400, clone: () => ({ json: async () => errorBody }) }))
+    );
+
+    const result = await submitToken("cashuA", tollgateDetails, "30m", i18n);
+    expect(result.code).toBe("CU110");
+  });
 });

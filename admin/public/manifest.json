@@ -1,0 +1,21 @@
+{
+  "name": "TollGate",
+  "short_name": "TollGate",
+  "description": "TollGate Router Admin Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#FF6961",
+  "icons": [
+    {
+      "src": "assets/brand/tollgate/icon-colour.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/brand/tollgate/icon-colour.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

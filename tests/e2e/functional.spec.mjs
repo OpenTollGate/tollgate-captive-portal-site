@@ -12,11 +12,12 @@ test.describe('Captive portal — functional', () => {
     await expect(page.locator('.tollgate-captive-portal-header img')).toBeVisible();
   });
 
-  test('Cashu tab is default, Balance and Lightning present', async ({ page }) => {
+  test('Cashu tab is default; Balance tab removed; Lightning present', async ({ page }) => {
+    await setupMockBackend(page);
     await page.goto('/');
     await page.waitForSelector('#tab-cashu', { timeout: HYDRATE_TIMEOUT });
     await expect(page.locator('#tab-cashu')).toHaveAttribute('data-active', 'true');
-    await expect(page.locator('#tab-balance')).toBeVisible();
+    await expect(page.locator('#tab-balance')).toHaveCount(0);
     await expect(page.locator('#tab-lightning')).toBeVisible();
   });
 
@@ -51,11 +52,21 @@ test.describe('Captive portal — functional', () => {
     }
   });
 
-  test('Balance tab renders lookup form', async ({ page }) => {
+  test('Lightning tab is enabled by the capability probe', async ({ page }) => {
+    await setupMockBackend(page);
     await page.goto('/');
-    await page.waitForSelector('#tab-cashu', { timeout: HYDRATE_TIMEOUT });
-    await page.locator('#tab-balance').click();
-    await page.waitForSelector('#balance-token', { timeout: HYDRATE_TIMEOUT });
-    await expect(page.locator('#balance-token')).toBeVisible();
+    await page.waitForSelector('#tab-lightning', { timeout: HYDRATE_TIMEOUT });
+    // the probe resolves "supported" against the mock backend
+    await expect(page.locator('#tab-lightning')).toHaveAttribute('data-disabled', 'false', { timeout: HYDRATE_TIMEOUT });
+    await page.locator('#tab-lightning').click();
+    await page.waitForSelector('#lightning-unit-amount', { timeout: HYDRATE_TIMEOUT });
+    await expect(page.locator('#lightning-unit-amount')).toBeVisible();
+  });
+
+  test('standalone balance page renders backend session data', async ({ page }) => {
+    await setupMockBackend(page);
+    await page.goto('/balance.html');
+    await page.waitForSelector('.tollgate-captive-portal-balance-page', { timeout: HYDRATE_TIMEOUT });
+    await expect(page.locator('.tollgate-captive-portal-balance-card').first()).toBeVisible();
   });
 });

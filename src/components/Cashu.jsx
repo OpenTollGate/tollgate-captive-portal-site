@@ -14,6 +14,7 @@ import { requestScanQr, hasCameraSupport } from '../helpers/qr-code';
 import { requestPaste, hasClipboardSupport } from '../helpers/clipboard';
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
 import { validateToken, submitToken } from '../helpers/cashu';
+import { getMintSwapFee } from '../helpers/mint-fee';
 
 // styles and assets
 import './Cashu.scss'
@@ -37,6 +38,7 @@ export const Cashu = (props) => {
   const [accessOptions, setAccessOptions] = useState([])
   const [allocation, setAllocation] = useState(null)
   const [selectedMint, setSelectedMint] = useState(null)
+  const [mintFee, setMintFee] = useState(null)
 
   // TIP-03: auto-submit when the token arrived via ?token= URL parameter and
   // validation has produced both a tokenValue and an allocation. Manual entry
@@ -70,52 +72,87 @@ export const Cashu = (props) => {
     }
   }, [tollgateDetails])
 
-  // handle token change: validate and calculate allocation
+  // validate the token whenever it changes
   useEffect(() => {
-    if (token) {
-      const validation = validateToken(token, selectedMint, t);
-      if (!validation.status) {
-        setError(validation)
-        setTokenValue(null)
-      } else {
-        setTokenValue(validation.value)
-        if (selectedMint) {
-          setAllocation(calculateAllocation(validation.value.amount, selectedMint, t))
-          if (validation.value.amount < selectedMint.price) {
-            setError({
-              status: 0,
-              code: 'CU002',
-              label: t('CU002_label'),
-              message: t('CU002_message')
-            })
-          } else {
-            setError(null);
-          }
+    if (!token) {
+      setTokenValue(null)
+      setMintFee(null)
+      setError(null)
+      return
+    }
+    const validation = validateToken(token, selectedMint, t);
+    if (!validation.status) {
+      setError(validation)
+      setTokenValue(null)
+    } else {
+      setTokenValue(validation.value)
+      if (selectedMint) {
+        setAllocation(calculateAllocation(validation.value.amount, selectedMint, t))
+        if (validation.value.amount < selectedMint.price) {
+          setError({
+            status: 0,
+            code: 'CU002',
+            label: t('CU002_label'),
+            message: t('CU002_message')
+          })
+        } else {
+          setError(null);
         }
       }
-    } else {
-      setTokenValue(null)
-      setAllocation(null)
-      setError(null)
     }
-  }, [token])
+  }, [token, selectedMint, t])
 
-  // handle mint change: recalculate allocation and error
+  // look up the mint's swap fee for the token (async; the mint's /v1/keysets is
+  // CORS-open). If the fee can't be determined we simply skip the pre-check and
+  // let the backend classify any error.
   useEffect(() => {
-    if (selectedMint && tokenValue && tokenValue.amount) {
-      if (tokenValue.amount < selectedMint.price) {
-        setError({
-          status: 0,
-          code: 'CU002',
-          label: t('CU002_label'),
-          message: t('CU002_message')
-        })
-      } else {
-        setError(null);
-      }
-      setAllocation(calculateAllocation(tokenValue.amount, selectedMint, t))
+    if (!token || !tokenValue) {
+      setMintFee(null)
+      return
     }
-  }, [selectedMint])
+    let active = true
+    setMintFee(null)
+    getMintSwapFee(token).then((response) => {
+      if (active && response.status) setMintFee(response.value)
+    }).catch(() => {})
+    return () => { active = false }
+  }, [token, tokenValue])
+
+  // derive the fee-adjusted allocation and any blocking error
+  useEffect(() => {
+    if (!tokenValue || !selectedMint) {
+      setAllocation(null)
+      return
+    }
+    const fee = (mintFee && mintFee.fee) || 0
+    const net = Math.max(tokenValue.amount - fee, 0)
+
+    // the token is entirely consumed by the mint's swap fee — block the purchase
+    if (tokenValue.amount <= fee) {
+      setAllocation(null)
+      setError({
+        status: 0,
+        code: 'CU110',
+        label: t('CU110_label'),
+        message: t('CU110_message', { amount: tokenValue.amount, fee, mint: (mintFee && mintFee.mint) || '' })
+      })
+      return
+    }
+
+    if (net < selectedMint.price) {
+      setAllocation(null)
+      setError({
+        status: 0,
+        code: 'CU002',
+        label: t('CU002_label'),
+        message: t('CU002_message')
+      })
+      return
+    }
+
+    setError(null)
+    setAllocation(calculateAllocation(net, selectedMint, t))
+  }, [tokenValue, mintFee, selectedMint])
 
   // handle processing state: submit token and handle result
   useEffect(() => {
@@ -157,6 +194,11 @@ export const Cashu = (props) => {
           info={tokenValue.amount !== 1 ? t('sat_plural', { count: tokenValue.amount }) : t('sat', { count: tokenValue.amount })}
           message={t('valid_cashu_token_message', { purchased: `${allocation.value} ${allocation.unit}` })}
         />}
+
+        {/* mint fee: show the swap fee explicitly when the mint charges one */}
+        {(!success && !processing && tokenValue && mintFee && mintFee.fee > 0 && tokenValue.amount > mintFee.fee) && <p className="muted small tollgate-captive-portal-cashu-fee">
+          {t('mint_fee_note', { fee: mintFee.fee, net: tokenValue.amount - mintFee.fee })}
+        </p>}
 
         {/* error: shows error messages for invalid tokens or other issues */}
         {error && <Error label={error.label} code={error.code} message={error.message} />}

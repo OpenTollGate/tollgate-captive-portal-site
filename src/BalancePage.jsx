@@ -20,8 +20,8 @@ const StatCard = ({ label, value, detail }) => {
 };
 
 const formatDisplayValue = (amount, metric, i18n) => {
-  const formatted = formatMetricValue(amount, metric, i18n);
-  return `${formatted.value} ${formatted.unit}`.trim();
+  // formatMetricValue already returns a display string (e.g. "1.5 GB", "10 min")
+  return formatMetricValue(amount, metric, i18n);
 };
 
 const BalancePage = () => {
