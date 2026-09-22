@@ -212,6 +212,11 @@ export function mockUbusCall(
     'system.info': () => info(),
     'system.password_set': () => ({}),
     'network.interface.dump': () => interfaceDump,
+    // rpcd exposes the wireless object under the `network.` namespace (see
+    // openwrt/rpcd/tollgate_acl.json: "network.wireless": ["status","reload"]).
+    // The admin WiFi page calls it that way; keep the short aliases too.
+    'network.wireless.status': () => wirelessStatus,
+    'network.wireless.reload': () => ({}),
     'wireless.status': () => wirelessStatus,
     'wireless.reload': () => ({}),
     'dhcp.ipv4leases': () => dhcpLeases,
