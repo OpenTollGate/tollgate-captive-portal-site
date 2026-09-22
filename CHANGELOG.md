@@ -24,4 +24,7 @@ All notable changes to this project are documented here.
 - **OpenWrt admin setup:** the foreign-skin cleanup in
   `92-tollgate-admin-setup` can no longer delete the active brand's own webroot
   (or `/www`) when a malformed `__FOREIGN_SKINS__` token lists it — it now skips
-  the resolved `$ADMIN_HOME` and anything outside `/www/*`.
+  the resolved `$ADMIN_HOME` and anything outside `/www/*`. The guard also
+  normalizes trailing slashes off a token's webroot (so `/www/tollgate/` cannot
+  slip past the `$ADMIN_HOME` check) and refuses to `uci delete` the active
+  `admin` uhttpd section.

@@ -88,11 +88,18 @@ for skin in $FOREIGN; do
     webroot="${skin%%:*}"
     section="${skin##*:}"
     [ -n "$webroot" ] && [ -n "$section" ] && [ "$webroot" != "$section" ] || continue
-    # Never delete this build's own webroot (a malformed token that lists the
-    # active brand would rm -rf the admin board), and never touch /www itself or
-    # anything outside the webroot tree - LuCI lives in /www.
+    # Normalize trailing slashes first: /www/tollgate/ would otherwise slip past
+    # the self-deletion guard below (rm -rf /www/tollgate/ == /www/tollgate).
+    while [ "${webroot%/}" != "$webroot" ]; do
+        webroot="${webroot%/}"
+    done
+    # Never delete this build's own uhttpd section or webroot - a malformed
+    # token that lists the active brand would drop the board this script just
+    # installed (uci delete uhttpd.admin or rm -rf of its webroot).
+    [ "$section" = "admin" ] && continue
     [ "$webroot" = "$ADMIN_HOME" ] && continue
-    [ "$webroot" = "/www" ] && continue
+    # Only ever delete a brand webroot *under* /www: /www itself (or /www/,
+    # normalized above) is LuCI's webroot, and anything outside /www is not ours.
     case "$webroot" in
       /www/*) ;;
       *) continue ;;
