@@ -12,6 +12,11 @@
 // `tests/unit/brand.test.js` ("build-side and runtime id normalisation agree"),
 // so a change on one side cannot silently drift from the other.
 //
+// "In the slot" means exactly what the runtime `import.meta.glob('.../*.json')`
+// sees: a **file** whose name ends in lowercase `.json`. `DESCRIPTOR_FILE_RE` is
+// deliberately case-sensitive so a `README.md` (this directory ships one) or a
+// `ACME.JSON` can never become a phantom brand id that the runtime glob misses.
+//
 // Plain ESM with no dependencies on purpose: `vite.config.mjs` (loaded by Vite
 // before any app code) and `scripts/build-all.mjs` (plain node) both import it.
 
@@ -20,6 +25,23 @@ export const DEFAULT_BRAND_ID = 'tollgate';
 // Identifier alphabet only: starts alphanumeric, then alphanumerics, dot,
 // underscore or hyphen. No separators, no leading dot, no whitespace.
 const BRAND_ID_RE = /^[a-z0-9][a-z0-9._-]*$/;
+
+/** Matches exactly what the runtime descriptor glob (`brand/*.json`) matches. */
+export const DESCRIPTOR_FILE_RE = /\.json$/;
+
+/** Descriptor fields the runtime requires; mirror of brand-core.ts. */
+export const REQUIRED_DESCRIPTOR_FIELDS = [
+  'id',
+  'name',
+  'domain',
+  'tagline',
+  'poweredBy',
+  'website',
+  'version',
+  'themeColor',
+  'sessionKey',
+  'sessionUser',
+];
 
 /**
  * Normalise a requested brand id: trim, lowercase, and reject anything that is
@@ -42,6 +64,11 @@ export function descriptorIdFromPath(path) {
   return leaf.trim().replace(/\.json$/i, '').toLowerCase();
 }
 
+/** True when a directory entry name is a descriptor file (`tollgate.json`). */
+export function isDescriptorFile(name) {
+  return DESCRIPTOR_FILE_RE.test(String(name ?? ''));
+}
+
 /**
  * Look a descriptor module up by id, case-insensitively, from an
  * `import.meta.glob`-style map keyed by file path.
@@ -50,9 +77,25 @@ export function findDescriptor(modules, id) {
   const wanted = normalizeBrandId(id);
   if (!wanted) return null;
   for (const [path, mod] of Object.entries(modules ?? {})) {
-    if (descriptorIdFromPath(path) === wanted) {
+    if (isDescriptorFile(path) && descriptorIdFromPath(path) === wanted) {
       return (mod && mod.default) || mod || null;
     }
   }
   return null;
+}
+
+/**
+ * Validate a descriptor's required fields. Mirror of `validateDescriptor` in
+ * `admin/src/brand-core.ts`; the build fails on a descriptor the runtime would
+ * reject, instead of emitting a manifest for a skin the app cannot render.
+ */
+export function validateDescriptor(desc, source = 'brand descriptor') {
+  for (const field of REQUIRED_DESCRIPTOR_FIELDS) {
+    const value = desc?.[field];
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(
+        `${source} for "${desc?.id ?? '<unknown>'}" missing required field "${field}"`,
+      );
+    }
+  }
 }

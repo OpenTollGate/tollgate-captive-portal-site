@@ -14,7 +14,10 @@ All notable changes to this project are documented here.
   `scripts/build-all.mjs` and `admin/vite.config.mjs` now resolve the descriptor
   through the same rule (`scripts/brand-id.mjs`) as the runtime
   (`admin/src/brand-core.ts`), so the generated PWA manifest and static favicon
-  reference can never drift from the skin the app renders.
+  reference can never drift from the skin the app renders. Descriptor files are
+  matched strictly as lowercase `*.json` (the exact set `import.meta.glob('.../*.json')`
+  sees), so a `README.md` or uppercase-extension file can never become a phantom
+  brand id; the build fails early on a descriptor the runtime would reject.
   ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
 
 ### Fixed

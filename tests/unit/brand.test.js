@@ -15,6 +15,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_BRAND_ID,
+  DESCRIPTOR_REQUIRED_FIELDS,
   descriptorIdFromPath,
   indexDescriptors,
   loadBrandDescriptors,
@@ -116,6 +117,30 @@ describe('descriptor slot discovery', () => {
         '../brand/ACME.json': { ...OVERLAY, id: 'Acme' },
       }),
     ).toThrow(/duplicate/);
+    // The runtime path goes glob -> loadBrandDescriptors -> resolveBrand, so
+    // the check has to fire there too (indexDescriptors then sees one entry).
+    expect(() =>
+      loadBrandDescriptors({
+        '../brand/acme.json': { default: OVERLAY },
+        '../brand/ACME.json': { default: { ...OVERLAY, id: 'Acme' } },
+      }),
+    ).toThrow(/duplicate/);
+  });
+
+  it('treats only lowercase *.json names as slot descriptors', async () => {
+    // The runtime glob is `brand/*.json`; the build tooling must agree, or a
+    // README/uppercase-extension file becomes a phantom id the app can never
+    // resolve (favicon/skin drift).
+    const buildSide = await import('../../scripts/brand-id.mjs');
+    expect(buildSide.isDescriptorFile('tollgate.json')).toBe(true);
+    expect(buildSide.isDescriptorFile('Acme.json')).toBe(true);
+    for (const name of ['README.md', 'ACME.JSON', 'brand.json.bak', 'acme.json5', '']) {
+      expect(buildSide.isDescriptorFile(name)).toBe(false);
+    }
+    expect(buildSide.findDescriptor({ '../brand/README.md': OVERLAY }, 'readme')).toBeNull();
+    expect(
+      buildSide.findDescriptor({ '../brand/Acme.json': { default: OVERLAY } }, 'ACME'),
+    ).toBe(OVERLAY);
   });
 });
 
@@ -264,6 +289,20 @@ describe('build-side and runtime id normalisation agree', () => {
     for (const sample of ['../../admin/brand/Acme.json', 'C:\\repo\\brand\\ACME.JSON', 'acme.json']) {
       expect(buildSide.descriptorIdFromPath(sample)).toBe(descriptorIdFromPath(sample));
     }
+  });
+
+  it('requires the same descriptor fields as the runtime validator', async () => {
+    const buildSide = await import('../../scripts/brand-id.mjs');
+    expect([...buildSide.REQUIRED_DESCRIPTOR_FIELDS].sort()).toEqual(
+      [...DESCRIPTOR_REQUIRED_FIELDS].sort(),
+    );
+    // And the build-side validator rejects what the runtime rejects.
+    const { themeColor, ...missing } = OVERLAY;
+    expect(() => buildSide.validateDescriptor(missing)).toThrow(/missing required field "themeColor"/);
+    expect(() => buildSide.validateDescriptor({ ...OVERLAY, name: '  ' })).toThrow(
+      /missing required field "name"/,
+    );
+    expect(() => buildSide.validateDescriptor(OVERLAY)).not.toThrow();
   });
 });
 

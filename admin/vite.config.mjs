@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_BRAND_ID,
   descriptorIdFromPath,
+  isDescriptorFile,
   normalizeBrandId,
 } from '../scripts/brand-id.mjs';
 
@@ -18,7 +19,15 @@ const brandDir = fileURLToPath(new URL('brand/', import.meta.url));
 // the skin the JS actually renders for a differently-cased unknown id.
 function slotIds() {
   try {
-    return readdirSync(brandDir).map(descriptorIdFromPath).filter(Boolean);
+    // Exactly what the runtime glob (`brand/*.json`) sees: regular files whose
+    // name ends in lowercase `.json`. Without the filter this directory's own
+    // README.md would register as a phantom brand id ("readme.md") that the
+    // runtime can never resolve, re-introducing the favicon/skin drift this
+    // config is here to prevent.
+    return readdirSync(brandDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && isDescriptorFile(entry.name))
+      .map((entry) => descriptorIdFromPath(entry.name))
+      .filter(Boolean);
   } catch {
     return [];
   }

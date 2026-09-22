@@ -24,7 +24,9 @@ import path from 'node:path';
 import {
   DEFAULT_BRAND_ID,
   descriptorIdFromPath,
+  isDescriptorFile,
   normalizeBrandId,
+  validateDescriptor,
 } from './brand-id.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
@@ -39,7 +41,8 @@ const brandDir = path.join(repo, 'admin', 'brand');
 
 function slotFiles() {
   try {
-    return readdirSync(brandDir).filter((name) => /\.json$/i.test(name));
+    // Same set the runtime glob (`brand/*.json`) sees — lowercase `.json` only.
+    return readdirSync(brandDir).filter(isDescriptorFile);
   } catch {
     return [];
   }
@@ -61,6 +64,14 @@ function readDescriptor(id) {
       console.error(
         `[build-all] descriptor "${name}" declares id "${desc.id}" but its file name is "${wanted}".`,
       );
+      process.exit(1);
+    }
+    try {
+      // Fail here rather than emitting a manifest for a skin the app will
+      // refuse to render (the runtime validates the same field set).
+      validateDescriptor(desc, `[build-all] descriptor "${name}"`);
+    } catch (err) {
+      console.error(String(err.message));
       process.exit(1);
     }
     return { ...desc, id: wanted };

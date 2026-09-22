@@ -61,6 +61,10 @@ const REQUIRED_FIELDS: readonly (keyof BrandDescriptor)[] = [
   'sessionUser',
 ];
 
+/** Exported so the build tooling can pin the same field list (see
+ *  `scripts/brand-id.mjs` / tests/unit/brand.test.js). */
+export const DESCRIPTOR_REQUIRED_FIELDS = REQUIRED_FIELDS;
+
 /**
  * Trim + lowercase a requested brand id, rejecting anything that is not a plain
  * identifier (returns `''`, so callers fall back to {@link DEFAULT_BRAND_ID}).
@@ -126,13 +130,21 @@ function assetPaths(id: string): Pick<Brand, 'logo' | 'logoWhite' | 'icon' | 'ic
   };
 }
 
-/** Flatten an `import.meta.glob` result into a normalized id -> descriptor map. */
+/**
+ * Flatten an `import.meta.glob` result into a normalized id -> descriptor map.
+ * Two files that normalize to the same id are rejected here (this is the
+ * function the runtime actually calls, so the duplicate check has to live here
+ * and not only in {@link indexDescriptors}, which then sees one entry per id).
+ */
 export function loadBrandDescriptors(
   modules: Record<string, { default: BrandDescriptor } | BrandDescriptor>,
 ): Record<string, BrandDescriptor> {
   const out: Record<string, BrandDescriptor> = {};
   for (const [path, mod] of Object.entries(modules)) {
     const id = descriptorIdFromPath(path);
+    if (Object.prototype.hasOwnProperty.call(out, id)) {
+      throw new Error(`duplicate brand descriptor id "${id}" (from "${path}")`);
+    }
     const desc =
       (mod as { default?: BrandDescriptor }).default ?? (mod as BrandDescriptor);
     out[id] = desc ? { ...desc, id } : desc;
