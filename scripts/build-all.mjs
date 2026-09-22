@@ -10,31 +10,78 @@
 // manifest for the admin app, so a branded build ships its own name/theme and
 // the icon slot always points at the resolved brand id.
 //
+// Resolution mirrors `admin/src/brand-core.ts` exactly (same id alphabet, same
+// case-insensitive slot lookup, same loud fallback to the generic default), so
+// the manifest can never disagree with what the admin app resolves at runtime.
+// The id is normalized *before* it is used as a path component, so a path-ish
+// `VITE_BRAND` cannot read a descriptor outside the slot.
+//
 // The script never hardcodes a company brand; it reads the descriptor slot.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import {
+  DEFAULT_BRAND_ID,
+  descriptorIdFromPath,
+  normalizeBrandId,
+} from './brand-id.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
 
-const requested = (process.env.VITE_BRAND || '').trim().toLowerCase();
-const brand = requested || 'tollgate';
+const requestedRaw = process.env.VITE_BRAND || '';
+const requested = normalizeBrandId(requestedRaw);
 const base = process.env.VITE_BASE_PATH || '/';
 
-// Resolve the active descriptor directly from the brand slot. Mirrors
-// admin/src/brand-core.ts so the generated manifest always agrees with what the
-// admin app resolves at runtime (id, name, themeColor).
+// The brand slot: `admin/brand/<id>.json`, one descriptor per skin.
 const brandDir = path.join(repo, 'admin', 'brand');
-function readDescriptor(id) {
-  const file = path.join(brandDir, `${id}.json`);
-  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+
+function slotFiles() {
+  try {
+    return readdirSync(brandDir).filter((name) => /\.json$/i.test(name));
+  } catch {
+    return [];
+  }
 }
-const desc = readDescriptor(brand) ?? readDescriptor('tollgate');
+
+function slotIds() {
+  return slotFiles().map(descriptorIdFromPath).filter(Boolean).sort();
+}
+
+/** Case-insensitive descriptor lookup by normalized id, or null. */
+function readDescriptor(id) {
+  const wanted = normalizeBrandId(id);
+  if (!wanted) return null;
+  for (const name of slotFiles()) {
+    if (descriptorIdFromPath(name) !== wanted) continue;
+    const desc = JSON.parse(readFileSync(path.join(brandDir, name), 'utf8'));
+    const declared = normalizeBrandId(desc.id);
+    if (declared && declared !== wanted) {
+      console.error(
+        `[build-all] descriptor "${name}" declares id "${desc.id}" but its file name is "${wanted}".`,
+      );
+      process.exit(1);
+    }
+    return { ...desc, id: wanted };
+  }
+  return null;
+}
+
+const desc = readDescriptor(requested) ?? readDescriptor(DEFAULT_BRAND_ID);
 if (!desc) {
   console.error('[build-all] brand slot is empty: no descriptors in admin/brand/.');
   process.exit(1);
+}
+
+// The id the build actually ships: the bundled descriptor's normalized id. An
+// unknown or unusable VITE_BRAND falls back loudly, exactly like the runtime.
+const brand = desc.id;
+if (brand !== requested) {
+  console.warn(
+    `[build-all] VITE_BRAND="${requestedRaw}" did not select a descriptor; ` +
+      `building "${brand}". Bundled: ${slotIds().join(', ')}`,
+  );
 }
 
 const name = desc.name;
@@ -50,12 +97,12 @@ const manifest = {
   theme_color: themeColor,
   icons: [
     {
-      src: `assets/brand/${desc.id}/icon-colour.png`,
+      src: `assets/brand/${brand}/icon-colour.png`,
       sizes: '192x192',
       type: 'image/png',
     },
     {
-      src: `assets/brand/${desc.id}/icon-colour.png`,
+      src: `assets/brand/${brand}/icon-colour.png`,
       sizes: '512x512',
       type: 'image/png',
     },
@@ -67,7 +114,9 @@ writeFileSync(
   path.join(repo, 'admin/public/manifest.json'),
   `${JSON.stringify(manifest, null, 2)}\n`,
 );
-console.log(`[build-all] brand="${brand}" (name="${name}") base="${base}" -> admin/public/manifest.json`);
+console.log(
+  `[build-all] brand="${brand}" (name="${name}") base="${base}" -> admin/public/manifest.json`,
+);
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const run = (script, env = {}) =>

@@ -26,8 +26,12 @@ public/assets/brand/<id>/icon-colour.png
 public/assets/brand/<id>/icon-white.png
 ```
 
-`VITE_BRAND` is matched case-insensitively; an unknown id falls back — loudly —
-to the generic default.
+`VITE_BRAND` is matched **case-insensitively** and an id is a narrow identifier
+(`[a-z0-9][a-z0-9._-]*`): the id is normalized to lowercase before it is used as a
+path component (`admin/brand/<id>.json`, `public/assets/brand/<id>/`), so
+`VITE_BRAND=ACME` selects `brand/Acme.json`, and a path-ish value such as
+`../../etc/passwd` is rejected (falls back — loudly — to the generic default).
+An unknown id also falls back to the generic default, loudly.
 
 ## Descriptor fields
 
@@ -36,7 +40,7 @@ All fields are required and must be non-empty strings (see
 
 | field | purpose |
 |---|---|
-| `id` | Brand id; must equal the descriptor file name. |
+| `id` | Brand id; must equal the descriptor file name (case-insensitively) and match the identifier alphabet `[a-z0-9][a-z0-9._-]*`. |
 | `name` | Human-readable product name (window title, logo alt text). |
 | `domain` | Gateway hostname shown in the UI. |
 | `tagline` | One-line descriptor. |

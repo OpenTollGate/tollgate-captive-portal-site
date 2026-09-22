@@ -13,9 +13,20 @@
 // Logo/icon paths are a *convention* derived from the id, so an overlay only
 // has to get its files into the slot; the descriptor holds no asset paths.
 //
+// An id is an **identifier, not a path**: it is used to build the paths above.
+// The accepted alphabet is therefore narrow (`[a-z0-9][a-z0-9._-]*`) and the id
+// is normalized to lowercase before use, so matching is case-insensitive end to
+// end (request, descriptor file name, declared id, asset directory) and a
+// path-ish value like `../../etc/passwd` can never reach a filesystem join.
+// `scripts/brand-id.mjs` mirrors this rule for the build tooling; the two are
+// pinned together by tests/unit/brand.test.js.
+//
 // This file deliberately never references any company name.
 
 export const DEFAULT_BRAND_ID = 'tollgate';
+
+/** Brand ids are identifiers, not paths — see the file header. */
+const BRAND_ID_RE = /^[a-z0-9][a-z0-9._-]*$/;
 
 export interface BrandDescriptor {
   id: string;
@@ -50,10 +61,20 @@ const REQUIRED_FIELDS: readonly (keyof BrandDescriptor)[] = [
   'sessionUser',
 ];
 
+/**
+ * Trim + lowercase a requested brand id, rejecting anything that is not a plain
+ * identifier (returns `''`, so callers fall back to {@link DEFAULT_BRAND_ID}).
+ * Mirror of `scripts/brand-id.mjs` `normalizeBrandId`.
+ */
+export function normalizeBrandId(requested: string | null | undefined): string {
+  const cleaned = String(requested ?? '').trim().toLowerCase();
+  return BRAND_ID_RE.test(cleaned) ? cleaned : '';
+}
+
 /** `repo/admin/brand/acme.json` -> `acme`. Windows-backslash-safe too. */
 export function descriptorIdFromPath(path: string): string {
-  const leaf = (path.split(/[/\\]/).pop() ?? '').trim();
-  return leaf.replace(/\.json$/i, '');
+  const leaf = (String(path ?? '').split(/[/\\]/).pop() ?? '').trim();
+  return leaf.replace(/\.json$/i, '').toLowerCase();
 }
 
 /** Validate a descriptor's required fields; throws with a clear message. */
@@ -68,7 +89,12 @@ export function validateDescriptor(desc: BrandDescriptor): void {
   }
 }
 
-/** Index a set of descriptor modules by id (validating file-name = id). */
+/**
+ * Index a set of descriptor modules by **normalized** id (validating that the
+ * declared id agrees with the file name, comparison being case-insensitive).
+ * The stored descriptor's own `id` is normalized too, because that id is what
+ * addresses the asset slot.
+ */
 export function indexDescriptors(
   modules: Record<string, BrandDescriptor>,
 ): Record<string, BrandDescriptor> {
@@ -76,12 +102,16 @@ export function indexDescriptors(
   for (const [path, desc] of Object.entries(modules)) {
     const fileId = descriptorIdFromPath(path);
     validateDescriptor(desc);
-    if (desc.id && fileId && desc.id !== fileId) {
+    const declared = normalizeBrandId(desc.id);
+    if (desc.id && fileId && declared !== fileId) {
       throw new Error(
         `brand descriptor at "${path}" declares id "${desc.id}" but its file name is "${fileId}"`,
       );
     }
-    indexed[fileId] = desc;
+    if (Object.prototype.hasOwnProperty.call(indexed, fileId)) {
+      throw new Error(`duplicate brand descriptor id "${fileId}" (from "${path}")`);
+    }
+    indexed[fileId] = { ...desc, id: fileId };
   }
   return indexed;
 }
@@ -96,14 +126,16 @@ function assetPaths(id: string): Pick<Brand, 'logo' | 'logoWhite' | 'icon' | 'ic
   };
 }
 
-/** Flatten an `import.meta.glob` result into an id -> descriptor map. */
+/** Flatten an `import.meta.glob` result into a normalized id -> descriptor map. */
 export function loadBrandDescriptors(
   modules: Record<string, { default: BrandDescriptor } | BrandDescriptor>,
 ): Record<string, BrandDescriptor> {
   const out: Record<string, BrandDescriptor> = {};
   for (const [path, mod] of Object.entries(modules)) {
-    out[descriptorIdFromPath(path)] = (mod as { default?: BrandDescriptor }).default ??
-      (mod as BrandDescriptor);
+    const id = descriptorIdFromPath(path);
+    const desc =
+      (mod as { default?: BrandDescriptor }).default ?? (mod as BrandDescriptor);
+    out[id] = desc ? { ...desc, id } : desc;
   }
   return out;
 }
@@ -111,13 +143,15 @@ export function loadBrandDescriptors(
 /**
  * Resolve the active Brand from a requested id and the bundled descriptor map
  * (as loaded via `import.meta.glob('../../brand/*.json', { eager: true })`).
- * Falls back — loudly — to the generic default for an unknown/empty id.
+ * Matching is case-insensitive. Falls back — loudly — to the generic default for
+ * an unknown or unusable id.
  */
 export function resolveBrand(
   requestedId: string | null | undefined,
   bundled: Record<string, BrandDescriptor>,
 ): Brand {
-  const cleaned = (requestedId ?? '').trim().toLowerCase();
+  const raw = String(requestedId ?? '').trim();
+  const requested = normalizeBrandId(requestedId);
   const descriptors = indexDescriptors(bundled);
 
   if (!descriptors[DEFAULT_BRAND_ID]) {
@@ -126,15 +160,30 @@ export function resolveBrand(
     );
   }
 
-  const chosen = cleaned && descriptors[cleaned] ? descriptors[cleaned] : descriptors[DEFAULT_BRAND_ID];
+  const fallback = (): Brand => ({
+    ...descriptors[DEFAULT_BRAND_ID],
+    ...assetPaths(DEFAULT_BRAND_ID),
+  });
 
-  if (cleaned && !descriptors[cleaned]) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[brand] VITE_BRAND="${requestedId}" not bundled; falling back to "${DEFAULT_BRAND_ID}". ` +
-        `Bundled: ${Object.keys(descriptors).join(', ')}`,
-    );
+  if (!requested) {
+    if (raw) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[brand] VITE_BRAND="${raw}" is not a valid brand id ` +
+          `(expected ${String(BRAND_ID_RE)}); using "${DEFAULT_BRAND_ID}".`,
+      );
+    }
+    return fallback();
   }
 
-  return { ...chosen, ...assetPaths(chosen.id) };
+  if (!descriptors[requested]) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[brand] VITE_BRAND="${raw}" not bundled; falling back to "${DEFAULT_BRAND_ID}". ` +
+        `Bundled: ${Object.keys(descriptors).join(', ')}`,
+    );
+    return fallback();
+  }
+
+  return { ...descriptors[requested], ...assetPaths(requested) };
 }

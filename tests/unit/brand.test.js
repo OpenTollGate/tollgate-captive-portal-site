@@ -7,11 +7,18 @@
 //
 // These tests are deliberately descriptor-driven: they never mention any
 // company name, so they cannot themselves become a branding leak.
+//
+// An id is an *identifier*, not a path: the slot is addressed by
+// `admin/brand/<id>.json` and `public/assets/brand/<id>/`, so the accepted
+// alphabet is deliberately narrow and matching is case-insensitive (the
+// documented contract). Both halves are pinned here.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_BRAND_ID,
   descriptorIdFromPath,
   indexDescriptors,
+  loadBrandDescriptors,
+  normalizeBrandId,
   resolveBrand,
 } from '../../admin/src/brand-core';
 
@@ -70,6 +77,46 @@ describe('descriptor slot discovery', () => {
       indexDescriptors({ '../brand/renamed.json': OVERLAY }),
     ).toThrow(/declares id "acme"/);
   });
+
+  it('normalizes a descriptor file name to a lowercase id key', () => {
+    expect(descriptorIdFromPath('../../admin/brand/Acme.json')).toBe('acme');
+    expect(descriptorIdFromPath('../../admin/brand/ACME.JSON')).toBe('acme');
+  });
+
+  it('treats a filename/id mismatch as consistent when it differs only in case', () => {
+    expect(() =>
+      indexDescriptors({ '../brand/ACME.json': { ...OVERLAY, id: 'Acme' } }),
+    ).not.toThrow();
+  });
+
+  it('indexes descriptors under lowercase keys via loadBrandDescriptors', () => {
+    const loaded = loadBrandDescriptors({
+      '../brand/Acme.json': { default: { ...OVERLAY, id: 'Acme' } },
+    });
+    expect(Object.keys(loaded)).toEqual(['acme']);
+    expect(loaded.acme.name).toBe('Acme');
+  });
+
+  it('stores the normalized id on the indexed descriptor', () => {
+    // The resolved id is what addresses the asset slot
+    // (`public/assets/brand/<id>/`), so it must be the lowercase one even when
+    // the descriptor file/declared id is not.
+    const indexed = indexDescriptors({ '../brand/Acme.json': { ...OVERLAY, id: 'Acme' } });
+    expect(indexed.acme.id).toBe('acme');
+    const loaded = loadBrandDescriptors({
+      '../brand/Acme.json': { default: { ...OVERLAY, id: 'Acme' } },
+    });
+    expect(loaded.acme.id).toBe('acme');
+  });
+
+  it('rejects two descriptor files that normalize to the same id', () => {
+    expect(() =>
+      indexDescriptors({
+        '../brand/acme.json': OVERLAY,
+        '../brand/ACME.json': { ...OVERLAY, id: 'Acme' },
+      }),
+    ).toThrow(/duplicate/);
+  });
 });
 
 describe('resolveBrand', () => {
@@ -103,6 +150,18 @@ describe('resolveBrand', () => {
     expect(resolveBrand('  ACME ', { ...bundled, acme: OVERLAY }).id).toBe('acme');
   });
 
+  it('selects a descriptor whose file name is not lowercase', () => {
+    // Regression: `VITE_BRAND=ACME` with an `Acme.json` descriptor used to fall
+    // back to the default, because only the request was lowercased.
+    const brand = resolveBrand('ACME', {
+      tollgate: GENERIC,
+      'Acme.json': { ...OVERLAY, id: 'Acme' },
+    });
+    expect(brand.id).toBe('acme');
+    expect(brand.name).toBe('Acme');
+    expect(brand.logo).toBe('assets/brand/acme/logo-colour.png');
+  });
+
   it('falls back to the default brand, loudly, when the id is not bundled', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const brand = resolveBrand('not-bundled', bundled);
@@ -132,6 +191,79 @@ describe('resolveBrand', () => {
 
   it('fails loudly when the default descriptor itself is absent', () => {
     expect(() => resolveBrand('acme', {})).toThrow(/no descriptor for the default brand/);
+  });
+});
+
+describe('the accepted brand-id alphabet', () => {
+  it('trims and lowercases a usable id', () => {
+    expect(normalizeBrandId('  AcMe ')).toBe('acme');
+    expect(normalizeBrandId('tollgate')).toBe('tollgate');
+    expect(normalizeBrandId('a1._-b')).toBe('a1._-b');
+  });
+
+  it('rejects anything that is not a plain identifier', () => {
+    // A brand id addresses `admin/brand/<id>.json` and
+    // `public/assets/brand/<id>/`, so a path-ish value must never survive.
+    for (const bad of [
+      undefined,
+      null,
+      '',
+      '   ',
+      '../../etc/passwd',
+      '/etc/passwd',
+      'a/b',
+      '..',
+      '.',
+      '.acme',
+      '-acme',
+      '_acme',
+      'acme/',
+      'acme\\x',
+      'acme json',
+      'acme;rm -rf /',
+      'acme\u0000',
+    ]) {
+      expect(normalizeBrandId(bad)).toBe('');
+    }
+  });
+
+  it('never hands a path-ish id to the asset slot', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const brand = resolveBrand('../../etc/passwd', { tollgate: GENERIC });
+    expect(brand.id).toBe(DEFAULT_BRAND_ID);
+    expect(brand.logo).toBe('assets/brand/tollgate/logo-colour.png');
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/not a valid brand id/);
+  });
+});
+
+describe('build-side and runtime id normalisation agree', () => {
+  it('normalizes identically in scripts/brand-id.mjs and brand-core.ts', async () => {
+    // Two implementations exist (one for node/vite config, one for the app)
+    // because vite.config.mjs cannot import TypeScript. Pin them together.
+    const buildSide = await import('../../scripts/brand-id.mjs');
+    const samples = [
+      undefined,
+      null,
+      '',
+      '  ',
+      'TollGate',
+      ' ACME ',
+      'acme',
+      'Acme.json',
+      '../../etc/passwd',
+      'a/b',
+      '.',
+      '-acme',
+      'a1._-b',
+    ];
+    for (const sample of samples) {
+      expect(buildSide.normalizeBrandId(sample)).toBe(normalizeBrandId(sample));
+    }
+    expect(buildSide.DEFAULT_BRAND_ID).toBe(DEFAULT_BRAND_ID);
+    for (const sample of ['../../admin/brand/Acme.json', 'C:\\repo\\brand\\ACME.JSON', 'acme.json']) {
+      expect(buildSide.descriptorIdFromPath(sample)).toBe(descriptorIdFromPath(sample));
+    }
   });
 });
 

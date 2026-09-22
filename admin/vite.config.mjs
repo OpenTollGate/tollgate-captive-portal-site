@@ -1,9 +1,41 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
+import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import {
+  DEFAULT_BRAND_ID,
+  descriptorIdFromPath,
+  normalizeBrandId,
+} from '../scripts/brand-id.mjs';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
-const brand = process.env.VITE_BRAND || 'tollgate';
+const brandDir = fileURLToPath(new URL('brand/', import.meta.url));
+
+// Resolve the brand the same way the app does at runtime
+// (admin/src/brand-core.ts): normalize the id, then require it to be present in
+// the slot, falling back to the generic default. Doing it here (instead of
+// taking VITE_BRAND raw) keeps the static favicon reference from drifting from
+// the skin the JS actually renders for a differently-cased unknown id.
+function slotIds() {
+  try {
+    return readdirSync(brandDir).map(descriptorIdFromPath).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+const requestedRaw = process.env.VITE_BRAND || '';
+const requested = normalizeBrandId(requestedRaw);
+const bundled = slotIds();
+const brand = requested && bundled.includes(requested) ? requested : DEFAULT_BRAND_ID;
+
+if (requestedRaw.trim() && brand !== requested) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[brand] VITE_BRAND="${requestedRaw}" did not select a bundled descriptor; ` +
+      `building "${brand}". Bundled: ${bundled.join(', ')}`,
+  );
+}
 
 // Keep the static favicon reference brand-scoped so a build never even
 // references another brand's icon before JS runs (main.tsx also sets it at
