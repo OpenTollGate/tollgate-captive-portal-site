@@ -21,6 +21,19 @@ All notable changes to this project are documented here.
   ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
 
 ### Fixed
+- **Runtime brand slot (release blocker):** `admin/src/brand.ts` loaded the slot
+  with `import.meta.glob('../../brand/*.json')`. A relative glob is resolved
+  against the *importing module*, so the pattern pointed at `<repo>/brand/` — a
+  directory that does not exist — and the descriptor set was always empty. Every
+  build shipped a slot that could not resolve: the admin bundle threw
+  `brand slot is broken: no descriptor for the default brand "tollgate"` on
+  import, so a distribution build shipped a branded PWA manifest and favicon with
+  a UI that could not start. The pattern now resolves to `admin/brand/*.json`,
+  and `tests/unit/brand-bundling.test.js` pins the contract (the bundled id set
+  must equal the slot contents) so the failure cannot come back silently.
+  Found by building a distribution overlay (descriptor + assets dropped into the
+  slot, `VITE_BRAND=<id>`) and mechanically verifying the artifact.
+  ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
 - **OpenWrt admin setup:** the foreign-skin cleanup in
   `92-tollgate-admin-setup` can no longer delete the active brand's own webroot
   (or `/www`) when a malformed `__FOREIGN_SKINS__` token lists it — it now skips

@@ -19,12 +19,24 @@ import {
 const requested = (import.meta.env.VITE_BRAND as string | undefined) || undefined;
 
 // eager + import.meta.glob: keys are the descriptor file paths.
-const descriptorModules = import.meta.glob('../../brand/*.json', { eager: true }) as Record<
+// NOTE: a relative glob is resolved against THIS file (admin/src/), so the
+// slot is one level up -- '../../brand/*.json' points at '<repo>/brand/', which
+// does not exist and silently yields an empty descriptor set.
+const descriptorModules = import.meta.glob('../brand/*.json', { eager: true }) as Record<
   string,
   { default: BrandDescriptor }
 >;
 
 const bundled = loadBrandDescriptors(descriptorModules);
+
+//
+// Ids of the descriptors the runtime glob actually bundled. This is the
+// observable outcome of the pattern above, so it is what the slot contract test
+// asserts: an `import.meta.glob` pattern is resolved relative to THIS module,
+// and a pattern pointing at the wrong directory yields an empty map (and then
+// `resolveBrand` cannot even find the default descriptor).
+//
+export const bundledBrandIds = (): string[] => Object.keys(bundled);
 
 export const BRAND = resolveBrand(requested, bundled);
 
