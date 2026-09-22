@@ -1,9 +1,8 @@
 # Admin board
 
-The router admin dashboard, ported from
-[`net4sats/configurationwizzard`](https://github.com/net4sats/configurationwizzard)
-into this repo as a **second (Preact) app**, so the admin board and the guest
-portal share one codebase and one release.
+The TollGate router admin dashboard, a **Preact + TypeScript app** living in
+this repo as a second app alongside the React guest portal and balance page, so
+the admin board and the guest portal share one codebase and one release.
 
 ## Stack
 
@@ -20,17 +19,21 @@ The React guest portal and balance page are unchanged and build separately.
 
 ## Brand
 
-One build ships **one** skin (`src/brand.ts`), selected with `VITE_BRAND`:
+One build ships **one** skin. Branding is resolved from the **brand slot**
+(`brand/*.json` descriptors + `public/assets/brand/<id>/` logos) at build time
+by `src/brand.ts` via `VITE_BRAND` — see `brand/README.md`. This repo ships the
+generic default (`tollgate`); a distribution operator adds its own descriptor
+and asset slot without forking the code:
 
-| | TollGate (default) | net4sats |
-|---|---|---|
-| `VITE_BRAND` | `tollgate` | `net4sats` |
-| webroot | `/www/tollgate` | `/www/net4sats` |
-| domain | `tollgate.lan` | `net4sats.lan` |
-| accent | `#FF6961` | `#111111` |
+| | Default |
+|---|---|
+| `VITE_BRAND` | `tollgate` |
+| webroot | `/www/tollgate` |
+| domain | `tollgate.lan` |
+| accent | `#FF6961` |
 
-Both are served at the root of `:8090` (base `/`); the brand only selects the
-webroot, manifest, and skin. Logos/icons live in `public/assets/brand/<brand>/`.
+Served at the root of `:8090` (base `/`); the brand selects webroot, manifest,
+and skin. Logos/icons live in `public/assets/brand/<id>/`.
 
 ## Build
 
@@ -40,14 +43,14 @@ npm run build
 
 # admin only
 npm run build:admin
-VITE_BRAND=net4sats npm run build:admin   # net4sats skin
+VITE_BRAND=tollgate npm run build:admin   # any bundled descriptor id
 
 # dev (mock ubus, no router needed)
 npm run dev:admin
 ```
 
-`scripts/build-all.mjs` generates a brand-correct `public/manifest.json` and
-runs the portal build first (its `emptyOutDir` would otherwise wipe
+`scripts/build-all.mjs` generates a brand-correct `admin/public/manifest.json`
+and runs the portal build first (its `emptyOutDir` would otherwise wipe
 `build/admin/`).
 
 ## Test

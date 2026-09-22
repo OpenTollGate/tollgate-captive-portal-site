@@ -2,11 +2,11 @@
 # TollGate admin board setup: create/repair the dedicated uhttpd instance on
 # :8090 and make sure rpcd (which serves the `tollgate` ubus object) is running.
 #
-# The admin SPA is served at the ROOT of :8090 from its BRAND webroot:
-#   /www/tollgate   (TollGate)      /www/net4sats   (net4sats skin)
-# The packaging build substitutes __ADMIN_HOME__ for the brand it builds (see the
-# feed Makefile), so a TollGate build can never point at a leftover net4sats
-# webroot — and vice versa. Do NOT guess the webroot by directory existence.
+# The admin SPA is served at the ROOT of :8090 from its BRAND webroot
+# (/www/<brand>; the generic default is /www/tollgate). The packaging build
+# substitutes __ADMIN_HOME__ for the brand it builds (see the feed Makefile), so
+# a build can never point at a leftover webroot from another brand. Do NOT guess
+# the webroot by directory existence.
 #
 # Scheme: the board is served over plain HTTP on :8090 — the URL people type
 # (http://<router>:8090/) and the same scheme as LuCI on :8080. When a cert/key
@@ -31,8 +31,8 @@
 # HTTPS-only :8090 left behind by an earlier build.
 
 # Brand webroot. __ADMIN_HOME__ is substituted at package build time
-# (TollGate feed -> /www/tollgate; net4sats feed -> /www/net4sats). Fall back to
-# the TollGate webroot if a build forgot to substitute it.
+# (/www/<brand>, e.g. /www/tollgate for the generic default build). Fall back to
+# the default webroot if a build forgot to substitute it.
 ADMIN_HOME="__ADMIN_HOME__"
 case "$ADMIN_HOME" in
   *__ADMIN_HOME__*|"") ADMIN_HOME="/www/tollgate" ;;
@@ -65,7 +65,7 @@ uci -q delete uhttpd.admin.cgi_prefix
 uci -q delete uhttpd.admin.lua_prefix
 
 # :8090 / :8443 belong to the admin instance only — strip them from any other
-# section (a stale net4sats/`luci` section must not own the admin port).
+# section (a stale `uhttpd.luci`-style section must not own the admin port).
 for sec in $(uci show uhttpd 2>/dev/null | sed -n 's/^uhttpd\.\([^.]*\)=uhttpd$/\1/p'); do
     [ "$sec" = "admin" ] && continue
     uci -q del_list "uhttpd.$sec.listen_http=0.0.0.0:8090" 2>/dev/null
@@ -76,13 +76,37 @@ for sec in $(uci show uhttpd 2>/dev/null | sed -n 's/^uhttpd\.\([^.]*\)=uhttpd$/
     uci -q del_list "uhttpd.$sec.listen_https=[::]:8443" 2>/dev/null
 done
 
-# Rebrand: a TollGate build must not serve a leftover net4sats skin. Drop a
-# foreign net4sats uhttpd section and its webroot so only the brand webroot is
-# ever exposed. On a net4sats build ADMIN_HOME=/www/net4sats and this is a no-op.
-if [ "$ADMIN_HOME" = "/www/tollgate" ]; then
-    uci -q delete uhttpd.net4sats 2>/dev/null
-    rm -rf /www/net4sats 2>/dev/null
-fi
+# Rebrand: a brand build must not serve a leftover skin from a foreign brand.
+# The packaging build substitutes __FOREIGN_SKINS__ with whitespace-separated
+# "<webroot>:<uhttpd-section>" tokens, one per OTHER known brand skin (e.g. the
+# generic default build lists the other vendors' webroots/sections, and a
+# branded build lists the generic + the remaining vendors). Each foreign uhttpd
+# section and webroot is dropped so only this brand's webroot can be served.
+# Falls back to no-op when a build forgot to substitute the list.
+FOREIGN="__FOREIGN_SKINS__"
+for skin in $FOREIGN; do
+    webroot="${skin%%:*}"
+    section="${skin##*:}"
+    [ -n "$webroot" ] && [ -n "$section" ] && [ "$webroot" != "$section" ] || continue
+    # Normalize trailing slashes first: /www/tollgate/ would otherwise slip past
+    # the self-deletion guard below (rm -rf /www/tollgate/ == /www/tollgate).
+    while [ "${webroot%/}" != "$webroot" ]; do
+        webroot="${webroot%/}"
+    done
+    # Never delete this build's own uhttpd section or webroot - a malformed
+    # token that lists the active brand would drop the board this script just
+    # installed (uci delete uhttpd.admin or rm -rf of its webroot).
+    [ "$section" = "admin" ] && continue
+    [ "$webroot" = "$ADMIN_HOME" ] && continue
+    # Only ever delete a brand webroot *under* /www: /www itself (or /www/,
+    # normalized above) is LuCI's webroot, and anything outside /www is not ours.
+    case "$webroot" in
+      /www/*) ;;
+      *) continue ;;
+    esac
+    uci -q delete "uhttpd.$section" 2>/dev/null
+    rm -rf "$webroot" 2>/dev/null
+done
 
 uci commit uhttpd
 

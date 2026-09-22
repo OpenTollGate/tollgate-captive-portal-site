@@ -1,0 +1,12 @@
+{
+  "id": "tollgate",
+  "name": "TollGate",
+  "domain": "tollgate.lan",
+  "tagline": "Router Admin Dashboard",
+  "poweredBy": "Powered by TollGate",
+  "website": "https://tollgate.me/",
+  "version": "TollGate v0.6.0-alpha2",
+  "themeColor": "#FF6961",
+  "sessionKey": "tollgate_session",
+  "sessionUser": "tollgate_user"
+}
