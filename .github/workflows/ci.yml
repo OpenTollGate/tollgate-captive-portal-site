@@ -36,6 +36,8 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
+      - name: Packaging guard (foreign-skin cleanup)
+        run: sh tests/packaging/foreign-skins-guard.sh .
       - run: npm run build
 
   e2e-tests:

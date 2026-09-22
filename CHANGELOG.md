@@ -20,6 +20,15 @@ All notable changes to this project are documented here.
   brand id; the build fails early on a descriptor the runtime would reject.
   ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
 
+### Tests
+- **Packaging guard harness:** `tests/packaging/foreign-skins-guard.sh` extracts the
+  `__FOREIGN_SKINS__` cleanup loop from `92-tollgate-admin-setup` verbatim, runs it with
+  stubbed `uci`/`rm`, and asserts what it tried to delete (11 cases: real foreign skin is
+  removed; own webroot, trailing-slash variants, `/www`, paths outside `/www`, bare tokens,
+  the unsubstituted placeholder and the active `uhttpd.admin` section are all spared).
+  Wired into CI as a step of the unit-test job.
+  ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
+
 ### Fixed
 - **Runtime brand slot (release blocker):** `admin/src/brand.ts` loaded the slot
   with `import.meta.glob('../../brand/*.json')`. A relative glob is resolved
