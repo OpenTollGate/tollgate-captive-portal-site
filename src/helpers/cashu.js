@@ -170,6 +170,15 @@ export const validateToken = (token = "", mint, i18n) => {
   }
 };
 
+// The portal may offer the "submit anyway — router will validate it" bypass only
+// for a *decode-only* refusal: the token's keyset could not be resolved client
+// side (CU102), yet the merchant can still attempt an authoritative redemption.
+// Hard format failures are never submittable — CU100 (empty) and CU101 (not a
+// cashu token) carry no usable payload to hand the merchant, so the option is
+// deliberately withheld for them.
+export const canSubmitAnyway = (validation) =>
+  !!validation && validation.status !== 1 && validation.code === "CU102";
+
 // submit a cashu token to the tollgate backend for payment.
 //
 // HTTP-01 raw-token POST: the Cashu token is a bearer instrument, so the
@@ -289,7 +298,13 @@ export const submitToken = async (token, _tollgateDetails, allocation, i18n) => 
     return {
       status: 1,
       label: i18n("access_granted_title"),
-      message: i18n("access_granted_subtitle", { purchased: allocation }),
+      // Normal flow: report the granted allocation. Bypass ("submit anyway")
+      // flow: the token wasn't validated client-side (e.g. a v2 short-keyset
+      // token), so there is no allocation to report — the merchant authorised
+      // the spend directly, confirmed by the 2xx.
+      message: allocation
+        ? i18n("access_granted_subtitle", { purchased: allocation })
+        : i18n("submit_anyway_granted_message"),
     };
   } catch (error) {
     console.error("error sending token:", error);

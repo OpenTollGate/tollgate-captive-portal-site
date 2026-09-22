@@ -13,7 +13,7 @@ import { CancelIcon } from './Icon'
 import { requestScanQr, hasCameraSupport } from '../helpers/qr-code';
 import { requestPaste, hasClipboardSupport } from '../helpers/clipboard';
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
-import { validateToken, submitToken } from '../helpers/cashu';
+import { validateToken, submitToken, canSubmitAnyway } from '../helpers/cashu';
 import { getMintSwapFee } from '../helpers/mint-fee';
 
 // styles and assets
@@ -35,6 +35,9 @@ export const Cashu = (props) => {
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Bypass ("submit anyway") flag — set when the user opts to push a raw,
+  // client-side-undecodable token to the merchant for authoritative validation.
+  const [bypassing, setBypassing] = useState(false);
   const [accessOptions, setAccessOptions] = useState([])
   const [allocation, setAllocation] = useState(null)
   const [selectedMint, setSelectedMint] = useState(null)
@@ -158,8 +161,11 @@ export const Cashu = (props) => {
   useEffect(() => {
     if (processing) {
       const submit = async () => {
-        const response = await submitToken(token, tollgateDetails, allocation, t);
+        // In bypass mode there is no validated allocation — pass null so
+        // submitToken does not try to render a granted-amount subtitle.
+        const response = await submitToken(token, tollgateDetails, bypassing ? null : allocation, t);
         setProcessing(false);
+        setBypassing(false);
 
         if (response.status) {
           setSuccess(true);
@@ -170,7 +176,20 @@ export const Cashu = (props) => {
 
       submit()
     }
-  }, [processing])
+  }, [processing, bypassing]);
+
+  // "Submit anyway" — push the raw token to the merchant for authoritative
+  // validation. Surfaced when client-side decode refused a token that is very
+  // likely valid (e.g. a v4 cashuB note with a v2 short keyset id, which
+  // cashu-ts cannot map without the mint's keysets). The merchant is the real
+  // validator; this is a thin affordance, not business logic. The backend
+  // resolves short keyset ids itself (GetAllKeysets) and decides acceptance.
+  const handleSubmitAnyway = () => {
+    const raw = (token || '').trim();
+    if (!raw) return;
+    setBypassing(true);
+    setProcessing(true);
+  };
 
   // render the cashu payment form and flow
   return (
@@ -184,6 +203,14 @@ export const Cashu = (props) => {
 
         {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
         {(success && !processing && allocation) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} metric={selectedMint?.metric} />}
+
+        {/* accessgranted via "submit anyway": the merchant accepted a token the
+            portal could not decode client-side, so there is no known allocation
+            to display — show a plain success card instead of a blank screen. */}
+        {(success && !processing && !allocation) && <Success
+          label={t('access_granted_title')}
+          info={t('submit_anyway_granted_message')}
+        />}
 
         {/* tokeninput: input field and actions for entering or scanning a cashu token */}
         {(!success && !processing && accessOptions.length > 0) && <TokenInput token={token} setToken={setToken} scanning={scanning} setScanning={setScanning} setError={setError} />}
@@ -202,6 +229,27 @@ export const Cashu = (props) => {
 
         {/* error: shows error messages for invalid tokens or other issues */}
         {error && <Error label={error.label} code={error.code} message={error.message} />}
+
+        {/* "submit anyway" affordance: when the only barrier is a client-side
+            decode refusal (CU102 — e.g. a v4 cashuB note with a v2 short keyset
+            id that cashu-ts cannot map without the mint's keysets), let the
+            operator push the raw token to the merchant for authoritative
+            validation. The merchant is the real validator via its own keyset
+            resolution (GetAllKeysets); this is a thin backstop, never a
+            substitute for the backend's decision. */}
+        {(!success && !processing && canSubmitAnyway(error) && token.trim()) && (
+          <div className="tollgate-captive-portal-cashu-submit-anyway">
+            <button
+              className="ghost cta"
+              onClick={handleSubmitAnyway}
+            >
+              {t('submit_anyway_button')}
+            </button>
+            <p className="muted small tollgate-captive-portal-cashu-submit-anyway-note">
+              {t('submit_anyway_note')}
+            </p>
+          </div>
+        )}
 
         {/* accessoptions: lets the user select from available access/pricing options */}
         {(!success && !processing && accessOptions.length > 0) && <div className="tollgate-captive-portal-method-options">
