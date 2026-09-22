@@ -1,4 +1,15 @@
-import { getTollgateBaseUrl } from "./tollgate";
+import { getTollgateBaseUrl, getClientMac } from "./tollgate";
+
+// the backend identifies the client by the "mac" query parameter and falls back
+// to an IP-derived lookup only when it is absent (main.go: HandleLightningInvoice).
+// the portal already knows its MAC from the /whoami device info, so every
+// /ln-invoice call carries it: without it the invoice is created against the IP
+// the request happens to arrive from, which is not necessarily the client the
+// operator is looking at.
+const macQuery = (deviceInfo) => {
+  const mac = getClientMac(deviceInfo);
+  return mac ? `mac=${encodeURIComponent(mac)}` : "";
+};
 
 // runtime capability probe for the lightning payment method.
 //
@@ -44,10 +55,11 @@ const invoiceStatusError = (i18n, message) => ({
 });
 
 // request an invoice for a lightning payment
-export const requestInvoice = async (amount, mintUrl, i18n) => {
+export const requestInvoice = async (amount, mintUrl, i18n, deviceInfo) => {
   try {
     const baseUrl = getTollgateBaseUrl();
-    const response = await fetch(`${baseUrl}/ln-invoice`, {
+    const mac = macQuery(deviceInfo);
+    const response = await fetch(`${baseUrl}/ln-invoice${mac ? `?${mac}` : ""}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -77,10 +89,13 @@ export const requestInvoice = async (amount, mintUrl, i18n) => {
   }
 };
 
-export const getInvoiceStatus = async (quote, i18n) => {
+export const getInvoiceStatus = async (quote, i18n, deviceInfo) => {
   try {
     const baseUrl = getTollgateBaseUrl();
-    const response = await fetch(`${baseUrl}/ln-invoice?quote=${encodeURIComponent(quote)}`);
+    const mac = macQuery(deviceInfo);
+    const response = await fetch(
+      `${baseUrl}/ln-invoice?quote=${encodeURIComponent(quote)}${mac ? `&${mac}` : ""}`
+    );
     const payload = await response.json();
 
     if (!response.ok || !payload.status) {

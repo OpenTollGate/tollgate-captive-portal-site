@@ -22,6 +22,9 @@ import './Lightning.scss'
 export const Lightning = (props) => {
   const { t } = useTranslation();
   const { tollgateDetails } = props;
+  // the client MAC the portal already resolved from /whoami; forwarded to every
+  // /ln-invoice call so the backend bills the device the operator is on
+  const deviceInfo = tollgateDetails?.deviceInfo;
   // state for payment flow and user input
   const [processing, setProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -79,7 +82,7 @@ export const Lightning = (props) => {
   useEffect(() => {
     if (processing && !invoiceData && selectedMint) {
       const request = async () => {
-        const response = await requestInvoice(unitAmount, selectedMint.url, t);
+        const response = await requestInvoice(unitAmount, selectedMint.url, t, deviceInfo);
 
         setTimeout(() => {
           setProcessing(false);
@@ -95,7 +98,7 @@ export const Lightning = (props) => {
 
       request()
     }
-  }, [invoiceData, processing, selectedMint, t, unitAmount])
+  }, [deviceInfo, invoiceData, processing, selectedMint, t, unitAmount])
 
   useEffect(() => {
     if (!invoiceData || success) {
@@ -105,7 +108,7 @@ export const Lightning = (props) => {
     let active = true;
 
     const pollStatus = async () => {
-      const response = await getInvoiceStatus(invoiceData.quote, t);
+      const response = await getInvoiceStatus(invoiceData.quote, t, deviceInfo);
       if (!active) {
         return;
       }
@@ -127,7 +130,7 @@ export const Lightning = (props) => {
       active = false;
       window.clearInterval(interval)
     }
-  }, [invoiceData, success, t])
+  }, [invoiceData, success, t, deviceInfo]);
 
   return <div className="tollgate-captive-portal-method-lightning tollgate-captive-portal-method">
     {/* header: shows the portal title and a short description about lightning */}
