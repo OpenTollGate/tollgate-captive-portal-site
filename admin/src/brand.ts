@@ -1,70 +1,33 @@
-// Build-time brand selection.
+// Brand selection for the admin board.
 //
-// One build ships exactly one skin. The default is TollGate; net4sats builds
-// pass VITE_BRAND=net4sats. Keeping the brand config in-repo (rather than in a
-// separate `configui` project) was a deliberate consolidation decision.
+// This repository ships exactly ONE skin: the generic TollGate default. It is
+// the *protocol* side of the TollGate UI. A branded distribution operator
+// supplies its own skin at build time without forking this repo: drop
+// `brand/<id>.json` + `public/assets/brand/<id>/` assets into the build, then
+// build with `VITE_BRAND=<id>`. Env/assets/config only.
 //
-// Asset paths are relative to the app base, so callers should pass them through
-// `withBase()` from './paths'.
+// Loading uses import.meta.glob with { eager: true } so the descriptor set is
+// resolved at build time and the active descriptor is bundled into the output
+// (a distribution build ships exactly its own skin).
 
-export type BrandId = 'tollgate' | 'net4sats';
+import {
+  resolveBrand,
+  type BrandDescriptor,
+  loadBrandDescriptors,
+} from './brand-core';
 
-export interface Brand {
-  id: BrandId;
-  name: string;
-  domain: string;
-  tagline: string;
-  poweredBy: string;
-  website: string;
-  version: string;
-  /** colour logo (on light backgrounds) */
-  logo: string;
-  /** white logo (on dark backgrounds) */
-  logoWhite: string;
-  /** colour icon (favicon / PWA) */
-  icon: string;
-  /** white icon */
-  iconWhite: string;
-  themeColor: string;
-  sessionKey: string;
-  sessionUser: string;
-}
+const requested = (import.meta.env.VITE_BRAND as string | undefined) || undefined;
 
-const BRANDS: Record<BrandId, Brand> = {
-  tollgate: {
-    id: 'tollgate',
-    name: 'TollGate',
-    domain: 'tollgate.lan',
-    tagline: 'Router Admin Dashboard',
-    poweredBy: 'Powered by TollGate',
-    website: 'https://tollgate.me/',
-    version: 'TollGate v0.6.0-alpha2',
-    logo: 'assets/brand/tollgate/logo-colour.png',
-    logoWhite: 'assets/brand/tollgate/logo-white.png',
-    icon: 'assets/brand/tollgate/icon-colour.png',
-    iconWhite: 'assets/brand/tollgate/icon-white.png',
-    themeColor: '#FF6961',
-    sessionKey: 'tollgate_session',
-    sessionUser: 'tollgate_user',
-  },
-  net4sats: {
-    id: 'net4sats',
-    name: 'net4sats',
-    domain: 'net4sats.lan',
-    tagline: 'Router Admin Dashboard',
-    poweredBy: 'Powered by Lightning',
-    website: 'https://net4sats.cash',
-    version: 'net4sats v1.0',
-    logo: 'assets/brand/net4sats/logo-colour.png',
-    logoWhite: 'assets/brand/net4sats/logo-white.png',
-    icon: 'assets/brand/net4sats/icon-colour.png',
-    iconWhite: 'assets/brand/net4sats/icon-white.png',
-    themeColor: '#111111',
-    sessionKey: 'net4sats_session',
-    sessionUser: 'net4sats_user',
-  },
-};
+// eager + import.meta.glob: keys are the descriptor file paths.
+const descriptorModules = import.meta.glob('../../brand/*.json', { eager: true }) as Record<
+  string,
+  { default: BrandDescriptor }
+>;
 
-const requested = (import.meta.env.VITE_BRAND as BrandId) || 'tollgate';
+const bundled = loadBrandDescriptors(descriptorModules);
 
-export const BRAND: Brand = BRANDS[requested] ?? BRANDS.tollgate;
+export const BRAND = resolveBrand(requested, bundled);
+
+// Re-export the type so callers can annotate without importing brand-core.
+export type { Brand, BrandDescriptor } from './brand-core';
+export { DEFAULT_BRAND_ID } from './brand-core';

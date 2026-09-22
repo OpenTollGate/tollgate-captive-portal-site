@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 const brand = process.env.VITE_BRAND || 'tollgate';
 
-// Keep the static favicon reference brand-scoped so a net4sats build never
-// even references the TollGate icon before JS runs (main.tsx also sets it at
+// Keep the static favicon reference brand-scoped so a build never even
+// references another brand's icon before JS runs (main.tsx also sets it at
 // runtime). Brand isolation: one build ships one skin.
 const brandFavicon = () => ({
   name: 'brand-favicon',
