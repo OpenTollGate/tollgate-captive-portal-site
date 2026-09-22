@@ -83,11 +83,20 @@ done
 # branded build lists the generic + the remaining vendors). Each foreign uhttpd
 # section and webroot is dropped so only this brand's webroot can be served.
 # Falls back to no-op when a build forgot to substitute the list.
-FOREIGN="${__FOREIGN_SKINS__}"
+FOREIGN="__FOREIGN_SKINS__"
 for skin in $FOREIGN; do
     webroot="${skin%%:*}"
     section="${skin##*:}"
     [ -n "$webroot" ] && [ -n "$section" ] && [ "$webroot" != "$section" ] || continue
+    # Never delete this build's own webroot (a malformed token that lists the
+    # active brand would rm -rf the admin board), and never touch /www itself or
+    # anything outside the webroot tree - LuCI lives in /www.
+    [ "$webroot" = "$ADMIN_HOME" ] && continue
+    [ "$webroot" = "/www" ] && continue
+    case "$webroot" in
+      /www/*) ;;
+      *) continue ;;
+    esac
     uci -q delete "uhttpd.$section" 2>/dev/null
     rm -rf "$webroot" 2>/dev/null
 done
