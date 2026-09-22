@@ -8,18 +8,19 @@
 # binds the same ubus socket as the rest of the system (`ubus_prefix /ubus`),
 # so the SPA can drive `tollgate --json` through the rpcd plugin.
 #
-# NOTE: home is the brand webroot (/www/tollgate for TollGate builds,
-# /www/net4sats for net4sats), substituted into the setup script as
-# __ADMIN_HOME__ at package build time, so uhttpd maps http://<gw>:8090/ ->
-# /www/<brand>/index.html and /assets/... -> /www/<brand>/assets/.... Only one
-# brand is ever installed, so only one of those directories exists. LuCI is NOT
-# served here (its webroot is /www on uhttpd.main, :8080) — the admin instance
-# never exposes /www. `home` MUST NOT be /www: uhttpd's default cgi_prefix
-# (/cgi-bin) would then resolve /cgi-bin/luci to the real LuCI CGI on :8090.
+# NOTE: home is the brand webroot (/www/<brand>: /www/tollgate for the default
+# TollGate build, a distribution's own webroot for a branded build), substituted
+# into the setup script as __ADMIN_HOME__ at package build time, so uhttpd maps
+# :8090 -> /www/<brand>/index.html and /assets/... -> /www/<brand>/assets/....
+# Only one brand is ever installed, so only one of those directories exists.
+# LuCI is NOT served here (its webroot is /www on uhttpd.main, :8080) — the
+# admin instance never exposes /www. `home` MUST NOT be /www: uhttpd's default
+# cgi_prefix (/cgi-bin) would then resolve /cgi-bin/luci to the real LuCI CGI on
+# :8090.
 #
 # :8090 belongs to the admin instance alone: the setup script removes it from any
-# other section, and (TollGate builds) deletes a leftover `uhttpd.net4sats`
-# section + /www/net4sats webroot so a foreign skin can never shadow the board.
+# other section, and drops leftover uhttpd sections + webroots from any OTHER
+# brand skin (__FOREIGN_SKINS__) so a foreign skin can never shadow the board.
 #
 # LuCI stays on uhttpd.main (:8080) and the captive portal on uhttpd.portal
 # (:2051); those are NOT touched here.
