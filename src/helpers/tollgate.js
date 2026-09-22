@@ -14,6 +14,16 @@ export const getPortalBaseUrl = () => {
   return `http://${currentHost}:2051`;
 };
 
+// extract the client MAC from the deviceInfo object returned by
+// fetchTollgateData (single source of truth: the /whoami response). returns an
+// empty string when there is no MAC identity available, so callers can omit the
+// parameter instead of sending "undefined" to the backend.
+export const getClientMac = (deviceInfo = null) => {
+  if (!deviceInfo || deviceInfo.type !== "mac") return "";
+  if (typeof deviceInfo.value !== "string") return "";
+  return deviceInfo.value.trim();
+};
+
 // function to fetch the tollgate details and device info
 export const fetchTollgateData = async (i18n = (k, v) => k) => {
   try {
