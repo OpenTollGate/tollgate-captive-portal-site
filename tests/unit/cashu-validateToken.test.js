@@ -16,6 +16,24 @@ const buildV4Token = (amounts) =>
     })),
   });
 
+// Build a v4 token whose proofs carry a v2 SHORT keyset id (`01`-prefixed).
+// This is the exact Bug A trigger: cashu-ts's getDecodedToken(token) (no
+// keysets) throws "A short keyset ID v2 was encountered, but got no keysets
+// to map it to." on such tokens — the portal was misreporting that as CU102
+// and the operator could never pay. coinos.io and minibits note mint both
+// rotate short v2 keysets, so this shape is production-real.
+const buildV4ShortKeysetToken = (amounts) =>
+  getEncodedToken({
+    mint: 'https://mint.minibits.cash/Bitcoin',
+    unit: 'sat',
+    proofs: amounts.map((amount, i) => ({
+      amount,
+      id: '01ad268c4d1f5826',
+      secret: `secret-${i}`,
+      C: `02${'a'.repeat(64)}`,
+    })),
+  });
+
 const buildV2Token = (amounts) => {
   const payload = {
     token: [
@@ -41,6 +59,21 @@ describe('validateToken', () => {
 
     const result = validateToken(token, undefined, i18n);
     expect(result.status).toBe(1);
+    expect(result.value.amount).toBe(210);
+    expect(result.value.proofCount).toBe(2);
+    expect(result.value.unit).toBe('sat');
+  });
+
+  it('BUG A regression: decodes a v4 token with a v2 SHORT keyset id — does NOT bounce to CU102', () => {
+    // coinos.io / minibits notes use short v2 keyset ids. Before the fix, this
+    // token threw inside getDecodedToken(token) and the portal returned CU102,
+    // so the operator could never pay. It must now decode to a valid value.
+    const token = buildV4ShortKeysetToken([200, 10]);
+    expect(token.startsWith('cashuB')).toBe(true);
+
+    const result = validateToken(token, undefined, i18n);
+    expect(result.status).toBe(1);
+    expect(result.code).toBeUndefined();
     expect(result.value.amount).toBe(210);
     expect(result.value.proofCount).toBe(2);
     expect(result.value.unit).toBe('sat');

@@ -1,5 +1,5 @@
 // external
-import { getDecodedToken } from "@cashu/cashu-ts";
+import { getTokenMetadata, getDecodedToken } from "@cashu/cashu-ts";
 import { getPublicKey, getEventHash, getSignature } from "nostr-tools";
 
 // helpers
@@ -34,6 +34,19 @@ export const extractProofsFromToken = (decodedToken) => {
         }
       });
     }
+    // handle getTokenMetadata output (keyset-agnostic summary): the proofs are
+    // carried under `incompleteProofs`. These are real proofs (secret, C,
+    // amount, dleq) with their keyset id intentionally stripped — sufficient
+    // to sum the token value for display; presence does not imply DLEQ validity.
+    else if (decodedToken.incompleteProofs && Array.isArray(decodedToken.incompleteProofs)) {
+      proofs.push(...decodedToken.incompleteProofs);
+    }
+    // handle a bare getTokenMetadata metadata object with no proof list at all —
+    // the amount is already summed, synthesize a single synthetic proof so value
+    // display still works.
+    else if (typeof decodedToken.amount !== 'undefined') {
+      proofs.push({ amount: decodedToken.amount });
+    }
   } catch (error) {
     // log and ignore extraction errors
     console.error("error extracting proofs:", error);
@@ -65,19 +78,35 @@ export const validateToken = (token = "", mint, i18n) => {
       };
     }
 
-    // attempt to decode the token using the getDecodedToken method
+    // attempt to decode the token.
+    //
+    // PRIMARY PATH — getTokenMetadata: a keyset-agnostic decoder that works
+    // WITHOUT the mint's keyset list. cashu-ts's getDecodedToken(token) (no
+    // keysets) throws on v4 cashuB tokens whose proofs carry a v2 SHORT keyset
+    // id (e.g. coinos.io or minibits cashuB notes) — the "A short keyset ID v2
+    // was encountered, but got no keysets to map it to." error that was being
+    // misreported as CU102. getTokenMetadata resolves proofs without needing to
+    // map short -> full keyset ids, so those tokens decode here. The backend
+    // (merchant) re-decodes authoritatively on submit.
+    //
+    // FALLBACK PATH — getDecodedToken: getTokenMetadata throws on multi-entry
+    // (multi-mint) V3 tokens, which getDecodedToken-with-keysets handled. Keep
+    // it so multi-mint tokens (which cashu-ts 2.9.0 requires MintKeyset objects
+    // for) can still fall through to this decoder when it can decode them.
+    const trimmedToken = token.trim();
     let decodedToken = null;
     try {
-      decodedToken = getDecodedToken(token.trim());
-      if (!decodedToken) {
-        return {
-          status: 0,
-          code: "CU102",
-          label: i18n("CU102_label"),
-          message: i18n("CU102_message"),
-        };
+      decodedToken = getTokenMetadata(trimmedToken) || null;
+    } catch (errMeta) {
+      console.error("getTokenMetadata failed for token:", errMeta);
+      try {
+        decodedToken = getDecodedToken(trimmedToken);
+      } catch (errDecode) {
+        console.error("getDecodedToken fallback failed for token:", errDecode);
+        decodedToken = null;
       }
-    } catch (err) {
+    }
+    if (!decodedToken) {
       return {
         status: 0,
         code: "CU102",
