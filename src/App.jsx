@@ -301,6 +301,10 @@ export const AccessGranted = ({ allocation, metric }) => {
         <span className="tollgate-captive-portal-access-granted-duration-label">
           {t('access_duration_label')}
         </span>
+        {/* explicit separator: JSX drops the whitespace between the two spans
+            and these classes have no stylesheet rule, which rendered the
+            label and the value glued together ("Access purchased21.00 MiB") */}
+        {' '}
         <span className="tollgate-captive-portal-access-granted-duration-value">
           {allocation}
         </span>
