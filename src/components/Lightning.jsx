@@ -132,6 +132,17 @@ export const Lightning = (props) => {
     }
   }, [invoiceData, success, t, deviceInfo]);
 
+  // "Buy more time" after the session expired: return to the invoice/unit-input
+  // flow in page — no reload, no navigation (the merchant API on :2121 stays
+  // reachable for unauthenticated clients).
+  const handleBuyMoreTime = () => {
+    setSuccess(false);
+    setError(null);
+    setInvoiceData(null);
+    setUnitAmount('');
+    setAllocation(null);
+  };
+
   return <div className="tollgate-captive-portal-method-lightning tollgate-captive-portal-method">
     {/* header: shows the portal title and a short description about lightning */}
     {((!success && !processing) || (invoiceData && !success)) && <Header />}
@@ -141,7 +152,7 @@ export const Lightning = (props) => {
       {(!success && processing) && <Processing label={t('processing_invoice_request')} />}
 
       {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
-      {(success && !processing && allocation) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} />}
+      {(success && !processing && allocation) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} onRenew={handleBuyMoreTime} />}
 
       {/* unitinput: input field for entering the amount to pay, and selecting access option */}
       {(!success && !processing && accessOptions.length > 0 && !invoiceData) && <UnitInput
