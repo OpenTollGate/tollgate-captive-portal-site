@@ -4,6 +4,20 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Cashu mint auto-select:** the purchase page now derives the mint from the
+  pasted e-cash note and selects the matching access option, instead of making
+  the user pick the mint by hand (the note states which mint issued it, and the
+  allocation/price is mint-dependent, so a hand-picked mint showed the wrong
+  price). New helpers in `src/helpers/cashu.js`: `mintUrlFromToken` (uses the
+  keyset-agnostic `getTokenMetadata` decoder, the `#CU102` fix, with
+  `getDecodedToken` as fallback; null on anything undecodable or ambiguous),
+  `normalizeMintUrl` (scheme/trailing-slash/case/default-port insensitive) and
+  `findMintOption`. Partial input stays silent, a note from a mint the router
+  does not accept clears the selection and shows the translated
+  `unsupported_mint_notice` naming that mint, and a manual click still wins
+  until the note itself changes.
+
 ### Changed
 - **Brand slot:** brand ids are now treated as case-insensitive *identifiers* end to
   end. `VITE_BRAND=ACME` selects `admin/brand/Acme.json` (previously only the

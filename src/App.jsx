@@ -393,7 +393,11 @@ export const AccessOptions = ({ pricingInfo, selectedMint, setSelectedMint }) =>
 
       return <button
         key={mintAddressStripped}
-        className={classNames('ghost', 'ellipsis', { 'cta active': mint.url === selectedMint.url })}
+        // selectedMint is null when the pasted note's mint is not among the
+        // advertised options — the purchase page clears the selection and asks
+        // the user to pick, so no option may render as active (and the
+        // comparison must not dereference null).
+        className={classNames('ghost', 'ellipsis', { 'cta active': mint.url === selectedMint?.url })}
         onClick={() => {
           setSelectedMint(mint);
         }}>
