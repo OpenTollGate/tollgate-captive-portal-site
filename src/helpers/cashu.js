@@ -55,6 +55,118 @@ export const extractProofsFromToken = (decodedToken) => {
   return proofs;
 };
 
+// Normalise a mint URL so the router's advertisement and the URL embedded in a
+// Cashu note can be compared. In practice they disagree about the scheme (a
+// router may advertise http:// on its LAN while the note says https://), a
+// trailing slash, and case — all of which describe the same mint:
+//
+//   https://mint.example.com
+//   https://mint.example.com/
+//   http://mint.example.com
+//   HTTPS://Mint.Example.COM//
+//   https://mint.example.com:443
+//
+//   => "mint.example.com" for all of them
+//
+// Returns null for anything that is not a usable URL string, so callers can
+// null-check instead of comparing garbage.
+export const normalizeMintUrl = (url) => {
+  if ("string" !== typeof url) return null;
+
+  let value = url.trim().toLowerCase();
+  if (!value) return null;
+
+  // a default port is not a distinguishing feature
+  const scheme = value.startsWith("http://") ? "http" : "https";
+  value = value.replace(scheme === "http" ? /:80(?=\/|$)/ : /:443(?=\/|$)/, "");
+
+  // the scheme is not a distinguishing feature either (see above)
+  value = value.replace(/^https?:\/\//, "");
+
+  // a mint URL never carries a query string or fragment
+  value = value.replace(/[?#].*$/, "");
+
+  // trailing slashes are not a distinguishing feature
+  value = value.replace(/\/+$/, "");
+
+  return value.length ? value : null;
+};
+
+// Every mint URL a decoded token states. getTokenMetadata summarises a single
+// mint as `mint`; the structural decoders carry it per entry under `token`
+// (V2/V3) or `tokens`.
+const mintUrlsFromDecoded = (decoded) => {
+  const urls = [];
+  const push = (url) => {
+    if (typeof url === "string" && url.trim()) urls.push(url.trim());
+  };
+
+  push(decoded.mint);
+  for (const entry of [].concat(decoded.token || [], decoded.tokens || [])) {
+    if (entry && "object" === typeof entry) push(entry.mint);
+  }
+
+  return urls;
+};
+
+// Decode just enough of a note to learn WHICH MINT issued it.
+//
+// Decoder precedence mirrors validateToken: `getTokenMetadata` is the PRIMARY,
+// keyset-agnostic decoder (the #CU102 fix — real coinos/minibits v4 `cashuB`
+// notes carry v2 SHORT keyset ids that `getDecodedToken(token)` cannot map
+// without the mint's keysets, and it throws on them), and `getDecodedToken` is
+// the fallback for shapes metadata refuses (V3 multi-entry). Neither call is
+// given keyset ids: cashu-ts wants `MintKeyset` OBJECTS there, and passing id
+// strings throws the hardware `TypeError … reading 'slice'`.
+//
+// Returns the mint URL exactly as the note spells it, or null when the mint is
+// unknowable. It never throws — it runs on every keystroke while a token is
+// being typed/pasted — and it stays null for an AMBIGUOUS note (multi-mint /
+// multi-entry) so the UI asks the user instead of guessing.
+export const mintUrlFromToken = (token) => {
+  try {
+    if ("string" !== typeof token) return null;
+
+    const trimmed = token.trim();
+    if (!trimmed.startsWith("cashu")) return null;
+
+    let decoded = null;
+    try {
+      decoded = getTokenMetadata(trimmed) || null;
+    } catch (errMeta) {
+      try {
+        decoded = getDecodedToken(trimmed) || null;
+      } catch (errDecode) {
+        decoded = null;
+      }
+    }
+    if (!decoded) return null;
+
+    const candidates = mintUrlsFromDecoded(decoded);
+    if (!candidates.length) return null;
+
+    // Unambiguous only: every stated mint must normalise to the same mint.
+    const distinct = [...new Set(candidates.map(normalizeMintUrl).filter(Boolean))];
+    if (distinct.length !== 1) return null;
+
+    return candidates.find((url) => normalizeMintUrl(url) === distinct[0]) || null;
+  } catch (error) {
+    // garbage, truncated pastes, unexpected decoder failures — never fatal
+    return null;
+  }
+};
+
+// The advertised access option (the router's `price_per_step` entry) for a mint
+// URL, compared on the normalised form so scheme/slash/case differences between
+// the note and the advertisement cannot silently miss. Returns null when the
+// router does not accept that mint.
+export const findMintOption = (mintUrl, options) => {
+  const wanted = normalizeMintUrl(mintUrl);
+  if (!wanted || !Array.isArray(options)) return null;
+
+  return options.find((option) => normalizeMintUrl(option?.url) === wanted) || null;
+};
+
 // validate a cashu token: check format, decode, extract proofs, and sum value
 export const validateToken = (token = "", mint, i18n) => {
   try {

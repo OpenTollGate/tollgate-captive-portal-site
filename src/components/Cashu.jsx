@@ -1,5 +1,5 @@
 // external
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 
 // internal
@@ -13,7 +13,7 @@ import { CancelIcon } from './Icon'
 import { requestScanQr, hasCameraSupport } from '../helpers/qr-code';
 import { requestPaste, hasClipboardSupport } from '../helpers/clipboard';
 import { getAccessOptions, calculateAllocation } from '../helpers/tollgate';
-import { validateToken, submitToken, canSubmitAnyway } from '../helpers/cashu';
+import { validateToken, submitToken, canSubmitAnyway, mintUrlFromToken, findMintOption } from '../helpers/cashu';
 import { getMintSwapFee } from '../helpers/mint-fee';
 
 // styles and assets
@@ -42,6 +42,11 @@ export const Cashu = (props) => {
   const [allocation, setAllocation] = useState(null)
   const [selectedMint, setSelectedMint] = useState(null)
   const [mintFee, setMintFee] = useState(null)
+  // the mint URL of a pasted note this router does not accept (null otherwise)
+  const [unsupportedMint, setUnsupportedMint] = useState(null)
+  // the exact token text the current selection was derived from — a manual
+  // click owns the selection until the note itself changes
+  const derivedTokenRef = useRef(null)
 
   // TIP-03: auto-submit when the token arrived via ?token= URL parameter and
   // validation has produced both a tokenValue and an allocation. Manual entry
@@ -74,6 +79,60 @@ export const Cashu = (props) => {
       })
     }
   }, [tollgateDetails])
+
+  // Mint auto-select.
+  //
+  // The host advertises one access option per accepted mint and the pasted note
+  // already states which mint issued it, so the user should not have to pick by
+  // hand — a hand-picked mint shows the WRONG price/allocation (the allocation
+  // is mint-dependent: price, step size and min_steps all come from the option
+  // the note is validated against). This derives the mint from the note and
+  // selects the very option object a button click would select, so every
+  // downstream calculation follows.
+  //
+  // Deliberately quiet and conservative:
+  //   * partial input (empty field, still typing, truncated paste, multi-mint
+  //     note) decodes to nothing -> no message, no selection change, no churn;
+  //   * a note whose mint is NOT among the advertised options does not
+  //     auto-select: the selection is cleared so nothing renders as active and
+  //     the user is told which mint the note came from (see the notice below),
+  //     leaving them free to pick another option (or a token from another mint);
+  //   * a manual click wins — the note is only re-derived when its text changes.
+  //
+  // Re-validation is not restated here: changing selectedMint re-runs the
+  // token-validation effect below, which re-derives value, allocation and error.
+  useEffect(() => {
+    // nothing advertised yet — there is nothing to select
+    if (!accessOptions.length) return;
+
+    const raw = (token || '').trim();
+    if (!raw) {
+      // the field was cleared: the next paste is a fresh derivation
+      derivedTokenRef.current = null;
+      setUnsupportedMint(null);
+      return;
+    }
+
+    // already derived for this exact note text — leave the selection alone
+    if (derivedTokenRef.current === raw) return;
+
+    const noteMint = mintUrlFromToken(raw);
+    // undecodable / partial input: stay quiet and change nothing
+    if (!noteMint) return;
+
+    derivedTokenRef.current = raw;
+
+    const match = findMintOption(noteMint, accessOptions);
+    if (match) {
+      setUnsupportedMint(null);
+      setSelectedMint(match);
+      return;
+    }
+
+    // the note's mint is not accepted by this router
+    setUnsupportedMint(noteMint);
+    setSelectedMint(null);
+  }, [token, accessOptions])
 
   // validate the token whenever it changes
   useEffect(() => {
@@ -225,6 +284,16 @@ export const Cashu = (props) => {
         {/* mint fee: show the swap fee explicitly when the mint charges one */}
         {(!success && !processing && tokenValue && mintFee && mintFee.fee > 0 && tokenValue.amount > mintFee.fee) && <p className="muted small tollgate-captive-portal-cashu-fee">
           {t('mint_fee_note', { fee: mintFee.fee, net: tokenValue.amount - mintFee.fee })}
+        </p>}
+
+        {/* unsupported mint: the note decodes, but the router does not accept
+            its mint. Nothing is auto-selected in that case, so name the mint
+            and point the user at the options — this is a hint, not a blocker:
+            they can still pick an advertised mint by hand. */}
+        {(!success && !processing && unsupportedMint) && <p
+          className="muted small tollgate-captive-portal-cashu-mint-unsupported"
+          role="status">
+          {t('unsupported_mint_notice', { mint: unsupportedMint })}
         </p>}
 
         {/* error: shows error messages for invalid tokens or other issues */}

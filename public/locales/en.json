@@ -49,6 +49,7 @@
   "valid_cashu_token_message": "You will receive {{purchased}} of internet access.",
   "mint_fee_note": "Mint swap fee: {{fee}} sat · you receive {{net}} sat",
   "access_options": "Select access option",
+  "unsupported_mint_notice": "This e-cash note is from {{mint}}, which this router does not accept. Pick one of the access options below, or get a note from an accepted mint.",
   "price": "1 sat per 10 minutes",
   "purchase": "Purchase Internet Access",
   "purchase_filled": "Pay {{price}} to get {{unit}}",
