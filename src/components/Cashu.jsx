@@ -178,6 +178,17 @@ export const Cashu = (props) => {
     }
   }, [processing, bypassing]);
 
+  // "Buy more time" after the session expired: return to the token/purchase UI
+  // in page — no reload, no navigation (the merchant API on :2121 stays
+  // reachable for unauthenticated clients). The spent token is cleared so the
+  // operator pastes a fresh one.
+  const handleBuyMoreTime = () => {
+    setSuccess(false);
+    setError(null);
+    setScanning(false);
+    setToken('');
+  };
+
   // "Submit anyway" — push the raw token to the merchant for authoritative
   // validation. Surfaced when client-side decode refused a token that is very
   // likely valid (e.g. a v4 cashuB note with a v2 short keyset id, which
@@ -202,7 +213,7 @@ export const Cashu = (props) => {
         {(!success && processing) && <Processing label={t('processing_payment')} />}
 
         {/* accessgranted: shows a success message and the amount of access granted after a successful payment */}
-        {(success && !processing && allocation) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} metric={selectedMint?.metric} />}
+        {(success && !processing && allocation) && <AccessGranted allocation={`${allocation.value} ${allocation.unit}`} metric={selectedMint?.metric} onRenew={handleBuyMoreTime} />}
 
         {/* accessgranted via "submit anyway": the merchant accepted a token the
             portal could not decode client-side, so there is no known allocation
