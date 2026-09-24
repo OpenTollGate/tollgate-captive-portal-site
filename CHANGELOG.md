@@ -4,6 +4,41 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Security
+- **Admin board: fail closed against a router with no root credential.** rpcd's
+  login check (`rpc_login_test_password`, `session.c`) begins with
+  `if (!hash || !*hash) return true;` and the distribution's `/etc/config/rpcd`
+  sets the login password to `$p$root` — i.e. `getspnam("root")->sp_pwdp`. So
+  while root's `/etc/shadow` hash is **unset**, `ubus session.login` returns a
+  session for **any** password, including the empty string, and that session
+  carries this board's ACL (`file:["exec"]`, `system:["password_set"]`,
+  `tollgate wallet_drain_cashu`). A freshly deployed router that was never given
+  a password was therefore unauthenticated root administration over plain HTTP
+  from the guest side. Three layers now close it, and the credential STATE is
+  the single predicate they all key off: `set` (a real hash) and `locked`
+  (`!`/`*`, which `crypt()` can never match) are served and allowed; `empty` and
+  `unknown` are not.
+  - `packaging/files/etc/uci-defaults/92-tollgate-admin-setup` **does not
+    configure the `:8090`/`:8443` listeners at all** while root has no usable
+    credential, and removes them from a router that already served them, with
+    the reason and the remedy (`passwd root`) printed to stderr.
+  - `openwrt/rpcd/tollgate` refuses **every method that acts on the router**
+    while the state is `empty`/`unknown` (`success:0`,
+    `error:"no-admin-credential"`) and never invokes the `tollgate` CLI. The one
+    exception is the new `auth_status` probe, which reports the state only —
+    never a hash or a password.
+  - `tollgate_acl.json` grows an `unauthenticated` group that grants a session-less
+    caller **exactly** `["auth_status"]` (no write, no list), so the board can
+    learn the state before it has a credential to sign in with.
+  - The admin SPA asks for the state before it renders anything
+    (`fetchCredentialStatus`): on `empty` it shows a refusal screen naming the
+    remedy and offers **no form at all**; on `locked` it explains that no
+    password can sign in; on `unknown` it warns and defers to the router-side
+    refusal. `login()` and the submit button no longer accept a blank password —
+    against an empty hash a blank one "succeeds", so it must never be sent.
+  - CI: both packaging guards and the admin credential-guard e2e run as
+    mandatory steps, so this cannot regress silently.
+
 ### Added
 - **Cashu mint auto-select:** the purchase page now derives the mint from the
   pasted e-cash note and selects the matching access option, instead of making

@@ -1,9 +1,18 @@
 {
+  "unauthenticated": {
+    "description": "Tollgate credential probe (the `tollgate auth_status` method), callable WITHOUT a session. The :8090 admin board asks whether the router has a usable root credential before it renders a login form, so it can refuse to run against an unset/empty root hash (rpcd's rpc_login_test_password() accepts ANY password while the shadow hash is empty). Exposes the credential STATE only — never a hash or a password — and grants nothing else: no write and no list access for a caller with no session.",
+    "read": {
+      "ubus": {
+        "tollgate": ["auth_status"]
+      }
+    }
+  },
   "tollgate": {
     "description": "Tollgate management",
     "read": {
       "ubus": {
         "tollgate": [
+          "auth_status",
           "config_schema",
           "config_get",
           "wallet_balance",

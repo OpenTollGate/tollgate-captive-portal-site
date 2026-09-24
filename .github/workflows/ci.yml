@@ -35,6 +35,20 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      - name: Packaging guards (admin board credential fail-closed)
+        # A fresh router whose root /etc/shadow hash is UNSET accepts ANY
+        # password through rpcd's session.login. These two gates keep the
+        # surface shut: the uci-defaults must not serve :8090/:8443 in that
+        # state, and the rpcd plugin must refuse every method that acts on the
+        # router (exposing only the pre-auth auth_status probe).
+        #
+        # They run FIRST, before the vitest suite: pure POSIX sh, no network, no
+        # root, ~1s each, and they must not be masked by an unrelated failure in
+        # a suite they are not part of (the vitest run is currently red on main
+        # for a heap OOM in the full-suite process).
+        run: |
+          sh packaging/tests/test-92-admin-credential-guard.sh
+          sh packaging/tests/test-rpcd-tollgate-credential-guard.sh
       - run: npm test
       - name: Packaging guard (foreign-skin cleanup)
         run: sh tests/packaging/foreign-skins-guard.sh .
@@ -56,6 +70,18 @@ jobs:
         run: npm run dev &
       - name: Wait for server
         run: npx wait-on http://localhost:5173 --timeout 30000
+
+      - name: Run admin board credential guard (mandatory)
+        # The :8090 board must REFUSE to render a login form against a router
+        # whose root /etc/shadow hash is unset: rpcd's session.login accepts ANY
+        # password (including "") while it is empty, so a successful login would
+        # prove nothing. Runs the real Preact app in VITE_MOCK mode, with the
+        # router's state selected by ?mockCredentialState=.
+        #
+        # It runs before the portal functional suite: it is self-contained (its
+        # own vite dev server on :5199), and the credential gate must not be
+        # masked by an unrelated portal test failure.
+        run: npx playwright test --config admin/playwright.config.mjs admin-credential-guard
 
       - name: Run functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop

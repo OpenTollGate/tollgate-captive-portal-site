@@ -3,7 +3,12 @@ import { useState, useEffect } from 'preact/hooks';
 import './styles/variables.css';
 import './styles/admin.css';
 import { initRouter, useRoute, navigate } from './lib/router';
-import { checkSession, isLoggedIn, isMock } from './lib/ubus';
+import {
+  checkSession,
+  isLoggedIn,
+  isMock,
+  fetchCredentialStatus,
+} from './lib/ubus';
 import { BRAND } from './brand';
 import Layout from './components/layout';
 import LoginPage from './routes/login';
@@ -26,7 +31,20 @@ function AdminApp() {
     initRouter();
     (async () => {
       if (isMock()) {
-        setAuthed(true);
+        // A mock/demo build must not pretend to authenticate against a router
+        // that has NO root credential either. The auto-login models a router
+        // that has been provisioned, so it happens only when the probe reports
+        // a real credential (`set`); every other state renders the login screen
+        // instead of the dashboard — `empty` as the fail-closed refusal, and
+        // `locked`/`unknown` as the form itself.
+        // (admin/tests/admin-credential-guard.spec.mjs drives this.)
+        const status = await fetchCredentialStatus();
+        if (status.state === 'set') {
+          setAuthed(true);
+        } else {
+          setAuthed(false);
+          navigate('login');
+        }
         setReady(true);
         return;
       }
