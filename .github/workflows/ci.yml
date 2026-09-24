@@ -38,6 +38,15 @@ jobs:
       - run: npm test
       - name: Packaging guard (foreign-skin cleanup)
         run: sh tests/packaging/foreign-skins-guard.sh .
+      - name: Packaging guards (admin board credential fail-closed)
+        # A fresh router whose root /etc/shadow hash is UNSET accepts ANY
+        # password through rpcd's session.login. These two gates keep the
+        # surface shut: the uci-defaults must not serve :8090/:8443 in that
+        # state, and the rpcd plugin must refuse every method that acts on the
+        # router (exposing only the pre-auth auth_status probe).
+        run: |
+          sh packaging/tests/test-92-admin-credential-guard.sh
+          sh packaging/tests/test-rpcd-tollgate-credential-guard.sh
       - run: npm run build
 
   e2e-tests:
@@ -59,6 +68,14 @@ jobs:
 
       - name: Run functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop
+
+      - name: Run admin board credential guard (mandatory)
+        # The :8090 board must REFUSE to render a login form against a router
+        # whose root /etc/shadow hash is unset: rpcd's session.login accepts ANY
+        # password (including "") while it is empty, so a successful login would
+        # prove nothing. Runs the real Preact app in VITE_MOCK mode, with the
+        # router's state selected by ?mockCredentialState=.
+        run: npx playwright test --config admin/playwright.config.mjs admin-credential-guard
 
       - name: Run visual tests (informational — allowed to fail)
         run: npx playwright test tests/e2e/visual.spec.mjs --project=desktop || true
