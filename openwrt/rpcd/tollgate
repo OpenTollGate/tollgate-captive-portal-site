@@ -3,9 +3,62 @@
 # Methods map 1:1 to tollgate --json CLI commands
 . /usr/share/libubox/jshn.sh
 
+# ─── root credential state (fail closed) ─────────────────────────────────────
+#
+# rpcd's own login check (rpcd/session.c, rpc_login_test_password) starts with
+#
+#     /* password is not set */
+#     if (!hash || !*hash) { return true; }
+#
+# and the distribution's /etc/config/rpcd sets the login password to `$p$root`,
+# i.e. getspnam("root")->sp_pwdp. So while root's /etc/shadow hash is EMPTY,
+# session.login succeeds with ANY password — including the empty string — and
+# the session that comes out carries this ACL (file exec, system.password_set,
+# wallet_drain_cashu). The admin board on :8090 is exactly that session.
+#
+# We cannot patch rpcd, so the plugin refuses: every method that acts on the
+# router fails closed while root has no usable credential, and the board's UI
+# uses the pre-auth `auth_status` probe below to refuse to render a login form
+# at all. Only the credential STATE is exposed — never a hash or a password.
+#
+# '!' / '*' is a LOCKED account: crypt() can never match it, so it is not
+# credential-less and nothing here refuses on it.
+SHADOW_FILE="${TOLLGATE_SHADOW_FILE:-/etc/shadow}"
+
+root_hash_state() {
+    local h
+    h=$(awk -F: '$1=="root"{print $2}' "$SHADOW_FILE" 2>/dev/null)
+    case "$h" in
+        "")        echo empty ;;
+        '!'*|'*'*) echo locked ;;
+        ?*)        echo set ;;
+        *)         echo unknown ;;
+    esac
+}
+
+# credential_usable: true when root's hash is `set` (only the real password
+# matches) or `locked` ('!'/'*'): crypt() can never return a lock sentinel, so
+# nobody can authenticate with a password either. `empty` (ANY password
+# authenticates) and `unknown` (state could not be read) are not usable.
+credential_usable() {
+    case "$(root_hash_state)" in
+        set|locked) return 0 ;;
+        *)          return 1 ;;
+    esac
+}
+
+json_credential_refusal() {
+    json_init
+    json_add_boolean "success" 0
+    json_add_string "error" "no-admin-credential"
+    json_add_string "message" "router has no usable root password: refusing. While root's /etc/shadow hash is unset, rpcd accepts ANY password (including an empty one), so an authenticated session cannot be trusted. Set a root password on the router (passwd root) and re-run the board setup."
+    json_dump
+}
+
 case "$1" in
   list)
     echo '{
+      "auth_status":{},
       "config_schema":{},
       "config_get":{},
       "config_set":{"key":"string","value":"string"},
@@ -24,6 +77,36 @@ case "$1" in
     }'
     ;;
   call)
+    # Pre-auth probe: the credential STATE only (empty | locked | set |
+    # unknown). Granted to unauthenticated sessions by the `unauthenticated`
+    # group in tollgate_acl.json, because the board must be able to refuse a
+    # login form BEFORE it has a session. No hash, no password, no username
+    # list — nothing here is a secret, and revealing "this router has no root
+    # password" tells an attacker nothing they would not learn by simply
+    # submitting an empty password.
+    if [ "$2" = "auth_status" ]; then
+        CRED_STATE=$(root_hash_state)
+        json_init
+        json_add_string "username" "root"
+        json_add_string "state" "$CRED_STATE"
+        if [ "$CRED_STATE" = "set" ]; then
+            json_add_boolean "password_set" 1
+        else
+            json_add_boolean "password_set" 0
+        fi
+        json_dump
+        exit 0
+    fi
+
+    # FAIL CLOSED: while root has no usable password, an authenticated session
+    # proves nothing (rpcd accepts any password against an empty hash), so no
+    # method that acts on the router may run. auth_status above is the only
+    # exception — it is the probe that lets the board explain the state.
+    if ! credential_usable; then
+        json_credential_refusal
+        exit 0
+    fi
+
     case "$2" in
       config_schema)
         tollgate --json config schema 2>/dev/null
