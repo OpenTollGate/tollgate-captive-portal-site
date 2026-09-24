@@ -1,4 +1,4 @@
-import { mockUbusCall, mockLogin, mockSessionId } from './ubus.mock';
+import { mockUbusCall, mockLogin, mockSessionId, mockCredentialStatus } from './ubus.mock';
 import { BRAND } from '../brand';
 
 const MOCK = import.meta.env.VITE_MOCK === 'true';
@@ -19,6 +19,81 @@ if (saved) sessionId = saved;
 let rpcId = 0;
 
 const UBUS_ZERO = '00000000000000000000000000000000';
+
+// ─── Router root credential state ────────────────────────────────────
+//
+// The :8090 board must NOT authenticate against a router whose root
+// /etc/shadow hash is unset. rpcd's rpc_login_test_password()
+// (rpcd/session.c) starts with `if (!hash || !*hash) return true;`, so on an
+// empty hash session.login accepts ANY password — including "" — and the
+// session it returns carries this board's ACL (file exec,
+// system.password_set, wallet_drain_cashu). "I got a session" is therefore not
+// evidence of anything while the hash is empty.
+//
+// So the board asks for the credential STATE first, through the rpcd plugin's
+// `tollgate auth_status` method (callable pre-auth via the `unauthenticated`
+// ACL group), and refuses to render a login form at all when it reports no
+// usable credential.
+//
+// States: `set` (a real hash — only the real password matches), `locked`
+// ('!'/'*' — nobody can authenticate by password), `empty` (any password,
+// including "", authenticates), `unknown` (could not be determined: older
+// package, no plugin, unreachable router).
+export type CredentialState = 'set' | 'locked' | 'empty' | 'unknown';
+
+export interface CredentialStatus {
+  state: CredentialState;
+  passwordSet: boolean;
+  username: string;
+}
+
+function parseCredentialStatus(data: any): CredentialStatus {
+  const raw = typeof data?.state === 'string' ? data.state.toLowerCase() : '';
+  const state: CredentialState =
+    raw === 'set' || raw === 'locked' || raw === 'empty' ? raw : 'unknown';
+  return {
+    state,
+    // Be strict about the boolean: only an explicit true/1 counts as "set".
+    passwordSet: data?.password_set === true || data?.password_set === 1,
+    username: typeof data?.username === 'string' && data.username
+      ? data.username
+      : 'root',
+  };
+}
+
+// A credential state we could not read must not be silently treated as safe,
+// but it must not lock an owner out of a board that is probably fine either:
+// `unknown` warns in the UI and the ROUTER-side plugin still refuses every
+// privileged call while the hash is unset (defense in depth).
+function unknownCredentialStatus(): CredentialStatus {
+  return { state: 'unknown', passwordSet: false, username: 'root' };
+}
+
+// fetchCredentialStatus never throws.
+export async function fetchCredentialStatus(): Promise<CredentialStatus> {
+  if (MOCK) {
+    return parseCredentialStatus(mockCredentialStatus());
+  }
+  try {
+    const res = await fetch(UBUS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: ++rpcId,
+        method: 'call',
+        params: [UBUS_ZERO, 'tollgate', 'auth_status', {}],
+      }),
+    });
+    const json = await res.json();
+    if (json.error || !json.result || json.result[0] !== 0) {
+      return unknownCredentialStatus();
+    }
+    return parseCredentialStatus(json.result[1]);
+  } catch {
+    return unknownCredentialStatus();
+  }
+}
 
 // ubus status results we surface by name (rpcd returns these in result[0]).
 const UBUS_STATUS: Record<number, string> = {
@@ -117,6 +192,21 @@ export async function login(
   username: string,
   password: string
 ): Promise<any> {
+  // A blank credential is NEVER sent. On a router whose root hash is unset an
+  // empty password authenticates (rpcd returns true for any password against
+  // an empty hash), so accepting one here would hand out a session that proves
+  // nothing — exactly the state the board refuses to run against. The router
+  // also rejects an empty password at `passwd`, so there is no legitimate case
+  // for an empty one.
+  if (!username.trim()) {
+    throw new Error('Username is required');
+  }
+  if (password === '') {
+    throw new Error(
+      'Enter the router password — an empty password is not accepted'
+    );
+  }
+
   if (MOCK) {
     const data = await mockLogin(username, password);
     sessionId = data.ubus_rpc_session;

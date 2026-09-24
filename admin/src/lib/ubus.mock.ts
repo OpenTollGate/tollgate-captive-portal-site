@@ -230,6 +230,7 @@ export function mockUbusCall(
     'uci.commit': () => ({}),
 
     // tollgate --json methods
+    'tollgate.auth_status': () => mockCredentialStatus(),
     'tollgate.config_schema': () => mockConfigSchema,
     'tollgate.config_get': () => mockConfigGet,
     'tollgate.config_set': () => ({
@@ -289,6 +290,30 @@ export function mockLogin(username: string, _password: string): Promise<any> {
     username,
     expires: 3600,
   });
+}
+
+// mockCredentialStatus answers the `tollgate auth_status` probe with the
+// router's root credential STATE. Default `set` (a normally provisioned
+// router). A test or a demo can ask for another state with the URL query
+// `?mockCredentialState=empty` — which is how the board's fail-closed screen
+// is exercised end-to-end (admin/tests/admin-credential-guard.spec.mjs)
+// without a router.
+export function mockCredentialStatus(): {
+  state: string;
+  password_set: boolean;
+  username: string;
+} {
+  let state = 'set';
+  if (typeof window !== 'undefined' && window.location) {
+    const asked = new URLSearchParams(window.location.search).get(
+      'mockCredentialState'
+    );
+    if (asked) state = asked.toLowerCase();
+  }
+  if (state !== 'set' && state !== 'locked' && state !== 'empty') {
+    state = 'unknown';
+  }
+  return { state, password_set: state === 'set', username: 'root' };
 }
 
 export function mockSessionId(): string {
