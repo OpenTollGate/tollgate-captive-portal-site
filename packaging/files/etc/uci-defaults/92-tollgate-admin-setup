@@ -30,6 +30,61 @@
 # it also repairs the older home=/www + /tollgate/ scheme and a stale
 # HTTPS-only :8090 left behind by an earlier build.
 
+# ─── FAIL CLOSED: never serve the board against an unset root credential ─────
+#
+# rpcd's login check (rpcd/session.c, rpc_login_test_password) starts with
+#
+#     /* password is not set */
+#     if (!hash || !*hash) { return true; }
+#
+# and the distribution's /etc/config/rpcd sets the login password to `$p$root`,
+# i.e. getspnam("root")->sp_pwdp. So while root's /etc/shadow hash is EMPTY —
+# the state a fresh OpenWrt ships in, and the state a deploy that was not given
+# a password used to be left in — ubus session.login accepts ANY password,
+# including the empty string, and the session it returns carries this board's
+# ACL (file exec, system.password_set, wallet_drain_cashu). An admin board in
+# that state is not a login, it is unauthenticated root administration.
+#
+# States:
+#   set    - a real hash: only the real password matches. Serve.
+#   locked - '!' / '*' : crypt() can never match, so no one can authenticate
+#            with a password. Serving it cannot hand out a session. Serve.
+#   empty  - no hash at all: ANY password authenticates. Do NOT serve.
+#   unknown- unreadable (no awk, no /etc/shadow): never assume it is safe.
+#
+# Refusing means: the :8090/:8443 listeners are removed (an already-deployed
+# router converges too). The owner sets a root password — `passwd root` over
+# SSH or LuCI, or the installer now always establishes one — and re-running this
+# script (any install/upgrade of the package) restores the board, because the
+# listener block below always re-asserts the options from scratch.
+SHADOW_FILE="${TOLLGATE_SHADOW_FILE:-/etc/shadow}"
+
+root_hash_state() {
+    local h
+    h=$(awk -F: '$1=="root"{print $2}' "$SHADOW_FILE" 2>/dev/null)
+    case "$h" in
+        "")        echo empty ;;
+        '!'*|'*'*) echo locked ;;
+        ?*)        echo set ;;
+        *)         echo unknown ;;
+    esac
+}
+
+ROOT_CRED_STATE=$(root_hash_state)
+ADMIN_BOARD_ALLOWED=1
+case "$ROOT_CRED_STATE" in
+    set|locked) ;;
+    *)
+        ADMIN_BOARD_ALLOWED=0
+        echo "WARNING: the TollGate admin board (:8090/:8443) is NOT being served:" >&2
+        echo "WARNING:   root has no usable password (state: $ROOT_CRED_STATE)." >&2
+        echo "WARNING:   rpcd's session.login accepts ANY password while root's" >&2
+        echo "WARNING:   /etc/shadow hash is unset, so a session would prove nothing." >&2
+        echo "WARNING:   Set one with 'passwd root' (SSH or LuCI), then re-run this" >&2
+        echo "WARNING:   setup (reinstall/upgrade the package) to enable the board." >&2
+        ;;
+esac
+
 # Brand webroot. __ADMIN_HOME__ is substituted at package build time
 # (/www/<brand>, e.g. /www/tollgate for the generic default build). Fall back to
 # the default webroot if a build forgot to substitute it.
@@ -42,15 +97,26 @@ esac
 uci -q get uhttpd.admin >/dev/null 2>&1 || uci set uhttpd.admin=uhttpd
 uci -q delete uhttpd.admin.listen_http
 uci -q delete uhttpd.admin.listen_https
-uci add_list uhttpd.admin.listen_http='0.0.0.0:8090'
-uci add_list uhttpd.admin.listen_http='[::]:8090'
-uci -q delete uhttpd.admin.cert
-uci -q delete uhttpd.admin.key
-if [ -f /etc/uhttpd.crt ] && [ -f /etc/uhttpd.key ]; then
-    uci add_list uhttpd.admin.listen_https='0.0.0.0:8443'
-    uci add_list uhttpd.admin.listen_https='[::]:8443'
-    uci set uhttpd.admin.cert='/etc/uhttpd.crt'
-    uci set uhttpd.admin.key='/etc/uhttpd.key'
+if [ "$ADMIN_BOARD_ALLOWED" = "1" ]; then
+    uci add_list uhttpd.admin.listen_http='0.0.0.0:8090'
+    uci add_list uhttpd.admin.listen_http='[::]:8090'
+    uci -q delete uhttpd.admin.cert
+    uci -q delete uhttpd.admin.key
+    if [ -f /etc/uhttpd.crt ] && [ -f /etc/uhttpd.key ]; then
+        uci add_list uhttpd.admin.listen_https='0.0.0.0:8443'
+        uci add_list uhttpd.admin.listen_https='[::]:8443'
+        uci set uhttpd.admin.cert='/etc/uhttpd.crt'
+        uci set uhttpd.admin.key='/etc/uhttpd.key'
+    fi
+else
+    # No listener at all while the router has no usable root credential: the
+    # board must be UNREACHABLE, not merely unhelpful. The deletes are repeated
+    # here (rather than relying on the pair above) so this branch alone is
+    # sufficient to take a router that ALREADY serves :8090/:8443 off the air.
+    uci -q delete uhttpd.admin.listen_http
+    uci -q delete uhttpd.admin.listen_https
+    uci -q delete uhttpd.admin.cert
+    uci -q delete uhttpd.admin.key
 fi
 uci set uhttpd.admin.ubus_prefix='/ubus'
 uci set uhttpd.admin.script_timeout='60'
