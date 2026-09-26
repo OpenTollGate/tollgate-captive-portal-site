@@ -193,27 +193,65 @@ if uci -q get nodogsplash.@nodogsplash[0] >/dev/null 2>&1; then
 fi
 
 # LuCI (uhttpd.main :8080) presents a login over plain HTTP, which browsers
-# flag as an insecure password field. Redirect it to the TLS listener when one
-# is actually configured on uhttpd.main; the board's own :8090 stays HTTP by
-# design.
+# flag as an insecure password field. Redirect it to the TLS listener when that
+# listener is real AND its identity covers this router; the board's own :8090
+# stays HTTP by design.
 #
-# The redirect target is uhttpd.main's OWN listen_https. "A cert/key exists" is
-# NOT a sufficient guard for it: uhttpd.main.listen_https is configured by the
-# module's 99-tollgate-setup, which only runs a FULL setup pass (first boot or a
-# setup-version change) - an apk upgrade takes its narrow branch. A router whose
-# certs appeared after its last full setup therefore has certs but no :443
-# listener, and enabling the redirect there sends every :8080 LuCI request to a
-# dead port (the 2026-09-21 pre13 LuCI lockout). Require a readable, non-empty
-# cert/key pair AND a configured listener, and always write an explicit value so
-# a stale '1' left by an earlier install is repaired rather than kept.
+# uhttpd.main.redirect_https is a DERIVED value, not a configured one. Two
+# conditions, both necessary, both checked here:
+#
+#   1. a TLS listener is actually configured on uhttpd.main. "A cert/key pair
+#      exists" is NOT a sufficient guard: uhttpd.main.listen_https is configured
+#      by the module's 99-tollgate-setup, which used to run a FULL setup pass only
+#      (first boot or a setup-version change) and skipped the uhttpd contract on
+#      an apk upgrade. A router whose certs appeared after its last full setup
+#      therefore had certs but no :443 listener, and enabling the redirect there
+#      sends every :8080 LuCI request to a dead port (the 2026-09-21 pre13 LuCI
+#      lockout). Condition 1 is what that incident added.
+#
+#   2. the identity on that listener COVERS the address a browser used to reach
+#      this router. Readable + non-empty is not coverage: the OpenWrt image ships
+#      a placeholder certificate (subject CN=OpenWrt, SAN DNS:OpenWrt, 561 bytes)
+#      that satisfies every existence check while covering neither the router's
+#      hostname nor its LAN IP. Measured on the bench MT3000 (pre17, 2026-09-26)
+#      before this change: callers were answered a 307 redirect to the TLS
+#      listener at the LAN IP, and the browser showed a hard certificate error on
+#      an identity it can never validate. Requiring coverage is what that
+#      incident added.
+#
+# Condition 2 delegates to the module's own x509 check - `tollgate ssl covers`,
+# src/cmd/tollgate-cli/ssl.go - so the shell, the Go side and a browser cannot
+# disagree about what a usable identity means (SAN validation via
+# x509.VerifyHostname; a CommonName with no SAN extension is deliberately not
+# coverage). The shell FAILS CLOSED: an absent or unusable CLI is "does not
+# cover", which keeps the hop off rather than pointing a browser at an identity
+# nobody checked.
+#
+# Always write an explicit value, so a stale '1' left by an earlier install is
+# repaired rather than kept.
 #
 # Keep this rule identical to the module's 99-tollgate-setup: both scripts write
-# uhttpd.main.redirect_https, install order decides which lands last, so the two
-# must agree on the value.
+# uhttpd.main.redirect_https and install order decides which lands last (the
+# module's postinst runs 90, 99, 92 - so 92 lands last there; numeric
+# uci-defaults order at boot is 90, 92, 99 - so 99 lands last there). Two writers
+# that evaluate the same rule agree in either order; two writers with a premise
+# of their own are the defect. packaging/tests/test-redirect-https-single-rule.sh
+# fails if either script decides this value on its own.
+TOLLGATE_CLI="${TOLLGATE_CLI:-/usr/bin/tollgate}"
+
+cert_covers_router() {
+    [ -n "$1" ] || return 1
+    [ -x "$TOLLGATE_CLI" ] || return 1
+    "$TOLLGATE_CLI" ssl covers "$1" >/dev/null 2>&1
+}
+
 if uci -q get uhttpd.main >/dev/null 2>&1; then
-    if [ -r /etc/uhttpd.crt ] && [ -s /etc/uhttpd.crt ] &&
-       [ -r /etc/uhttpd.key ] && [ -s /etc/uhttpd.key ] &&
-       [ -n "$(uci -q get uhttpd.main.listen_https 2>/dev/null)" ]; then
+    main_cert=$(uci -q get uhttpd.main.cert 2>/dev/null)
+    main_key=$(uci -q get uhttpd.main.key 2>/dev/null)
+    if [ -n "$main_cert" ] && [ -r "$main_cert" ] && [ -s "$main_cert" ] &&
+       [ -n "$main_key" ] && [ -r "$main_key" ] && [ -s "$main_key" ] &&
+       [ -n "$(uci -q get uhttpd.main.listen_https 2>/dev/null)" ] &&
+       cert_covers_router "$main_cert"; then
         uci set uhttpd.main.redirect_https='1'
     else
         uci set uhttpd.main.redirect_https='0'

@@ -79,6 +79,37 @@ All notable changes to this project are documented here.
   ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
 
 ### Fixed
+- **OpenWrt admin setup: the LuCI `:8080` → HTTPS redirect is now derived from a
+  covering certificate, not from a certificate merely existing.** `uhttpd.main.redirect_https`
+  is a derived value written by two scripts — this repo's `92-tollgate-admin-setup`
+  and the module's `99-tollgate-setup` — and the install order differs by path
+  (the module's postinst runs `90, 99, 92`, so `92` lands last there; numeric
+  uci-defaults order at boot is `90, 92, 99`, so `99` lands last there). This
+  script kept the older premise: a readable, non-empty cert/key pair plus a
+  configured listener. That premise accepts the **OpenWrt image's placeholder
+  certificate** (subject `CN=OpenWrt`, `SAN DNS:OpenWrt`, 561 bytes), which
+  covers neither the router's hostname nor its LAN IP — so on a router whose TLS
+  identity does not cover it, the last writer armed `307 → https://<lan-ip>/` and
+  every admin login began with a hard certificate error (measured on the bench
+  MT3000, pre17, 2026-09-26). Condition 1 (a listener must be configured) is kept
+  from the 2026-09-21 pre13 fix; condition 2 is new: the identity must **cover**
+  this router, delegated to the module's own check (`tollgate ssl covers`, so the
+  shell, the Go side and a browser cannot disagree about what a usable identity
+  is) and **failing closed** when that CLI is unusable. The value is still written
+  explicitly in both directions, so a stale `1` from an earlier install is
+  repaired rather than kept.
+- **Packaging guard for that value (`packaging/tests/test-redirect-https-single-rule.sh`,
+  new):** fails if either writer carries a premise of its own instead of deriving
+  the value through the shared coverage check — the class of defect that produced
+  both the pre13 LuCI lockout and the pre17 certificate error. It reads this
+  repo's shipped script and the module's (`MODULE_SCRIPT`/`MODULE_DIR`, or a
+  shallow fetch of the module repo; strict in CI), asserts the shared predicate,
+  the fail-closed CLI gate, the explicit write in both directions and the absence
+  of the image's fixed placeholder path, and carries a negative control (the
+  superseded existence-only rule) that the same checker must reject. The
+  `test-92-luci-redirect-guard.sh` harness gains the coverage cases, including the
+  defect state itself (a stale `1` with a non-covering identity must be repaired
+  to `0`) and the same negative control. Both are wired into CI.
 - **Runtime brand slot (release blocker):** `admin/src/brand.ts` loaded the slot
   with `import.meta.glob('../../brand/*.json')`. A relative glob is resolved
   against the *importing module*, so the pattern pointed at `<repo>/brand/` — a
