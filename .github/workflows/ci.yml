@@ -49,6 +49,23 @@ jobs:
         run: |
           sh packaging/tests/test-92-admin-credential-guard.sh
           sh packaging/tests/test-rpcd-tollgate-credential-guard.sh
+      - name: Packaging guard (LuCI redirect derived from a covering certificate)
+        # uhttpd.main.redirect_https is a DERIVED value written by TWO scripts —
+        # this repo's 92-tollgate-admin-setup and the module's 99-tollgate-setup —
+        # and last-writer-wins differs by install path (postinst: 90, 99, 92;
+        # numeric uci-defaults at boot: 90, 92, 99). They only agree if they
+        # evaluate the same rule, so:
+        #   * test-92-luci-redirect-guard.sh runs the shipped 92 block with a
+        #     stubbed uci + CLI: a non-covering identity must repair a stale
+        #     redirect to 0, an unusable CLI must fail closed, and the block must
+        #     not decide from the image's placeholder path (the pre17 bench
+        #     certificate error).
+        #   * test-redirect-https-single-rule.sh reads BOTH writers (the module's
+        #     is fetched if no checkout is given) and fails if either carries a
+        #     premise of its own instead of the shared `tollgate ssl covers` check.
+        run: |
+          sh packaging/tests/test-92-luci-redirect-guard.sh
+          sh packaging/tests/test-redirect-https-single-rule.sh
       - run: npm test
       - name: Packaging guard (foreign-skin cleanup)
         run: sh tests/packaging/foreign-skins-guard.sh .
