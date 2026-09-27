@@ -10,6 +10,61 @@ const MOCK_SESSION = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
 
 const now = () => Math.floor(Date.now() / 1000);
 
+// Every config_set the board makes, recorded as {key, value_len} — NEVER the
+// value. It exists so a browser test can assert that the board SENT a
+// passphrase (one call, the right key, the right length) while also asserting
+// that nothing in the rendered page carries it: if the mock kept the value,
+// the test could not tell "the board sent it" from "the board echoed it".
+function recordConfigSet(key: string, value: string) {
+  try {
+    const calls = JSON.parse(window.sessionStorage.getItem('tg.mock.config_set') || '[]');
+    calls.push({ key, value_len: value.length });
+    window.sessionStorage.setItem('tg.mock.config_set', JSON.stringify(calls));
+  } catch {
+    // sessionStorage unavailable (private mode, sandboxed frame): recording is
+    // best-effort and only the tests depend on it.
+  }
+}
+
+// A value the module cannot converge is reported the same way whichever reply
+// path carried it: `applied: [{status: 'refused'}]`, with `success` still true.
+// Nothing but a real router (an `admin_access` naming a bridge it does not have)
+// can produce one, so a test or a demo asks for it with the URL query
+// `?mockRefuse=<key>` — or `?mockRefuse=config_save` for the wholesale path —
+// mirroring how `mockCredentialState` selects the fail-closed screen. The
+// refusal deliberately carries NO `warning`, only `detail`: that is the harsher
+// of the two shapes the module can send, and the one the board used to render as
+// a green save.
+function mockRefusedKey(): string {
+  if (typeof window === 'undefined' || !window.location) return '';
+  return new URLSearchParams(window.location.search).get('mockRefuse') || '';
+}
+
+function refusedReply(key: string, value: string, wholesale = false) {
+  // The message mirrors the module's own rule, including the one that matters
+  // most here: a refusal must never echo a value back, and a secret's value is
+  // never in the message at all — a mock that leaked one would teach whatever
+  // spec copies it to assert on leaked text.
+  const secret = key === 'private_key';
+  const what = secret ? `Set ${key} (value withheld)` : `Set ${key} = ${value}`;
+  return {
+    success: true,
+    message: wholesale
+      ? 'Configuration saved; runtime: 0 applied, 1 refused'
+      : `${what}; runtime: 0 applied, 1 refused`,
+    data: {
+      ...(wholesale ? {} : { key, value }),
+      applied: [
+        {
+          setting: key,
+          status: 'refused',
+          detail: `${key} names a bridge this router does not have; the board keeps its previous scope`,
+        },
+      ],
+    },
+  };
+}
+
 const board = {
   hostname: `${BRAND.id}-gw1`,
   model: 'GL.iNet GL-MT3000',
@@ -65,6 +120,12 @@ const wirelessStatus = {
     config: { channel: 6, hwmode: '11g', htmode: 'HT40', country: 'NO' },
     interfaces: [
       { ifname: 'wlan0', ssid: BRAND.id, encryption: 'psk2', hidden: false, mode: 'Master', network: ['lan'] },
+      // The private (management) SSID, served by its own wifi-iface. Its UCI
+      // section name is what the WiFi page keys on to route an edit through
+      // `tollgate config_set` instead of raw `uci set` — the module owns these
+      // credentials, so a UCI write here would be reverted at the next service
+      // start.
+      { section: 'private_radio0', ifname: 'wlan0-private', ssid: `${BRAND.id}-private`, encryption: 'psk2+ccmp', hidden: false, mode: 'Master', network: ['private'] },
     ],
   },
   radio1: {
@@ -100,6 +161,10 @@ const mockConfigSchema = {
       { name: 'Margin', json_key: 'margin', type: 'float64', description: 'Margin factor (0.0-1.0)', default: 0.1, required: false, editable: true, min: 0, max: 1 },
       { name: 'ShowSetup', json_key: 'show_setup', type: 'bool', description: 'Show setup wizard', default: true, required: true, editable: true },
       { name: 'ResellerMode', json_key: 'reseller_mode', type: 'bool', description: 'Enable reseller mode', default: false, required: true, editable: true },
+      { name: 'PrivateSSID', json_key: 'private_ssid', type: 'string', description: 'Private network (management) SSID. Empty keeps the SSID the router minted at setup.', default: '', required: false, editable: true },
+      { name: 'PrivateKey', json_key: 'private_key', type: 'string', description: 'Private network WPA passphrase (8-63 characters). Empty keeps the passphrase the router already has. Write-only.', default: '', required: false, editable: true, secret: true },
+      { name: 'PrivateEncryption', json_key: 'private_encryption', type: 'string', description: 'Private network encryption.', default: 'psk2+ccmp', required: true, editable: true, enum: ['psk2+ccmp', 'psk2+tkip+ccmp', 'psk-mixed+ccmp'] },
+      { name: 'AdminAccess', json_key: 'admin_access', type: 'string', description: 'Which network may reach the administration surfaces.', default: 'both', required: true, editable: true, enum: ['br-private', 'br-mgmt', 'both', 'loopback-only'] },
       { name: 'AcceptedMints', json_key: 'accepted_mints', type: 'array', description: 'Accepted Cashu mints', required: true, editable: true, children: [
         { name: 'URL', json_key: 'url', type: 'string', description: 'Mint URL', required: true, editable: true },
         { name: 'PricePerStep', json_key: 'price_per_step', type: 'uint64', description: 'Price per step in sats', default: 1, required: true, editable: true },
@@ -126,6 +191,9 @@ const mockConfigGet = {
       margin: 0.1,
       show_setup: true,
       reseller_mode: false,
+      private_ssid: 'c08r4d0r-MOCK',
+      private_encryption: 'psk2+ccmp',
+      admin_access: 'both',
       accepted_mints: [
         { url: 'https://testnut-compat.mints.orangesync.tech', min_balance: 64, balance_tolerance_percent: 10, payout_interval_seconds: 60, min_payout_amount: 128, price_per_step: 1, price_unit: 'sats', purchase_min_steps: 0 },
       ],
@@ -155,6 +223,10 @@ const mockConfigGet = {
         { name: 'treasury', nsec: 'nsec1...', pubkey: 'npub1...' },
       ],
     },
+    // Which write-only fields have a stored value. The module reports this
+    // INSTEAD of the value (`private_key` is blanked on every read path), and
+    // the board's passphrase input is prefilled from nothing because of it.
+    secret_set: { private_key: true },
   },
 };
 
@@ -233,12 +305,40 @@ export function mockUbusCall(
     'tollgate.auth_status': () => mockCredentialStatus(),
     'tollgate.config_schema': () => mockConfigSchema,
     'tollgate.config_get': () => mockConfigGet,
-    'tollgate.config_set': () => ({
-      success: true,
-      message: `Set ${_params.key} = ${_params.value} (restart tollgate-wrt to apply)`,
-      data: { key: _params.key, value: _params.value },
-    }),
-    'tollgate.config_save': () => ({ success: true, message: 'Configuration saved (restart tollgate-wrt to apply)' }),
+    'tollgate.config_set': () => {
+      const key = String(_params?.key ?? '');
+      const value = String(_params?.value ?? '');
+      // A secret is NEVER echoed back: the module answers `Set private_key
+      // (value withheld)` and withholds it from `data` too, and the mock has to
+      // do the same or the board's write-only rendering would never be
+      // exercised. Record the call first (key + length only, never the value)
+      // so a browser test can prove the board SENT it without the secret ever
+      // being rendered into the page.
+      recordConfigSet(key, value);
+      if (mockRefusedKey() === key) return refusedReply(key, value);
+      const secret = key === 'private_key';
+      return {
+        success: true,
+        message: secret
+          ? `Set ${key} (value withheld); runtime: 1 applied`
+          : `Set ${key} = ${value} (restart tollgate-wrt to apply); runtime: 1 applied`,
+        data: {
+          key,
+          ...(secret ? {} : { value }),
+          applied: [{ setting: key, status: 'applied' }],
+        },
+      };
+    },
+    // The wholesale save reports per setting what happened, exactly like
+    // `config_set` (see the module's `data.applied`): the board renders a
+    // declined or failed step from this array, so the mock mirrors its shape.
+    'tollgate.config_save': () => (mockRefusedKey() === 'config_save'
+      ? refusedReply('admin_access', 'br-mgmt', true)
+      : {
+          success: true,
+          message: 'Configuration saved; runtime: 1 applied',
+          data: { applied: [{ setting: 'configuration', status: 'applied' }] },
+        }),
     'tollgate.config_save_identities': () => ({ success: true, message: 'Identities saved (restart tollgate-wrt to apply)' }),
     'tollgate.wallet_balance': () => mockWalletBalance,
     'tollgate.wallet_info': () => mockWalletInfo,

@@ -40,6 +40,41 @@ All notable changes to this project are documented here.
     mandatory steps, so this cannot regress silently.
 
 ### Added
+- **The router's own networks are operator settings: the private network's
+  credentials, and which network may reach the board.** The Settings page gains
+  two cards. *Private Network (management SSID)* carries `private_ssid`,
+  `private_key` and `private_encryption` — the credentials the module's
+  `99-tollgate-setup` minted and the encryption mode it rewrote on every full
+  setup pass — and *Administration Access* carries `admin_access`
+  (`both` | `br-private` | `br-mgmt` | `loopback-only`), which decides which
+  network may reach the board on `:8090/:8443` and LuCI on `:8080/:443`. Both
+  are the module's fields, set in `/etc/tollgate/config.json` and rendered from
+  its schema; the board is a view of them, not a second store. Decision record:
+  `tollgate-module-basic-go` `docs/architecture/lan-port-management-bridge-decision.md`
+  (D9-D12).
+  - **The passphrase is write-only in the UI too.** The schema marks it
+    `secret`, so `config get` blanks it and reports `secret_set.private_key`
+    instead; the card renders a password input, empty on every load — including
+    after a reload — that says a value is *stored* rather than pretending the
+    field is unset. The value the operator types is sent once (the module does
+    not echo it either) and the field goes back to empty with the "set" label,
+    so a later wholesale save cannot resend it and a page that is left open
+    does not hold the management network's WPA key.
+  - **The WiFi page stops being a second writer.** Editing a private radio
+    there wrote one `wifi-iface` by raw `uci set`, which the module's applier
+    now reverts at the next service start, and which let the 2.4 GHz and 5 GHz
+    SSIDs drift apart. The edit goes through `tollgate config_set`
+    (`private_ssid`, and `private_key` only when a password was typed), which is
+    the one writer, applies immediately, and writes both radios.
+  - **A successful save says so.** The WiFi page's save message used to be
+    rendered *inside* the edit form, which closes on success — so a successful
+    save reported nothing at all while a failure reported in red; and the
+    Settings page inferred its tone from the message prefix, so the module's
+    `Set admin_access = …; runtime: 1 applied` came back as an error. Tone is
+    now state on both pages, the message outlives the form, and the board
+    surfaces what the module actually converged onto the router (including a
+    `refused: …` scope, e.g. `br-mgmt` before the wired bridge exists).
+
 - **Cashu mint auto-select:** the purchase page now derives the mint from the
   pasted e-cash note and selects the matching access option, instead of making
   the user pick the mint by hand (the note states which mint issued it, and the
