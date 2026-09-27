@@ -8,12 +8,15 @@
 # a build can never point at a leftover webroot from another brand. Do NOT guess
 # the webroot by directory existence.
 #
-# Scheme: the board is served over plain HTTP on :8090 — the URL people type
-# (http://<router>:8090/) and the same scheme as LuCI on :8080. When a cert/key
-# pair exists, an OPT-IN HTTPS listener is added on :8443, because one uhttpd
-# instance cannot serve HTTP and HTTPS on the same port (bind: Address already
-# in use) and an HTTPS-only :8090 would make http://<router>:8090/ fail outright.
-# Never advertise a TLS listener without a cert — uhttpd would fail to start it.
+# Scheme: the board answers on a plain-HTTP :8090 and a TLS :8443 — one uhttpd
+# instance cannot serve HTTP and HTTPS on the SAME port (bind: Address already
+# in use), so the URL people type (http://<router>:8090/) stays bound; an
+# HTTPS-only :8090 would make it fail outright. :8090 then REDIRECTS to :8443,
+# so the board's login form is never typed on a cleartext origin — but only
+# while :8443 carries an identity that COVERS this router. The identity is the
+# MODULE's provisioned certificate (below); the image's placeholder pair keeps a
+# listener alive at most, and never arms the hop. Never advertise a TLS listener
+# without a cert — uhttpd would fail to start it.
 #
 # LuCI stays on uhttpd.main (:8080; webroot /www) and the captive portal on
 # uhttpd.portal (:2051). :8090 (and :8443) belong to the admin instance ALONE,
@@ -93,6 +96,28 @@ case "$ADMIN_HOME" in
   *__ADMIN_HOME__*|"") ADMIN_HOME="/www/tollgate" ;;
 esac
 
+# The two certificate pairs that can end up on the board's TLS listener.
+#
+#   TOLLGATE_SSL_CERT/KEY  the identity the MODULE provisions for THIS router
+#                          (`tollgate ssl apply`, driven by the module's
+#                          packaging/files/etc/uci-defaults/99-tollgate-setup),
+#                          with this router's hostname, <hostname>.lan alias and
+#                          LAN IP in its SANs. It is the only pair a browser can
+#                          validate here, and the module owns it: this script
+#                          consumes it and never generates one.
+#   IMAGE_CERT/KEY         the OpenWrt image's own pair, a PLACEHOLDER (subject
+#                          CN=OpenWrt, SAN DNS:OpenWrt). Usable as a fallback
+#                          LISTENER identity, so a router that could not be
+#                          provisioned keeps its :8443 listener instead of
+#                          losing it — never as an identity to send a browser to.
+#
+# Both are env-overridable so the offline packaging tests can point them at a
+# private temp dir, exactly like TOLLGATE_SHADOW_FILE above.
+TOLLGATE_SSL_CERT="${TOLLGATE_SSL_CERT:-/etc/tollgate/ssl/server.crt}"
+TOLLGATE_SSL_KEY="${TOLLGATE_SSL_KEY:-/etc/tollgate/ssl/server.key}"
+IMAGE_CERT="${UHTTPD_IMAGE_CERT:-/etc/uhttpd.crt}"
+IMAGE_KEY="${UHTTPD_IMAGE_KEY:-/etc/uhttpd.key}"
+
 # Create or repair the admin instance.
 uci -q get uhttpd.admin >/dev/null 2>&1 || uci set uhttpd.admin=uhttpd
 uci -q delete uhttpd.admin.listen_http
@@ -102,11 +127,27 @@ if [ "$ADMIN_BOARD_ALLOWED" = "1" ]; then
     uci add_list uhttpd.admin.listen_http='[::]:8090'
     uci -q delete uhttpd.admin.cert
     uci -q delete uhttpd.admin.key
-    if [ -f /etc/uhttpd.crt ] && [ -f /etc/uhttpd.key ]; then
+    # The provisioned identity FIRST — it is the one built to cover this router.
+    # The image's pair is the fallback listener identity only; which of the two
+    # is armed as a redirect target is decided further down, by the shared
+    # coverage predicate.
+    if [ -r "$TOLLGATE_SSL_CERT" ] && [ -s "$TOLLGATE_SSL_CERT" ] &&
+       [ -r "$TOLLGATE_SSL_KEY" ] && [ -s "$TOLLGATE_SSL_KEY" ]; then
+        admin_tls_cert="$TOLLGATE_SSL_CERT"
+        admin_tls_key="$TOLLGATE_SSL_KEY"
+    elif [ -r "$IMAGE_CERT" ] && [ -s "$IMAGE_CERT" ] &&
+         [ -r "$IMAGE_KEY" ] && [ -s "$IMAGE_KEY" ]; then
+        admin_tls_cert="$IMAGE_CERT"
+        admin_tls_key="$IMAGE_KEY"
+    else
+        admin_tls_cert=""
+        admin_tls_key=""
+    fi
+    if [ -n "$admin_tls_cert" ]; then
         uci add_list uhttpd.admin.listen_https='0.0.0.0:8443'
         uci add_list uhttpd.admin.listen_https='[::]:8443'
-        uci set uhttpd.admin.cert='/etc/uhttpd.crt'
-        uci set uhttpd.admin.key='/etc/uhttpd.key'
+        uci set uhttpd.admin.cert="$admin_tls_cert"
+        uci set uhttpd.admin.key="$admin_tls_key"
     fi
 else
     # No listener at all while the router has no usable root credential: the
@@ -117,6 +158,9 @@ else
     uci -q delete uhttpd.admin.listen_https
     uci -q delete uhttpd.admin.cert
     uci -q delete uhttpd.admin.key
+    # ...and the derived hop goes with them: a section with no TLS listener has
+    # nothing a redirect could land on.
+    uci -q delete uhttpd.admin.redirect_https
 fi
 uci set uhttpd.admin.ubus_prefix='/ubus'
 uci set uhttpd.admin.script_timeout='60'
@@ -194,8 +238,8 @@ fi
 
 # LuCI (uhttpd.main :8080) presents a login over plain HTTP, which browsers
 # flag as an insecure password field. Redirect it to the TLS listener when that
-# listener is real AND its identity covers this router; the board's own :8090
-# stays HTTP by design.
+# listener is real AND its identity covers this router; the board on :8090 is
+# redirected by the same rule, derived from the same predicate, just below.
 #
 # uhttpd.main.redirect_https is a DERIVED value, not a configured one. Two
 # conditions, both necessary, both checked here:
@@ -259,6 +303,43 @@ if uci -q get uhttpd.main >/dev/null 2>&1; then
     uci commit uhttpd
 fi
 
+# --- the BOARD's own listener: the same rule, the same predicate -------------
+#
+# The board's login form has the same problem LuCI's has — it is a password field
+# on a cleartext origin — so :8090 is redirected to the instance's OWN TLS
+# listener (:8443) under exactly the rule above:
+#
+#   1. a TLS listener is configured on uhttpd.admin (nothing to redirect to
+#      otherwise — uhttpd.main's :443 is a different instance and a different
+#      process),
+#   2. the identity ON that listener COVERS this router. This is the whole point
+#      of the change: the board used to be pinned to the image's placeholder pair
+#      (/etc/uhttpd.crt, CN=OpenWrt), which satisfies every existence check while
+#      covering neither the router's hostname nor its LAN IP, so a :8443 listener
+#      built on it is a hard certificate error in a browser. The module's
+#      provisioned identity is used instead, and the hop is armed only when that
+#      identity actually validates the address being used.
+#
+# The verdict comes from `cert_covers_router` above — the module's own
+# `tollgate ssl covers` — so the shell, the Go side and a browser cannot disagree
+# about what a usable identity means. It FAILS CLOSED: an unusable CLI is "does
+# not cover", which keeps the hop off rather than pointing a browser at an
+# identity nobody checked. An explicit value is written in both directions, so a
+# stale '1' from an earlier install is repaired rather than kept.
+if [ "$ADMIN_BOARD_ALLOWED" = "1" ] && uci -q get uhttpd.admin >/dev/null 2>&1; then
+    admin_cert=$(uci -q get uhttpd.admin.cert 2>/dev/null)
+    admin_key=$(uci -q get uhttpd.admin.key 2>/dev/null)
+    if [ -n "$admin_cert" ] && [ -r "$admin_cert" ] && [ -s "$admin_cert" ] &&
+       [ -n "$admin_key" ] && [ -r "$admin_key" ] && [ -s "$admin_key" ] &&
+       [ -n "$(uci -q get uhttpd.admin.listen_https 2>/dev/null)" ] &&
+       cert_covers_router "$admin_cert"; then
+        uci set uhttpd.admin.redirect_https='1'
+    else
+        uci set uhttpd.admin.redirect_https='0'
+    fi
+    uci commit uhttpd
+fi
+
 # Resolve .apk-new files left by apk when existing files were modified.
 find "$ADMIN_HOME" -name '*.apk-new' \
     -exec sh -c 'mv "$1" "${1%.apk-new}"' _ {} \; 2>/dev/null
@@ -277,6 +358,23 @@ if uci -q get uhttpd.main >/dev/null 2>&1 &&
     if ! awk '$2 ~ /:01BB$/ && $4 == "0A" { f = 1 } END { exit !f }' \
              /proc/net/tcp /proc/net/tcp6 2>/dev/null; then
         uci set uhttpd.main.redirect_https='0'
+        uci commit uhttpd
+        /etc/init.d/uhttpd restart
+    fi
+fi
+
+# Fail open, same shape, for the board's own hop: uhttpd accepts a listen_https
+# in config and can still fail to bind :8443 (unusable cert, port conflict), and
+# a :8090 that 307s into a dead port is a board nobody can open — the pre13
+# lockout, one surface over. Verify a LISTEN socket on :8443 (0x20FB) and, if it
+# is missing, drop the hop and restart once. This only ever turns the redirect
+# OFF.
+if [ "$ADMIN_BOARD_ALLOWED" = "1" ] && uci -q get uhttpd.admin >/dev/null 2>&1 &&
+   [ "$(uci -q get uhttpd.admin.redirect_https 2>/dev/null)" = "1" ]; then
+    sleep 1
+    if ! awk '$2 ~ /:20FB$/ && $4 == "0A" { f = 1 } END { exit !f }' \
+             /proc/net/tcp /proc/net/tcp6 2>/dev/null; then
+        uci set uhttpd.admin.redirect_https='0'
         uci commit uhttpd
         /etc/init.d/uhttpd restart
     fi

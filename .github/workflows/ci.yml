@@ -66,6 +66,18 @@ jobs:
         run: |
           sh packaging/tests/test-92-luci-redirect-guard.sh
           sh packaging/tests/test-redirect-https-single-rule.sh
+      - name: Packaging guard (admin board TLS identity + derived redirect)
+        # The :8090 board was the last surface still pinned to the OpenWrt
+        # image's placeholder certificate (/etc/uhttpd.crt, CN=OpenWrt) and it
+        # never redirected its own plain-HTTP port. This guard runs the shipped
+        # blocks with a stubbed uci + CLI and pins the rule: the board's :8443
+        # listener carries the identity the MODULE provisioned
+        # (/etc/tollgate/ssl/server.{crt,key}), the image's pair is only a
+        # fallback LISTENER identity, and uhttpd.admin.redirect_https is derived
+        # from the SAME coverage predicate as the LuCI hop — armed only when the
+        # identity covers this router, explicit in both directions, and dropped
+        # again (fail open) when :8443 never came up.
+        run: sh packaging/tests/test-92-admin-board-tls.sh
       - run: npm test
       - name: Packaging guard (foreign-skin cleanup)
         run: sh tests/packaging/foreign-skins-guard.sh .
