@@ -289,7 +289,14 @@ export function mockUbusCall(
         },
       };
     },
-    'tollgate.config_save': () => ({ success: true, message: 'Configuration saved (restart tollgate-wrt to apply)' }),
+    // The wholesale save reports per setting what happened, exactly like
+    // `config_set` (see the module's `data.applied`): the board renders a
+    // declined or failed step from this array, so the mock mirrors its shape.
+    'tollgate.config_save': () => ({
+      success: true,
+      message: 'Configuration saved; runtime: 1 applied',
+      data: { applied: [{ setting: 'configuration', status: 'applied' }] },
+    }),
     'tollgate.config_save_identities': () => ({ success: true, message: 'Identities saved (restart tollgate-wrt to apply)' }),
     'tollgate.wallet_balance': () => mockWalletBalance,
     'tollgate.wallet_info': () => mockWalletInfo,

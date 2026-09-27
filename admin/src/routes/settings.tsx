@@ -128,6 +128,30 @@ export default function Settings() {
     setConfigValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  /**
+   * The module reports what it converged onto the router as `applied` on BOTH
+   * reply paths — `config_set` and the wholesale `config_save`. `refused` means
+   * it declined the value (for example an admin_access naming a bridge this
+   * router does not have) and `failed` means the step did not land; neither is a
+   * save the operator can be told succeeded. `warning` is optional, so it must
+   * not be the condition, and every entry must be inspected rather than the
+   * first one: the board's own failure was rendering a declined step as a green
+   * save.
+   */
+  function refusalInApplied(res: any): string | null {
+    const applied = res?.data?.applied;
+    if (!Array.isArray(applied)) return null;
+    for (const entry of applied) {
+      if (entry?.status === 'refused') {
+        return `Refused: ${entry.warning || entry.detail || 'the module declined this change'}`;
+      }
+      if (entry?.status === 'failed') {
+        return `Failed: ${entry.warning || entry.detail || 'the module could not apply this change'}`;
+      }
+    }
+    return null;
+  }
+
   async function saveSchemaChanges() {
     const changed: Record<string, any> = {};
     const secretKeys = schema.filter((f) => f.secret).map((f) => f.json_key);
@@ -164,6 +188,15 @@ export default function Settings() {
           setSaving(false);
           return;
         }
+        // The wholesale path reports `applied` the same way the per-key path
+        // does, so a step the module declined must be surfaced here too.
+        const refused = refusalInApplied(res);
+        if (refused) {
+          setSchemaMsgIsError(true);
+          setMessage('schema', refused);
+          setSaving(false);
+          return;
+        }
         appliedMessage = res.message || '';
       } else {
         for (const [key, value] of Object.entries(changed)) {
@@ -174,19 +207,18 @@ export default function Settings() {
             setSaving(false);
             return;
           }
-          // The module reports what it converged onto the router (the private
-          // network's credentials and the admin-access scope apply immediately;
-          // the rest is read at service start). Surface it rather than the
-          // generic reminder.
-          const result = (res.data?.applied || []).find((r: any) => !r.detail || !r.detail.includes('not applicable'));
-          if (res.message) {
-            appliedMessage = res.message;
-          }
-          if (result && result.status === 'refused' && result.warning) {
+          const refused = refusalInApplied(res);
+          if (refused) {
             setSchemaMsgIsError(true);
-            setMessage('schema', `Refused: ${result.warning}`);
+            setMessage('schema', refused);
             setSaving(false);
             return;
+          }
+          // Surface what the module converged onto the router (the private
+          // network's credentials and the admin-access scope apply immediately;
+          // the rest is read at service start) rather than the generic reminder.
+          if (res.message) {
+            appliedMessage = res.message;
           }
         }
       }
