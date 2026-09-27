@@ -170,4 +170,43 @@ test.describe('admin board: private network + administration access', () => {
     ]);
     expect(await page.locator('body').innerText()).not.toContain(psk);
   });
+
+  // The module refuses a value it cannot converge (an `admin_access` naming a
+  // bridge this router does not have) by reporting `status: 'refused'` inside
+  // `applied` while `success` stays true. The board used to render exactly that
+  // as a green "saved" — the whole point of the fix these two specs pin.
+  test('a refused setting is reported as refused, never as saved', async ({ page }) => {
+    // The query has to precede the `#`/settings fragment or the app never sees it.
+    await page.goto('./?mockCredentialState=set&mockRefuse=admin_access#/settings');
+    const scope = page.locator('#field-admin_access');
+    await expect(scope).toBeVisible({ timeout: 30000 });
+
+    await scope.selectOption('br-mgmt');
+    await page.getByRole('button', { name: 'Save All Changes' }).click();
+
+    const message = page.locator('#schema-message');
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await expect(message).toHaveClass(/error-text/);
+    await expect(message).toContainText('Refused:');
+    // The refusal the module sent carries `detail` and NO `warning`, so this
+    // also pins the fallback: the board must not depend on `warning` existing.
+    await expect(message).toContainText('names a bridge this router does not have');
+    expect(await message.innerText()).not.toContain('set admin_access');
+  });
+
+  test('a refusal on the wholesale save is reported as refused too', async ({ page }) => {
+    await page.goto('./?mockCredentialState=set&mockRefuse=config_save#/settings');
+    await expect(page.locator('#field-log_level')).toBeVisible({ timeout: 30000 });
+
+    // Editing an array field routes the save through `config_save` (the
+    // wholesale path), which inspects `applied` on the same terms as the
+    // per-key path — the branch that used to ignore it entirely.
+    await page.getByRole('button', { name: /Add AcceptedMints/ }).click();
+    await page.getByRole('button', { name: 'Save All Changes' }).click();
+
+    const message = page.locator('#schema-message');
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await expect(message).toHaveClass(/error-text/);
+    await expect(message).toContainText('Refused:');
+  });
 });

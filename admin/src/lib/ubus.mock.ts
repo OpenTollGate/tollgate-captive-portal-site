@@ -26,6 +26,39 @@ function recordConfigSet(key: string, value: string) {
   }
 }
 
+// A value the module cannot converge is reported the same way whichever reply
+// path carried it: `applied: [{status: 'refused'}]`, with `success` still true.
+// Nothing but a real router (an `admin_access` naming a bridge it does not have)
+// can produce one, so a test or a demo asks for it with the URL query
+// `?mockRefuse=<key>` — or `?mockRefuse=config_save` for the wholesale path —
+// mirroring how `mockCredentialState` selects the fail-closed screen. The
+// refusal deliberately carries NO `warning`, only `detail`: that is the harsher
+// of the two shapes the module can send, and the one the board used to render as
+// a green save.
+function mockRefusedKey(): string {
+  if (typeof window === 'undefined' || !window.location) return '';
+  return new URLSearchParams(window.location.search).get('mockRefuse') || '';
+}
+
+function refusedReply(key: string, value: string, wholesale = false) {
+  return {
+    success: true,
+    message: wholesale
+      ? 'Configuration saved; runtime: 0 applied, 1 refused'
+      : `Set ${key} = ${value} (restart tollgate-wrt to apply); runtime: 0 applied, 1 refused`,
+    data: {
+      ...(wholesale ? {} : { key, value }),
+      applied: [
+        {
+          setting: key,
+          status: 'refused',
+          detail: `${key} names a bridge this router does not have; the board keeps its previous scope`,
+        },
+      ],
+    },
+  };
+}
+
 const board = {
   hostname: `${BRAND.id}-gw1`,
   model: 'GL.iNet GL-MT3000',
@@ -276,6 +309,7 @@ export function mockUbusCall(
       // so a browser test can prove the board SENT it without the secret ever
       // being rendered into the page.
       recordConfigSet(key, value);
+      if (mockRefusedKey() === key) return refusedReply(key, value);
       const secret = key === 'private_key';
       return {
         success: true,
@@ -292,11 +326,13 @@ export function mockUbusCall(
     // The wholesale save reports per setting what happened, exactly like
     // `config_set` (see the module's `data.applied`): the board renders a
     // declined or failed step from this array, so the mock mirrors its shape.
-    'tollgate.config_save': () => ({
-      success: true,
-      message: 'Configuration saved; runtime: 1 applied',
-      data: { applied: [{ setting: 'configuration', status: 'applied' }] },
-    }),
+    'tollgate.config_save': () => (mockRefusedKey() === 'config_save'
+      ? refusedReply('admin_access', 'br-mgmt', true)
+      : {
+          success: true,
+          message: 'Configuration saved; runtime: 1 applied',
+          data: { applied: [{ setting: 'configuration', status: 'applied' }] },
+        }),
     'tollgate.config_save_identities': () => ({ success: true, message: 'Identities saved (restart tollgate-wrt to apply)' }),
     'tollgate.wallet_balance': () => mockWalletBalance,
     'tollgate.wallet_info': () => mockWalletInfo,
