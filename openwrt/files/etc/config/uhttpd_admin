@@ -1,12 +1,22 @@
 # Reference snapshot of the uhttpd "admin" instance created by
 # packaging/files/etc/uci-defaults/92-tollgate-admin-setup.
 #
-# The admin board is a second (Preact) SPA served over HTTPS at the ROOT of
-# :8090 (browsers flag any password field on an http:// origin — the board has
-# login/WiFi/Settings password fields — so it is TLS-only, reusing the router's
-# self-signed /etc/uhttpd.crt; LuCI uses the same cert on :443). It
-# binds the same ubus socket as the rest of the system (`ubus_prefix /ubus`),
-# so the SPA can drive `tollgate --json` through the rpcd plugin.
+# The admin board is a second (Preact) SPA served at the ROOT of :8090 from its
+# BRAND webroot. It binds the same ubus socket as the rest of the system
+# (`ubus_prefix /ubus`), so the SPA can drive `tollgate --json` through the rpcd
+# plugin.
+#
+# Scheme: :8090 is plain HTTP — it is the URL people type
+# (http://<router>:8090/) — and the board's own TLS listener is :8443, because
+# one uhttpd instance cannot serve HTTP and HTTPS on the SAME port. Once that
+# listener carries an identity that COVERS this router, :8090 REDIRECTS to
+# :8443 (uhttpd.admin.redirect_https=1), so the board's password fields are
+# never typed on a cleartext origin. The identity is the one the module
+# provisioned for this router (`/etc/tollgate/ssl/server.{crt,key}`, written by
+# `tollgate ssl apply` from the module's 99-tollgate-setup); the OpenWrt image's
+# own pair (/etc/uhttpd.crt, CN=OpenWrt) is only a fallback LISTENER identity —
+# it keeps :8443 alive on a router that could not be provisioned, and never arms
+# the redirect.
 #
 # NOTE: home is the brand webroot (/www/<brand>: /www/tollgate for the default
 # TollGate build, a distribution's own webroot for a branded build), substituted
@@ -26,11 +36,14 @@
 # (:2051); those are NOT touched here.
 
 config uhttpd 'admin'
-    list listen_https '0.0.0.0:8090'
-    list listen_https '[::]:8090'
+    list listen_http '0.0.0.0:8090'
+    list listen_http '[::]:8090'
+    list listen_https '0.0.0.0:8443'
+    list listen_https '[::]:8443'
     option home '/www/tollgate'
-    option cert '/etc/uhttpd.crt'
-    option key '/etc/uhttpd.key'
+    option cert '/etc/tollgate/ssl/server.crt'
+    option key '/etc/tollgate/ssl/server.key'
+    option redirect_https '1'
     option ubus_prefix '/ubus'
     option script_timeout '60'
     option network_timeout '30'

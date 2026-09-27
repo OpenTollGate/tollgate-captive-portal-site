@@ -41,11 +41,13 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 BIN="$TMP/bin"
 CERT_CRT="$TMP/etc/uhttpd.crt"
 CERT_KEY="$TMP/etc/uhttpd.key"
+SSL_CRT="$TMP/etc/tollgate/ssl/server.crt"
+SSL_KEY="$TMP/etc/tollgate/ssl/server.key"
 SHADOW="$TMP/etc/shadow"
 UCI_STATE="$TMP/uci.state"
 BLOCK="$TMP/guard.sh"
 
-mkdir -p "$BIN" "$TMP/etc"
+mkdir -p "$BIN" "$TMP/etc" "$TMP/etc/tollgate/ssl"
 : > "$UCI_STATE"
 
 # --- preconditions -----------------------------------------------------------
@@ -192,15 +194,29 @@ shadow_set()    { printf 'root:$1$abc$defghijklmnop:0:0:99999:7:::\n' > "$SHADOW
 shadow_gone()   { rm -f "$SHADOW"; }
 
 certs_on() {
-    printf 'CERTIFICATE-DATA\n' > "$CERT_CRT"
-    printf 'PRIVATE-KEY-DATA\n' > "$CERT_KEY"
+    provisioned_off
+    printf 'IMAGE-PLACEHOLDER-CERT (561 bytes, DER fixture)\n' > "$CERT_CRT"
+    printf 'IMAGE-PLACEHOLDER-KEY fixture\n' > "$CERT_KEY"
 }
 
-certs_off() { rm -f "$CERT_CRT" "$CERT_KEY"; }
+certs_off() { rm -f "$CERT_CRT" "$CERT_KEY" "$SSL_CRT" "$SSL_KEY"; }
+
+# The identity the MODULE provisions (`tollgate ssl apply` -> 99-tollgate-setup).
+# The listener block prefers it over the image's pair; the two tests below pin
+# that precedence and the fallback.
+provisioned_on() {
+    printf 'PROVISIONED-CERT-DATA\n' > "$SSL_CRT"
+    printf 'PROVISIONED-KEY-DATA\n' > "$SSL_KEY"
+}
+
+provisioned_off() { rm -f "$SSL_CRT" "$SSL_KEY"; }
 
 run_block() {
     PATH="$BIN:$PATH" UCI_STATE="$UCI_STATE" UCI_LOG="$TMP/uci.log" \
         TOLLGATE_SHADOW_FILE="$SHADOW" \
+        TOLLGATE_SSL_CERT="$SSL_CRT" TOLLGATE_SSL_KEY="$SSL_KEY" \
+        IMAGE_CERT="$CERT_CRT" IMAGE_KEY="$CERT_KEY" \
+        UHTTPD_IMAGE_CERT="$CERT_CRT" UHTTPD_IMAGE_KEY="$CERT_KEY" \
         sh "$BLOCK" 2> "$TMP/stderr.txt"
     RC=$?
 }
@@ -339,6 +355,25 @@ if state_has uhttpd.admin.listen_http '0.0.0.0:8090'; then
     ok=1
 fi
 report "(f) shadow hash locked ('!') -> board still served (nobody can log in)" "$ok"
+
+# (g) the board's TLS listener carries the identity the MODULE provisioned for
+#     this router, not the image's placeholder pair - the two are both present
+#     here, so this pins the PRECEDENCE inside the listener block. Which of the
+#     two is allowed to arm the :8090 -> https hop is decided by the coverage
+#     predicate, and is pinned in test-92-admin-board-tls.sh.
+state_reset
+shadow_set
+certs_on
+provisioned_on
+run_block
+ok=0
+if state_has uhttpd.admin.cert "$SSL_CRT" &&
+   state_has uhttpd.admin.key "$SSL_KEY" &&
+   state_has uhttpd.admin.listen_https '0.0.0.0:8443'; then
+    ok=1
+fi
+report "(g) provisioned identity present -> :8443 carries the PROVISIONED pair, not the image's" "$ok"
+if [ "$ok" != 1 ]; then cat "$UCI_STATE" >&2; fi
 
 echo
 echo "-- $pass passed, $fail failed --"

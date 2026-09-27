@@ -38,6 +38,35 @@ All notable changes to this project are documented here.
     against an empty hash a blank one "succeeds", so it must never be sent.
   - CI: both packaging guards and the admin credential-guard e2e run as
     mandatory steps, so this cannot regress silently.
+- **Admin board: the :8090 login is no longer a password field on a cleartext
+  origin, and :8443 no longer serves a certificate nobody can validate.**
+  `92-tollgate-admin-setup` pinned the board's own TLS listener to the OpenWrt
+  image's certificate pair (`/etc/uhttpd.crt`, subject `CN=OpenWrt`,
+  `SAN DNS:OpenWrt`) — a placeholder that satisfies every readable-and-non-empty
+  check while covering neither the router's hostname nor its LAN IP — and it
+  never redirected :8090 at all, so the board's login was typed over plain HTTP
+  while its "secure" port answered a hard certificate error. That is the same
+  defect class as the pre17 LuCI incident (module `#593`, portal `#64`), one
+  surface over. Two halves, both derived, neither configured by hand:
+  - the board's :8443 listener now carries the identity the **module**
+    provisions for this router (`/etc/tollgate/ssl/server.{crt,key}`, written by
+    `tollgate ssl apply` from `99-tollgate-setup`, whose SANs cover the
+    hostname, the `<hostname>.lan` alias and the LAN IP). The image's pair stays
+    only as a fallback **listener** identity, so a router that could not be
+    provisioned keeps :8443 instead of losing it.
+  - `uhttpd.admin.redirect_https` is a **derived** value evaluated through the
+    same shared predicate as the LuCI hop (`tollgate ssl covers`, via
+    `cert_covers_router`): :8090 is sent to the instance's own :8443 only while
+    that listener's identity covers this router. It fails **closed** (an
+    unusable CLI is "does not cover"), writes an explicit value in both
+    directions so a stale `1` is repaired, and is turned back **off** if :8443
+    never came up — a redirect into a dead port is a board nobody can open.
+  - `packaging/tests/test-92-admin-board-tls.sh` pins all of it offline (stubbed
+    `uci`/`tollgate`, 9 cases + a non-vacuity guard) and is wired into CI as a
+    mandatory step. `openwrt/files/etc/config/uhttpd_admin` — the reference
+    snapshot of the instance — is corrected with it: it had claimed a
+    TLS-only :8090 that the script has never configured.
+  ([#65](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/65))
 
 ### Added
 - **Cashu mint auto-select:** the purchase page now derives the mint from the
