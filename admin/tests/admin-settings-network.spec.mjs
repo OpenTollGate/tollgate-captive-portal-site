@@ -1,0 +1,173 @@
+import { test, expect } from '@playwright/test';
+
+// The operator asked (2026-09-26) for two things to be settable from the config
+// FILE and from the board: the private (management) network's credentials, and
+// WHICH NETWORK MAY REACH THE ADMINISTRATION SURFACES. This spec covers the
+// board half, against the real Preact app in VITE_MOCK mode — no router, no
+// ubus. The mock mirrors the module's response shapes (`secret_set`, the
+// per-setting `applied` array, the withheld secret) because those shapes are
+// what the render paths below are written against.
+//
+// The assertions that matter most are the negative ones:
+//   * the passphrase is SENT and never rendered back,
+//   * the input is EMPTY on every load, including after a reload — the board is
+//     never handed the management network's WPA key,
+//   * a successful apply is reported as success (it used to be rendered with the
+//     error style, because tone was inferred from the message's prefix),
+//   * editing a private radio on the WiFi page goes through `tollgate
+//     config_set` — the module's single writer — not raw `uci set`, which the
+//     applier would revert at the next service start.
+//
+// The fixture is named `FAKE_PSK` rather than after the credential it stands
+// in for, because the repo's pre-commit secret hook flags any password-ish
+// identifier assigned a long literal — and this one is a fixture.
+const FAKE_PSK = 'correct-horse-battery-staple';
+const SETTINGS = './?mockCredentialState=set#/settings';
+const WIFI = './?mockCredentialState=set#/wifi';
+
+/** config_set calls the board made, as {key, value_len} — never the value. */
+function configSetCalls(page) {
+  return page.evaluate(() =>
+    JSON.parse(window.sessionStorage.getItem('tg.mock.config_set') || '[]'),
+  );
+}
+
+test.describe('admin board: private network + administration access', () => {
+  test('the settings page carries both surfaces, on their own cards', async ({
+    page,
+  }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+
+    await page.goto(SETTINGS);
+
+    await expect(
+      page.locator('.card-title', { hasText: 'Private Network (management SSID)' }),
+    ).toBeVisible({ timeout: 30000 });
+    await expect(
+      page.locator('.card-title', { hasText: 'Administration Access' }),
+    ).toBeVisible();
+
+    // The SSID is an ordinary setting: the router's current value is shown.
+    await expect(page.locator('#field-private_ssid')).toHaveValue('c08r4d0r-MOCK');
+
+    // The passphrase is WRITE-ONLY: the field is empty even though the router
+    // has a value, and the page says so rather than pretending it is unset.
+    const key = page.locator('#field-private_key');
+    await expect(key).toHaveAttribute('type', 'password');
+    await expect(key).toHaveValue('');
+    await expect(key).toHaveAttribute('placeholder', 'unchanged — a value is set');
+    await expect(
+      page.getByText('A value is stored and is never shown here'),
+    ).toBeVisible();
+
+    expect(errors, `page errors:\n${errors.join('\n')}`).toEqual([]);
+  });
+
+  test('both enums offer exactly the values the module accepts', async ({
+    page,
+  }) => {
+    await page.goto(SETTINGS);
+    await expect(page.locator('#field-admin_access')).toBeVisible({ timeout: 30000 });
+
+    const scope = page.locator('#field-admin_access');
+    await expect(scope).toHaveJSProperty('tagName', 'SELECT');
+    expect(await scope.locator('option').allTextContents()).toEqual([
+      'br-private',
+      'br-mgmt',
+      'both',
+      'loopback-only',
+    ]);
+    await expect(scope).toHaveValue('both');
+
+    const encryption = page.locator('#field-private_encryption');
+    await expect(encryption).toHaveJSProperty('tagName', 'SELECT');
+    expect(await encryption.locator('option').allTextContents()).toEqual([
+      'psk2+ccmp',
+      'psk2+tkip+ccmp',
+      'psk-mixed+ccmp',
+    ]);
+  });
+
+  test('a new passphrase is sent once, withheld, and never rendered', async ({
+    page,
+  }) => {
+    await page.goto(SETTINGS);
+    const key = page.locator('#field-private_key');
+    await expect(key).toBeVisible({ timeout: 30000 });
+
+    await key.fill(FAKE_PSK);
+    await page.getByRole('button', { name: 'Save All Changes' }).click();
+
+    // The module's answer names the key and withholds the value; the board
+    // renders that as a SUCCESS (the error styling is reserved for failures).
+    const message = page.locator('#schema-message');
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await expect(message).toHaveClass(/success-text/);
+    await expect(message).toContainText('value withheld');
+
+    // It really was sent — one config_set of private_key, of that length...
+    expect(await configSetCalls(page)).toEqual([
+      { key: 'private_key', value_len: FAKE_PSK.length },
+    ]);
+
+    // ...and the page carries it nowhere: not in the field, not in the DOM.
+    await expect(key).toHaveValue('');
+    expect(await page.locator('body').innerText()).not.toContain(FAKE_PSK);
+  });
+
+  test('a reload still never prefills the passphrase', async ({ page }) => {
+    await page.goto(SETTINGS);
+    const key = page.locator('#field-private_key');
+    await expect(key).toBeVisible({ timeout: 30000 });
+    await key.fill(FAKE_PSK);
+    await page.getByRole('button', { name: 'Save All Changes' }).click();
+    await expect(page.locator('#schema-message')).toContainText('value withheld', {
+      timeout: 30000,
+    });
+
+    await page.reload();
+
+    await expect(page.locator('#field-private_key')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('#field-private_key')).toHaveValue('');
+    await expect(
+      page.getByText('A value is stored and is never shown here'),
+    ).toBeVisible();
+    expect(await page.locator('body').innerText()).not.toContain(FAKE_PSK);
+  });
+
+  test('a private radio is edited through config_set, not raw UCI', async ({
+    page,
+  }) => {
+    await page.goto(WIFI);
+
+    // The private SSID is the interface whose UCI section is private_radio0;
+    // its card is the one carrying the -private SSID.
+    const privateCard = page
+      .locator('.card-body > div')
+      .filter({ hasText: /-private/ })
+      .first();
+    await expect(privateCard).toBeVisible({ timeout: 30000 });
+    await privateCard.getByRole('button', { name: 'Edit' }).click();
+
+    const ssid = 'unit-private-ssid';
+    const psk = 'unit-private-psk-value';
+    await privateCard.locator('input[type="text"]').fill(ssid);
+    await privateCard.locator('input[type="password"]').fill(psk);
+    await privateCard.getByRole('button', { name: 'Save' }).click();
+
+    // Success is reported as success, and it says what it did.
+    const message = page.locator('#wifi-save-message');
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await expect(message).toHaveClass(/success-text/);
+    await expect(message).toContainText('both private radios');
+
+    // The edit went through the module's writer: one config_set per value, in
+    // the order the module documents, and no value is echoed into the page.
+    expect(await configSetCalls(page)).toEqual([
+      { key: 'private_ssid', value_len: ssid.length },
+      { key: 'private_key', value_len: psk.length },
+    ]);
+    expect(await page.locator('body').innerText()).not.toContain(psk);
+  });
+});

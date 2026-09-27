@@ -12,6 +12,12 @@ export interface FieldSchema {
   children?: FieldSchema[];
   json_key: string;
   editable: boolean;
+  /**
+   * A write-only field: the module never returns its value, so the input is
+   * rendered empty and its content is only ever sent, never displayed back.
+   * `secretSet` on the form says whether a value is stored.
+   */
+  secret?: boolean;
 }
 
 interface SchemaFormProps {
@@ -19,6 +25,8 @@ interface SchemaFormProps {
   values: Record<string, any>;
   onChange: (key: string, value: any) => void;
   disabled?: boolean;
+  /** Which secret fields have a stored value (from `config_get.secret_set`). */
+  secretSet?: Record<string, boolean>;
 }
 
 function SchemaField({
@@ -27,12 +35,14 @@ function SchemaField({
   onChange,
   disabled,
   depth,
+  secretSet,
 }: {
   schema: FieldSchema;
   value: any;
   onChange: (key: string, value: any) => void;
   disabled: boolean;
   depth: number;
+  secretSet?: Record<string, boolean>;
 }) {
   if (schema.type === 'object' && schema.children?.length) {
     return (
@@ -48,6 +58,7 @@ function SchemaField({
             }}
             disabled={disabled}
             depth={depth + 1}
+            secretSet={secretSet}
           />
         ))}
       </div>
@@ -96,6 +107,7 @@ function SchemaField({
                 }}
                 disabled={disabled}
                 depth={depth + 1}
+                secretSet={secretSet}
               />
             ))}
           </div>
@@ -176,7 +188,25 @@ function SchemaField({
         {!schema.editable && <span className="text-muted" style={{ marginLeft: '0.3rem', fontSize: 'var(--font-size-xsmall)' }}>(read-only)</span>}
       </label>
 
-      {schema.enum ? (
+      {schema.secret ? (
+        <>
+          <input
+            id={inputId}
+            type="password"
+            className="input"
+            autoComplete="new-password"
+            value={value ?? ''}
+            placeholder={secretSet?.[schema.json_key] ? 'unchanged — a value is set' : 'not set'}
+            disabled={!schema.editable || disabled}
+            onInput={(e) => onChange(schema.json_key, (e.target as HTMLInputElement).value)}
+          />
+          <span className="text-muted" style={{ fontSize: 'var(--font-size-xsmall)' }}>
+            {secretSet?.[schema.json_key]
+              ? 'A value is stored and is never shown here. Type a new one to replace it; leave empty to keep it.'
+              : 'Write-only: the value is never shown again after saving.'}
+          </span>
+        </>
+      ) : schema.enum ? (
         <select
           id={inputId}
           className="input"
@@ -228,7 +258,7 @@ function SchemaField({
   );
 }
 
-export default function SchemaForm({ fields, values, onChange, disabled }: SchemaFormProps) {
+export default function SchemaForm({ fields, values, onChange, disabled, secretSet }: SchemaFormProps) {
   return (
     <div className="flex flex-col gap-sm">
       {fields.map((field) => (
@@ -239,6 +269,7 @@ export default function SchemaForm({ fields, values, onChange, disabled }: Schem
           onChange={onChange}
           disabled={disabled || false}
           depth={0}
+          secretSet={secretSet}
         />
       ))}
     </div>

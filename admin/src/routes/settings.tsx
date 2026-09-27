@@ -9,6 +9,11 @@ type FieldGroup = {
 
 const FIELD_GROUPS: FieldGroup[] = [
   { label: 'General', keys: ['log_level', 'metric', 'step_size', 'margin', 'show_setup', 'reseller_mode', 'manual_pause_seconds'] },
+  // The router's own networks (module schema v0.0.9). `private_key` is
+  // write-only: the module never returns it, so this card renders it empty and
+  // only ever sends a value the operator types here.
+  { label: 'Private Network (management SSID)', keys: ['private_ssid', 'private_key', 'private_encryption'] },
+  { label: 'Administration Access', keys: ['admin_access'] },
   { label: 'Accepted Mints', keys: ['accepted_mints'] },
   { label: 'Profit Share', keys: ['profit_share'] },
   { label: 'Upstream Detector', keys: ['probe_timeout', 'probe_retry_count', 'probe_retry_delay', 'require_valid_signature', 'ignore_interfaces'] },
@@ -51,6 +56,10 @@ export default function Settings() {
   const [schema, setSchema] = useState<FieldSchema[]>([]);
   const [configValues, setConfigValues] = useState<Record<string, any>>({});
   const [originalValues, setOriginalValues] = useState<Record<string, any>>({});
+  // Which write-only (secret) fields have a stored value. The module reports
+  // this instead of the value itself, which is what lets the card say "set"
+  // without ever holding the private network's passphrase.
+  const [secretSet, setSecretSet] = useState<Record<string, boolean>>({});
   const [hostname, setHostname] = useState('');
   const [currentHostname, setCurrentHostname] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -60,6 +69,12 @@ export default function Settings() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [messages, setMessages] = useState<Record<string, string>>({});
+  // Whether the schema-section message reports a FAILURE. It used to be
+  // inferred from the message text ("does it start with 'saved'"), which fell
+  // over as soon as the module started reporting what it converged onto the
+  // router: a successful apply came back as "Set admin_access = …; runtime: 1
+  // applied" and was rendered as an error. Tone is state, not a prefix.
+  const [schemaMsgIsError, setSchemaMsgIsError] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -76,6 +91,9 @@ export default function Settings() {
       if (configRes.status === 'fulfilled' && configRes.value?.data?.config) {
         setConfigValues(configRes.value.data.config);
         setOriginalValues(configRes.value.data.config);
+      }
+      if (configRes.status === 'fulfilled' && configRes.value?.data?.secret_set) {
+        setSecretSet(configRes.value.data.secret_set);
       }
 
       if (boardData.status === 'fulfilled' && boardData.value?.hostname) {
@@ -112,6 +130,7 @@ export default function Settings() {
 
   async function saveSchemaChanges() {
     const changed: Record<string, any> = {};
+    const secretKeys = schema.filter((f) => f.secret).map((f) => f.json_key);
     for (const key of Object.keys(configValues)) {
       if (JSON.stringify(configValues[key]) !== JSON.stringify(originalValues[key])) {
         changed[key] = configValues[key];
@@ -119,6 +138,7 @@ export default function Settings() {
     }
 
     if (Object.keys(changed).length === 0) {
+      setSchemaMsgIsError(false);
       setMessage('schema', 'No changes to save');
       return;
     }
@@ -129,6 +149,7 @@ export default function Settings() {
         v => Array.isArray(v) || (typeof v === 'object' && v !== null),
       );
 
+      let appliedMessage = '';
       if (hasComplex) {
         const merged = { ...originalValues };
         for (const [key, value] of Object.entries(changed)) {
@@ -138,23 +159,56 @@ export default function Settings() {
           json: JSON.stringify(merged),
         });
         if (!res.success) {
+          setSchemaMsgIsError(true);
           setMessage('schema', `Error: ${res.error || 'config save failed'}`);
           setSaving(false);
           return;
         }
+        appliedMessage = res.message || '';
       } else {
         for (const [key, value] of Object.entries(changed)) {
           const res = await ubusCall('tollgate', 'config_set', { key, value: String(value) });
           if (!res.success) {
+            setSchemaMsgIsError(true);
             setMessage('schema', `Error setting ${key}: ${res.error}`);
+            setSaving(false);
+            return;
+          }
+          // The module reports what it converged onto the router (the private
+          // network's credentials and the admin-access scope apply immediately;
+          // the rest is read at service start). Surface it rather than the
+          // generic reminder.
+          const result = (res.data?.applied || []).find((r: any) => !r.detail || !r.detail.includes('not applicable'));
+          if (res.message) {
+            appliedMessage = res.message;
+          }
+          if (result && result.status === 'refused' && result.warning) {
+            setSchemaMsgIsError(true);
+            setMessage('schema', `Refused: ${result.warning}`);
             setSaving(false);
             return;
           }
         }
       }
-      setOriginalValues({ ...configValues });
-      setMessage('schema', 'saved — restart tollgate-wrt to apply');
+
+      // A secret the operator just typed must not stay in the page's state (or
+      // in the values a later wholesale save would resend). The field goes back
+      // to empty and is marked as set, which is exactly what a reload shows.
+      const nextValues = { ...configValues };
+      const nextSecretSet = { ...secretSet };
+      for (const key of Object.keys(changed)) {
+        if (secretKeys.includes(key)) {
+          delete nextValues[key];
+          nextSecretSet[key] = String(changed[key]).length > 0;
+        }
+      }
+      setConfigValues(nextValues);
+      setOriginalValues(nextValues);
+      setSecretSet(nextSecretSet);
+      setSchemaMsgIsError(false);
+      setMessage('schema', appliedMessage || 'saved — restart tollgate-wrt to apply');
     } catch (err: any) {
+      setSchemaMsgIsError(true);
       setMessage('schema', `Error: ${err.message}`);
     } finally {
       setSaving(false);
@@ -230,6 +284,7 @@ export default function Settings() {
             values={configValues}
             onChange={handleSchemaChange}
             disabled={saving}
+            secretSet={secretSet}
           />
         </div>
       ))}
@@ -240,10 +295,10 @@ export default function Settings() {
             {saving ? 'Saving…' : 'Save All Changes'}
           </button>
           {messages.schema &&
-            (messages.schema === 'saved — restart tollgate-wrt to apply' || messages.schema.startsWith('saved') ? (
-              <span className="success-text">{messages.schema}</span>
+            (schemaMsgIsError ? (
+              <span className="error-text" id="schema-message">{messages.schema}</span>
             ) : (
-              <span className="error-text">{messages.schema}</span>
+              <span className="success-text" id="schema-message">{messages.schema}</span>
             ))}
         </div>
       )}

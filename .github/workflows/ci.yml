@@ -100,6 +100,19 @@ jobs:
         # masked by an unrelated portal test failure.
         run: npx playwright test --config admin/playwright.config.mjs admin-credential-guard
 
+      - name: Run admin board network settings (private SSID + administration access)
+        # The two settings the operator asked to be settable from the board
+        # (2026-09-26): the private network's credentials and which network may
+        # reach the administration surfaces. The assertions that matter are the
+        # negative ones — the passphrase is SENT once and never rendered back
+        # (the mock withholds it exactly as the module does, and records the
+        # call's key + length so "sent" is provable without "echoed"), the
+        # field is empty on every load including after a reload, a successful
+        # apply is reported as success, and a private-radio edit on the WiFi
+        # page goes through `tollgate config_set` — the module's single writer —
+        # instead of raw `uci set`, which the module's applier would revert.
+        run: npx playwright test --config admin/playwright.config.mjs admin-settings-network
+
       - name: Run functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop
 
