@@ -41,11 +41,17 @@ function mockRefusedKey(): string {
 }
 
 function refusedReply(key: string, value: string, wholesale = false) {
+  // The message mirrors the module's own rule, including the one that matters
+  // most here: a refusal must never echo a value back, and a secret's value is
+  // never in the message at all — a mock that leaked one would teach whatever
+  // spec copies it to assert on leaked text.
+  const secret = key === 'private_key';
+  const what = secret ? `Set ${key} (value withheld)` : `Set ${key} = ${value}`;
   return {
     success: true,
     message: wholesale
       ? 'Configuration saved; runtime: 0 applied, 1 refused'
-      : `Set ${key} = ${value} (restart tollgate-wrt to apply); runtime: 0 applied, 1 refused`,
+      : `${what}; runtime: 0 applied, 1 refused`,
     data: {
       ...(wholesale ? {} : { key, value }),
       applied: [

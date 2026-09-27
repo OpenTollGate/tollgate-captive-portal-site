@@ -191,7 +191,12 @@ test.describe('admin board: private network + administration access', () => {
     // The refusal the module sent carries `detail` and NO `warning`, so this
     // also pins the fallback: the board must not depend on `warning` existing.
     await expect(message).toContainText('names a bridge this router does not have');
-    expect(await message.innerText()).not.toContain('set admin_access');
+    // Not the success shape: no restart reminder, and the runtime summary says
+    // nothing was applied. (The mock's own message starts the key with a capital
+    // `Set`, so a lowercase `toContain('set …')` would have asserted nothing.)
+    const text = await message.innerText();
+    expect(text).not.toMatch(/restart tollgate-wrt to apply/);
+    expect(text).not.toMatch(/runtime: 1 applied/);
   });
 
   test('a refusal on the wholesale save is reported as refused too', async ({ page }) => {
