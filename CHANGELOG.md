@@ -66,6 +66,7 @@ All notable changes to this project are documented here.
     mandatory step. `openwrt/files/etc/config/uhttpd_admin` — the reference
     snapshot of the instance — is corrected with it: it had claimed a
     TLS-only :8090 that the script has never configured.
+  ([#65](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/65))
 
 ### Added
 - **Cashu mint auto-select:** the purchase page now derives the mint from the
