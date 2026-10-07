@@ -81,11 +81,12 @@ if [ ! -s "$BLOCK" ]; then
 fi
 
 # Every piece the block needs must actually be there; a silent extraction miss
-# would otherwise turn every case below into a tautology.
+# would otherwise turn every case below into a tautology. The listener pair is a
+# variable since the mode-aware mapping (D2) — the harness supplies it below.
 for needle in \
     'root_hash_state' \
     'ADMIN_BOARD_ALLOWED=0' \
-    "uci add_list uhttpd.admin.listen_http='0.0.0.0:8090'"
+    'uci add_list uhttpd.admin.listen_http="$ADMIN_HTTP"'
 do
     if ! grep -F -q -- "$needle" "$BLOCK"; then
         echo "FAIL: extracted block is missing '$needle' (sentinel drift?)" >&2
@@ -213,6 +214,8 @@ provisioned_off() { rm -f "$SSL_CRT" "$SSL_KEY"; }
 
 run_block() {
     PATH="$BIN:$PATH" UCI_STATE="$UCI_STATE" UCI_LOG="$TMP/uci.log" \
+        ADMIN_HTTP='0.0.0.0:8090' ADMIN_HTTP6='[::]:8090' \
+        ADMIN_HTTPS='0.0.0.0:8443' ADMIN_HTTPS6='[::]:8443' \
         TOLLGATE_SHADOW_FILE="$SHADOW" \
         TOLLGATE_SSL_CERT="$SSL_CRT" TOLLGATE_SSL_KEY="$SSL_KEY" \
         IMAGE_CERT="$CERT_CRT" IMAGE_KEY="$CERT_KEY" \

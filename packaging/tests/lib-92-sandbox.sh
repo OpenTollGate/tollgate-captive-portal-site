@@ -152,7 +152,9 @@ STUB
     # output (so the resolver falls back), exactly like the real tool.
     cat > "$SB_BIN/jq" <<'STUB'
 #!/bin/sh
-f=${2:-}
+# the file is the LAST argument of `jq -r '.entry_ui // empty' <file>`
+f=""
+for a in "$@"; do f="$a"; done
 [ -n "$f" ] || exit 2
 [ -f "$f" ] || exit 5
 v=$(sed -n 's/.*"entry_ui"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -n 1)
@@ -303,7 +305,7 @@ sb_owner() { # port -> the single section that lists it; MULTI when several; "" 
         { eq = index($0, "="); if (eq == 0) next
           k = substr($0, 1, eq - 1); v = substr($0, eq + 1)
           if (k ~ /\.listen_(http|https)$/ && v == p) {
-              sub(/\.listen_(http|https)$/, "", k); secs[k] = 1 } }
+              sub(/\.listen_(http|https)$/, "", k); sub(/^uhttpd\./, "", k); secs[k] = 1 } }
         END { n = 0; s = ""
               for (x in secs) { n++; s = x }
               if (n == 1) print s
@@ -311,7 +313,11 @@ sb_owner() { # port -> the single section that lists it; MULTI when several; "" 
 }
 
 sb_section_has() { # section port -> 0 when that section lists the port
-    grep -E -q "^uhttpd\.$1\.listen_(http|https)=$2\$" "$SB_STATE"
+    # awk string equality, not a regex: the v6 address carries [::], which is a
+    # bracket expression to grep -E.
+    awk -v s="uhttpd.$1" -v p="$2" -F= '
+        $1 == s ".listen_http" || $1 == s ".listen_https" { if ($2 == p) f = 1 }
+        END { exit !f }' "$SB_STATE"
 }
 
 sb_users_to_router() { # prints every admin-port entry in the pre-auth list

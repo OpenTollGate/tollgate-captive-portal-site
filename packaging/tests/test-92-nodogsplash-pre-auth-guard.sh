@@ -154,15 +154,18 @@ sb_report "(e) static: no add_list into users_to_router anywhere in the script" 
 [ "$ok" = 1 ] || grep -n 'users_to_router' "$SCRIPT" >&2
 
 # (f) static: every admin port is named in the removal, so a mode flip cannot
-#     leave one behind.
+#     leave one behind. The ports are listed in a `for port in ...` loop.
 ok=0
 if grep -E -q 'del_list[^|]*users_to_router' "$SCRIPT"; then
+    list=$(grep -o 'for port in [0-9 ][0-9 ]*' "$SCRIPT" | head -n 1 | sed 's/for port in //')
     n=0
     for port in 8080 443 8090 8443; do
-        grep -q -F "port $port" "$SCRIPT" && n=$((n + 1))
+        case " $list " in
+            *" $port "*) n=$((n + 1)) ;;
+        esac
     done
     [ "$n" = 4 ] && ok=1
 fi
-sb_report "(f) static: all four admin ports are removed from users_to_router" "$ok"
+sb_report "(f) static: the removal names all four admin ports (8080/443/8090/8443)" "$ok"
 
 sb_summary

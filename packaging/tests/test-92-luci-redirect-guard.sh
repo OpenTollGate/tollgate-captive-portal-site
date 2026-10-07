@@ -296,8 +296,11 @@ run_block_a() {
 }
 
 run_block_b() {
+    # MAIN_TLS_RE is the /proc/net/tcp hex port the probe looks for; the shipped
+    # script resolves it from the mapping (rule 1 = the entry pair owns :443).
     PATH="$BIN:$PATH" UCI_STATE="$UCI_STATE" RESTART_LOG="$RESTART_LOG" \
         CLI_LOG="$CLI_LOG" CLI_COVERS="${CLI_COVERS:-0}" \
+        MAIN_TLS_RE=':01BB' ADMIN_TLS_RE=':20FB' \
         sh "$BLOCK_B"
 }
 
