@@ -1,4 +1,5 @@
-import { mockUbusCall, mockLogin, mockSessionId, mockCredentialStatus } from './ubus.mock';
+import { mockUbusCall, mockLogin, mockSessionId, mockCredentialStatus, mockUiLinks } from './ubus.mock';
+import { parseUiLinks, emptyUiLinks, type UiLinks } from './ui-links';
 import { BRAND } from '../brand';
 
 const MOCK = import.meta.env.VITE_MOCK === 'true';
@@ -92,6 +93,24 @@ export async function fetchCredentialStatus(): Promise<CredentialStatus> {
     return parseCredentialStatus(json.result[1]);
   } catch {
     return unknownCredentialStatus();
+  }
+}
+
+// fetchUiLinks reads the router's answer for the OTHER admin UI's link
+// (`tollgate ui links --json` via the plugin's `ui_links` method). The board
+// must never guess the other UI's host or port: whether LuCI answers :8080 or
+// :8090 depends on the live mapping (docs/architecture/
+// default-ui-and-entry-port-decision.md D5/D6). Never throws — an unreachable
+// router yields a payload with no link and a reason to surface.
+export async function fetchUiLinks(): Promise<UiLinks> {
+  if (MOCK) {
+    return parseUiLinks(mockUiLinks());
+  }
+  try {
+    const data = await ubusCall('tollgate', 'ui_links', {});
+    return parseUiLinks(data);
+  } catch {
+    return emptyUiLinks();
   }
 }
 

@@ -68,6 +68,17 @@ All notable changes to this project are documented here.
     TLS-only :8090 that the script has never configured.
   ([#65](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/65))
 
+- **No admin port is in nodogsplash's pre-auth allow list, in either mapping.**
+  `92-tollgate-admin-setup` used to add `allow tcp port 8090` / `allow tcp port 8443`
+  to `nodogsplash.@nodogsplash[0].users_to_router` on every install and upgrade —
+  the guest-reachable admin login #546/#566/#588 removed, and, under the mapping
+  below, one UI's or the other's admin login in **every** mode. The block is
+  deleted and replaced by the **removal** of all four admin ports (`8080`, `443`,
+  `8090`, `8443`); that removal lives here rather than only in the module's `99`
+  because `99` reconciles the list on its full-setup pass, which an `apk` upgrade
+  skips. `packaging/tests/test-92-nodogsplash-pre-auth-guard.sh` pins it offline,
+  with a negative control that the checker flags the legacy entry.
+
 ### Added
 - **Cashu mint auto-select:** the purchase page now derives the mint from the
   pasted e-cash note and selects the matching access option, instead of making
@@ -98,7 +109,33 @@ All notable changes to this project are documented here.
   brand id; the build fails early on a descriptor the runtime would reject.
   ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
 
+- **`92-tollgate-admin-setup` is mode-aware: the `entry_ui` switch decides which
+  UI owns the admin entry ports.** The board's instance (`uhttpd.admin`) now binds
+  **either** the entry pair (`8080` + `443`) **or** the secondary pair (`8090` +
+  `8443`), decided by the same flat `entry_ui` field of
+  `/etc/tollgate/config.json` that the module's `99` reads (default `board`; a
+  missing file, missing key, empty or unparseable value, and an absent `jq` all
+  resolve to `board`, never to "no admin listener"). `92` binds only the pair it
+  owns and strips that pair from every other section, so no port is bound twice.
+  Each completed run writes the D4 marker `/etc/tollgate/entry-ui-mapping`
+  (overridable via `TOLLGATE_ENTRY_UI_MARKER`) carrying the resolved value — the
+  atomicity boundary across the two packages, so the module's `99` honours
+  `entry_ui=board` only when the mode-aware `92` is installed; a run that refuses
+  to serve (no usable root credential) writes **no** marker. The board's TLS
+  listener carries the module's provisioned identity
+  (`/etc/tollgate/ssl/server.{crt,key}`, the image pair as a fallback listener
+  identity only), and the fail-open probe now follows the TLS port the instance
+  actually owns instead of a fixed `:8443`.
+
 ### Tests
+- **`92` mapping + marker suites (new, offline):** `packaging/tests/test-92-entry-ui-mapping.sh`
+  drives the whole script in a sandbox (`packaging/tests/lib-92-sandbox.sh`): both
+  mappings against the literal port lists, invariant 3 (one binder per port, with
+  the OWNER pinned so the wrong mapping cannot pass), the `entry_ui` resolution
+  table (missing / keyless / garbage / empty / absent-`jq` -> `board`), and the D4
+  marker (content, absence on a refused run, path override).
+  `packaging/tests/test-92-admin-board-tls.sh` grew the board-mode cases
+  (the instance binds `8080`+`443`, and the fail-open probe follows `:443`).
 - **Packaging guard harness:** `tests/packaging/foreign-skins-guard.sh` extracts the
   `__FOREIGN_SKINS__` cleanup loop from `92-tollgate-admin-setup` verbatim, runs it with
   stubbed `uci`/`rm`, and asserts what it tried to delete (11 cases: real foreign skin is
@@ -106,7 +143,6 @@ All notable changes to this project are documented here.
   the unsubstituted placeholder and the active `uhttpd.admin` section are all spared).
   Wired into CI as a step of the unit-test job.
   ([PR #54 follow-up](https://github.com/OpenTollGate/tollgate-captive-portal-site/pull/54))
-
 ### Fixed
 - **OpenWrt admin setup: the LuCI `:8080` → HTTPS redirect is now derived from a
   covering certificate, not from a certificate merely existing.** `uhttpd.main.redirect_https`

@@ -293,6 +293,15 @@ chmod +x "$UHTTPD_INIT"
 
 # --- helpers -----------------------------------------------------------------
 
+# The pair the extracted blocks bind, and the hex port of the TLS listener the
+# instance owns. The defaults reproduce TODAY's mapping (luci: the board's
+# instance owns the secondary pair, 8090 + 8443), which is what the cases above
+# pin; the MODE SPLIT cases at the end override them with the entry pair, so a
+# hardcoded second mapping cannot pass.
+M92_ADMIN_HTTP='0.0.0.0:8090'; M92_ADMIN_HTTP6='[::]:8090'
+M92_ADMIN_HTTPS='0.0.0.0:8443'; M92_ADMIN_HTTPS6='[::]:8443'
+M92_ADMIN_TLS_RE=':20FB'; M92_MAIN_TLS_RE=':01BB'
+
 state_reset() {
     : > "$UCI_STATE"
     printf 'uhttpd.admin=uhttpd\n' >> "$UCI_STATE"
@@ -339,8 +348,21 @@ proc_net() {
     fi
 }
 
+# /proc/net/tcp fixture with a LISTEN socket on an ARBITRARY hex port — needed by
+# the MODE SPLIT fail-open case, where the instance owns :443 (0x01BB) and a
+# LISTEN on the other pair's :8443 must NOT satisfy its probe.
+proc_net_port() { # $1 = hex port, e.g. 01BB
+    : > "$PROC_TCP"
+    : > "$PROC_TCP6"
+    printf '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n' >> "$PROC_TCP"
+    printf '   0: 00000000:%s 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 12345 1 0000000000000000 100 0 0 10 0\n' "$1" >> "$PROC_TCP"
+}
+
 run_id() {
     PATH="$BIN:$PATH" UCI_STATE="$UCI_STATE" UCI_LOG="$TMP/uci.log" \
+        ADMIN_HTTP="$M92_ADMIN_HTTP" ADMIN_HTTP6="$M92_ADMIN_HTTP6" \
+        ADMIN_HTTPS="$M92_ADMIN_HTTPS" ADMIN_HTTPS6="$M92_ADMIN_HTTPS6" \
+        ADMIN_TLS_RE="$M92_ADMIN_TLS_RE" MAIN_TLS_RE="$M92_MAIN_TLS_RE" \
         TOLLGATE_CLI="${1:-$CLI}" \
         TOLLGATE_SSL_CERT="$SSL_CRT" TOLLGATE_SSL_KEY="$SSL_KEY" \
         IMAGE_CERT="$IMG_CRT" IMAGE_KEY="$IMG_KEY" \
@@ -353,6 +375,7 @@ run_id() {
 run_fo() {
     PATH="$BIN:$PATH" UCI_STATE="$UCI_STATE" UCI_LOG="$TMP/uci.log" \
         RESTART_LOG="$RESTART_LOG" \
+        ADMIN_TLS_RE="$M92_ADMIN_TLS_RE" MAIN_TLS_RE="$M92_MAIN_TLS_RE" \
         sh "$RUN_FO" 2> "$TMP/stderr.txt"
     RC=$?
 }
@@ -536,6 +559,71 @@ if grep -q -F 'cert_covers_router "$admin_cert"' "$SCRIPT" &&
     ok=1
 fi
 report "(i) the board hop is derived through the shared coverage check, not the placeholder path" "$ok"
+
+# --- MODE SPLIT (D2/D3): the same blocks, given the BOARD mapping -------------
+# The pair is a variable. These cases drive the extraction with the entry pair;
+# a second hardcoded mapping (or a probe pinned to one port) fails them.
+
+# (j) board mapping: uhttpd.admin binds 8080 + 443 — the entry pair — and the
+#     TLS listener still carries the MODULE's provisioned identity, never the
+#     image's placeholder pair.
+M92_ADMIN_HTTP='0.0.0.0:8080'; M92_ADMIN_HTTP6='[::]:8080'
+M92_ADMIN_HTTPS='0.0.0.0:443'; M92_ADMIN_HTTPS6='[::]:443'
+M92_ADMIN_TLS_RE=':01BB'; M92_MAIN_TLS_RE=':20FB'
+provisioned_on
+image_pair_on
+coverage_covering
+proc_net
+state_reset
+run_id
+ok=0
+if state_has uhttpd.admin.listen_http '0.0.0.0:8080' &&
+   state_has uhttpd.admin.listen_http '[::]:8080' &&
+   state_has uhttpd.admin.listen_https '0.0.0.0:443' &&
+   state_has uhttpd.admin.listen_https '[::]:443' &&
+   ! grep -q -F 'uhttpd.admin.listen_http=0.0.0.0:8090' "$UCI_STATE" &&
+   [ "$(state_get uhttpd.admin.cert)" = "$SSL_CRT" ] &&
+   [ "$(state_get uhttpd.admin.key)" = "$SSL_KEY" ] &&
+   [ "$(state_get uhttpd.admin.redirect_https)" = "1" ]; then
+    ok=1
+fi
+report "(j) board mapping: uhttpd.admin binds 8080 + 443 with the provisioned identity, redirect=1" "$ok"
+if [ "$ok" != 1 ]; then cat "$UCI_STATE" >&2; fi
+
+# (k) board mapping, fail open: the probe follows the port the instance OWNS
+#     (:443 = 0x01BB). A LISTEN socket on the OTHER pair's :8443 alone must not
+#     be read as "the board's TLS listener is up".
+proc_net listen
+state_reset
+state_set uhttpd.admin.redirect_https '1'
+: > "$RESTART_LOG"
+run_fo
+ok=0
+if [ "$(state_get uhttpd.admin.redirect_https)" = "0" ] &&
+   grep -q 'restart' "$RESTART_LOG"; then
+    ok=1
+fi
+report "(k) board mapping: a :8443 LISTEN alone does not satisfy the :443 probe (hop dropped, fail open)" "$ok"
+if [ "$ok" != 1 ]; then cat "$UCI_STATE" >&2; cat "$RESTART_LOG" >&2; fi
+
+# (l) ...and a real :443 listener keeps it, so (k) is the port being checked and
+#     not the probe being broken.
+proc_net_port 01BB
+state_reset
+state_set uhttpd.admin.redirect_https '1'
+: > "$RESTART_LOG"
+run_fo
+ok=0
+if [ "$(state_get uhttpd.admin.redirect_https)" = "1" ] && [ ! -s "$RESTART_LOG" ]; then
+    ok=1
+fi
+report "(l) board mapping: a :443 LISTEN keeps the hop (the probe is not vacuous)" "$ok"
+if [ "$ok" != 1 ]; then cat "$UCI_STATE" >&2; cat "$RESTART_LOG" >&2; fi
+
+# restore the default (luci) mapping for any later reader.
+M92_ADMIN_HTTP='0.0.0.0:8090'; M92_ADMIN_HTTP6='[::]:8090'
+M92_ADMIN_HTTPS='0.0.0.0:8443'; M92_ADMIN_HTTPS6='[::]:8443'
+M92_ADMIN_TLS_RE=':20FB'; M92_MAIN_TLS_RE=':01BB'
 
 echo
 echo "-- $pass passed, $fail failed --"
