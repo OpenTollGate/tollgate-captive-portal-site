@@ -46,6 +46,13 @@
 # the refuse-to-serve path below, so a router whose board is off the air does
 # not advertise a mapping whose entry pair nothing answers.
 #
+# Rollout (D4): the module half may ship the `board` default only in a release
+# whose feed pin (vendor.lock.json `portal_commit` / the feed recipe's
+# PKG_SOURCE_VERSION) carries THIS script — the feed is the atomicity boundary.
+# A module-only release ships the switch with the default still `luci`, which is
+# a behaviour no-op; a module release that defaulted to `board` against a
+# pre-switch 92 is the torn pair the marker gate above exists to prevent.
+#
 # ─── webroot, scheme, and the anti-LuCI guard
 #
 # The admin SPA is served at the ROOT of the pair this instance owns from its
