@@ -483,6 +483,39 @@ button {
   background: rgba(255, 69, 58, 0.1);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+/* Cross-link to the other admin UI (LuCI). Rendered only from the router's
+   ui_links answer: an anchor when it names an HTTPS url, otherwise the plain
+   reason line below — never a disabled-looking dead button. */
+.ui-crosslink {
+  font-size: var(--font-size-xsmall);
+  color: var(--text-dim);
+  text-decoration: none;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.ui-crosslink:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.ui-crosslink-reason {
+  margin: 0;
+  font-size: var(--font-size-xsmall);
+  color: var(--text-dim);
+  opacity: 0.7;
+  white-space: nowrap;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .app-content {
   position: relative;
   z-index: 1;

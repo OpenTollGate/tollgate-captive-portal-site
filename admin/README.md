@@ -15,6 +15,27 @@ the admin board and the guest portal share one codebase and one release.
   (`../openwrt/rpcd/tollgate`), which maps 1:1 to `tollgate --json …` CLI
   commands. Auth is `session.login` with the router root password.
 
+The `tollgate` plugin maps each ubus method 1:1 to a tollgate CLI subcommand.
+Besides the pre-auth `auth_status` probe (granted to the `unauthenticated` ACL
+group), these reads exist: `config_schema`, `config_get`, `wallet_balance`,
+`wallet_info`, `status`, `health`, `ui_links`, `upstream_scan`,
+`upstream_list`.
+
+### The cross-link to LuCI is a router answer
+
+The header's link to the *other* admin UI (LuCI) comes from the `ui_links`
+ubus method, on top of the tollgate CLI's `ui links` subcommand (JSON output).
+It is never a constant and never the browser's own hostname plus a guessed
+port: whether LuCI answers 8080/443 or 8090/8443 depends on the live mapping,
+and an operator can flip it by setting `entry_ui` (see
+`docs/architecture/default-ui-and-entry-port-decision.md`, D5/D6).
+
+The board renders an anchor only when the router names an **HTTPS** url; when
+the url is empty it renders **no button at all** and shows the router's
+`reason` instead — a link that answers "connection refused" is exactly what D5
+forbids. `ui_links` is in the authenticated `tollgate` read group, so the
+cross-link appears once signed in.
+
 The React guest portal and balance page are unchanged and build separately.
 
 ## Brand

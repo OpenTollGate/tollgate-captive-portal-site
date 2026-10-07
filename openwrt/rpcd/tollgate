@@ -70,6 +70,7 @@ case "$1" in
       "wallet_drain_cashu":{},
       "status":{},
       "health":{},
+      "ui_links":{},
       "upstream_scan":{},
       "upstream_connect":{"ssid":"string","passphrase":"string"},
       "upstream_list":{},
@@ -177,6 +178,15 @@ case "$1" in
         ;;
       health)
         tollgate --json health 2>/dev/null
+        ;;
+      ui_links)
+        # The router's answer for the board's cross-link to the OTHER admin UI
+        # (LuCI). Whether LuCI answers :8080/:443 or :8090/:8443 depends on the
+        # live mapping, so the SPA must never guess a port or build a URL from
+        # location.hostname — it renders what this prints, and renders NOTHING
+        # with the `reason` when a UI has no usable (HTTPS, covering-identity)
+        # link. Read-only, informational; no secret (a LAN admin url).
+        tollgate ui links --json 2>/dev/null
         ;;
       upstream_scan)
         tollgate --json upstream scan 2>/dev/null

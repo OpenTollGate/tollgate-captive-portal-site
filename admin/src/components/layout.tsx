@@ -1,8 +1,11 @@
+import { useState, useEffect } from 'preact/hooks';
 import { useRoute, navigate, type Route } from '../lib/router';
-import { getSessionUser, logout as doLogout } from '../lib/ubus';
+import { getSessionUser, logout as doLogout, fetchUiLinks } from '../lib/ubus';
 import { withBase } from '../lib/paths';
+import type { UiLinks } from '../lib/ui-links';
 import { BRAND } from '../brand';
 import ParticleBg from './particle-bg';
+import UiCrossLink from './ui-cross-link';
 import Dashboard from '../routes/dashboard';
 import Wifi from '../routes/wifi';
 import Devices from '../routes/devices';
@@ -105,6 +108,21 @@ function RouteContent({ route }: { route: Route }) {
 export default function Layout() {
   const route = useRoute();
   const user = getSessionUser() || 'root';
+  // The cross-link to the other admin UI is a ROUTER ANSWER: read it from
+  // `tollgate ui links` over ubus (never from location.hostname + a guessed
+  // port). null while the call is in flight, so nothing dead is shown.
+  const [uiLinks, setUiLinks] = useState<UiLinks | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const links = await fetchUiLinks();
+      if (!cancelled) setUiLinks(links);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function handleLogout() {
     doLogout();
@@ -125,10 +143,13 @@ export default function Layout() {
           />
           <span className="header-user">{user}</span>
         </div>
-        <button className="btn-logout" onClick={handleLogout}>
-          <IconLogout />
-          <span>Logout</span>
-        </button>
+        <div className="header-actions">
+          <UiCrossLink payload={uiLinks} />
+          <button className="btn-logout" onClick={handleLogout}>
+            <IconLogout />
+            <span>Logout</span>
+          </button>
+        </div>
       </header>
 
       {/* Content */}
