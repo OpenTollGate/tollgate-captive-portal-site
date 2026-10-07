@@ -19,6 +19,7 @@
           "wallet_info",
           "status",
           "health",
+          "ui_links",
           "pricing",
           "sessions",
           "upstream_scan",

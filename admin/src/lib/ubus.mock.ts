@@ -258,6 +258,7 @@ export function mockUbusCall(
     }),
     'tollgate.status': () => mockStatus,
     'tollgate.health': () => mockHealth,
+    'tollgate.ui_links': () => mockUiLinks(),
     'tollgate.upstream_scan': () => ({
       success: true,
       message: 'Found 3 network(s)',
@@ -318,4 +319,62 @@ export function mockCredentialStatus(): {
 
 export function mockSessionId(): string {
   return MOCK_SESSION;
+}
+
+// mockUiLinks answers the `tollgate ui_links` method with the shape the router
+// prints for `tollgate ui links --json`: an `entry_ui` name and one entry per
+// UI carrying the url it answers on plus, when there is none, the reason.
+//
+// A demo/test can ask for the no-link answer with the URL query
+// `?mockUiLinks=none`, which is how the "no dead button, show the reason"
+// branch is exercised without a router.
+export function mockUiLinks(): {
+  entry_ui: string;
+  links: {
+    board: { url: string; port: string; tls_port: string; reason: string };
+    luci: { url: string; port: string; tls_port: string; reason: string };
+  };
+} {
+  let mode = 'default';
+  if (typeof window !== 'undefined' && window.location) {
+    const asked = new URLSearchParams(window.location.search).get('mockUiLinks');
+    if (asked) mode = asked.toLowerCase();
+  }
+
+  const board = {
+    url: `https://${BRAND.id}-gw1.lan/`,
+    port: '8080',
+    tls_port: '443',
+    reason: '',
+  };
+
+  if (mode === 'none') {
+    return {
+      entry_ui: 'board',
+      links: {
+        board,
+        luci: {
+          url: '',
+          port: '8090',
+          tls_port: '8443',
+          reason: 'no HTTPS listener on 8443',
+        },
+      },
+    };
+  }
+
+  // Default: the board owns the entry pair, LuCI answers its own pair and its
+  // identity covers this router, so the cross-link is advertised.
+  return {
+    entry_ui: 'board',
+    links: {
+      board,
+      luci: {
+        url: `https://${BRAND.id}-gw1.lan:8443/`,
+        port: '8090',
+        tls_port: '8443',
+        reason: '',
+      },
+    },
+  };
 }

@@ -332,18 +332,6 @@ export default function LoginPage({ onLoggedIn }: { onLoggedIn?: () => void }) {
             {BRAND.name} &middot; {BRAND.poweredBy}
           </p>
 
-          <a
-            href={`http://${window.location.hostname}:8080/`}
-            style={{
-              fontSize: 'var(--font-size-xsmall)',
-              color: 'var(--text-dim)',
-              textDecoration: 'none',
-              opacity: 0.7,
-            }}
-          >
-            OpenWrt LuCI →
-          </a>
-
           {mockMode && (
             <a
               href={withBase('mockups/')}
