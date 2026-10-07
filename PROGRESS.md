@@ -35,5 +35,10 @@ branch `pr/portal-luci-link` @ origin/main `4158030`. Push target: `fork`.
 ## Verified
 - `npm ci` (node v22.22.1) — OK.
 - `npx vitest run tests/unit/ui-cross-link.test.js` — 10 passed.
+- `npx vitest run` for the touched/consumer files (ui-cross-link,
+  admin-credential-guard, brand, brand-bundling) — 49 passed (4 files).
 - `npx tsc -p admin/tsconfig.json` — only the pre-existing
   `admin/src/routes/devices.tsx(26,15)` implicit-any error (untouched file).
+- `npm run build:admin` — OK (26 modules, 66.74 kB js).
+
+Pushed: `d9b46d2` -> `fork/pr/portal-luci-link`.
