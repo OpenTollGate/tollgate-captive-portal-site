@@ -32,6 +32,13 @@ function configSetCalls(page) {
   );
 }
 
+/** Raw uci.set calls the board made, as {config, section}. */
+function uciSetCalls(page) {
+  return page.evaluate(() =>
+    JSON.parse(window.sessionStorage.getItem('tg.mock.uci_set') || '[]'),
+  );
+}
+
 test.describe('admin board: private network + administration access', () => {
   test('the settings page carries both surfaces, on their own cards', async ({
     page,
@@ -162,11 +169,138 @@ test.describe('admin board: private network + administration access', () => {
     await expect(message).toHaveClass(/success-text/);
     await expect(message).toContainText('both private radios');
 
-    // The edit went through the module's writer: one config_set per value, in
-    // the order the module documents, and no value is echoed into the page.
+    // The edit went through the module's writer, passphrase FIRST — a value
+    // the module would refuse is refused before anything changed — and no
+    // value is echoed into the page.
     expect(await configSetCalls(page)).toEqual([
-      { key: 'private_ssid', value_len: ssid.length },
       { key: 'private_key', value_len: psk.length },
+      { key: 'private_ssid', value_len: ssid.length },
+    ]);
+    expect(await uciSetCalls(page)).toEqual([]);
+    expect(await page.locator('body').innerText()).not.toContain(psk);
+  });
+
+  // The module provisions BOTH sections — wireless.private_radio0 and
+  // wireless.private_radio1 (its operator_settings.go declares the names;
+  // 99-tollgate-setup mints them). Pinning only radio0's name would leave the
+  // 5 GHz half unpinned, which is how a rename slips past the tests.
+  test('the 5 GHz private radio (private_radio1) is edited through config_set too', async ({
+    page,
+  }) => {
+    await page.goto(WIFI);
+
+    const privateCards = page
+      .locator('.card-body > div')
+      .filter({ hasText: /-private/ });
+    await expect(privateCards.nth(1)).toBeVisible({ timeout: 30000 });
+    await privateCards.nth(1).getByRole('button', { name: 'Edit' }).click();
+
+    await privateCards.nth(1).locator('input[type="text"]').fill('unit-5g-ssid');
+    await privateCards.nth(1).getByRole('button', { name: 'Save' }).click();
+
+    await expect(page.locator('#wifi-save-message')).toHaveClass(/success-text/, {
+      timeout: 30000,
+    });
+    expect(await configSetCalls(page)).toEqual([
+      { key: 'private_ssid', value_len: 'unit-5g-ssid'.length },
+    ]);
+    expect(await uciSetCalls(page)).toEqual([]);
+  });
+
+  // The discrimination must cut both ways: a guest (captive-portal) radio is
+  // NOT module-owned, and its edit still takes the raw UCI path. If the
+  // private-radio detection ever overreached, this is the spec that says so.
+  test('a guest radio edit stays on raw uci', async ({ page }) => {
+    await page.goto(WIFI);
+
+    const guestCard = page
+      .locator('.card-body > div')
+      .filter({ hasText: /tollgate-5g/ })
+      .first();
+    await expect(guestCard).toBeVisible({ timeout: 30000 });
+    await guestCard.getByRole('button', { name: 'Edit' }).click();
+
+    await guestCard.locator('input[type="text"]').fill('guest-new-name');
+    await guestCard.getByRole('button', { name: 'Save' }).click();
+
+    await expect(page.locator('#wifi-save-message')).toHaveClass(/success-text/, {
+      timeout: 30000,
+    });
+    expect(await configSetCalls(page)).toEqual([]);
+    expect(await uciSetCalls(page)).toEqual([
+      { config: 'wireless', section: 'wlan1' },
+    ]);
+  });
+
+  // A passphrase the module refuses (here: WPA2-PSK bounds) is refused as the
+  // FIRST write, so nothing else is sent and the router is untouched — the
+  // operator retries, rather than being left on a half-applied save. The
+  // refusal rides `applied: [{status: 'refused'}]` with `success` still true,
+  // which this page used to render as a green save.
+  test('a refused passphrase is reported as refused and nothing else is sent', async ({
+    page,
+  }) => {
+    await page.goto('./?mockCredentialState=set&mockRefuse=private_key#/wifi');
+
+    const privateCard = page
+      .locator('.card-body > div')
+      .filter({ hasText: /-private/ })
+      .first();
+    await expect(privateCard).toBeVisible({ timeout: 30000 });
+    await privateCard.getByRole('button', { name: 'Edit' }).click();
+
+    const psk = 'abc123';
+    await privateCard.locator('input[type="text"]').fill('unit-private-ssid');
+    await privateCard.locator('input[type="password"]').fill(psk);
+    await privateCard.getByRole('button', { name: 'Save' }).click();
+
+    const message = page.locator('#wifi-save-message');
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await expect(message).toHaveClass(/error-text/);
+    await expect(message).toContainText('Refused:');
+    await expect(message).toContainText('WPA2-PSK bounds');
+
+    // Only the passphrase was sent; the SSID write never happened.
+    expect(await configSetCalls(page)).toEqual([
+      { key: 'private_key', value_len: psk.length },
+    ]);
+    // The form stays open for the retry, and the page never echoes the value.
+    await expect(privateCard.locator('input[type="password"]')).toBeVisible();
+    expect(await page.locator('body').innerText()).not.toContain(psk);
+  });
+
+  // The m4 case proper: the passphrase lands, the SSID is then refused. The
+  // board must name the partial state — both radios now carry the previous
+  // SSID with the NEW passphrase — instead of a bare failure.
+  test('a refused SSID after an applied passphrase names the partial state', async ({
+    page,
+  }) => {
+    await page.goto('./?mockCredentialState=set&mockRefuse=private_ssid#/wifi');
+
+    const privateCard = page
+      .locator('.card-body > div')
+      .filter({ hasText: /-private/ })
+      .first();
+    await expect(privateCard).toBeVisible({ timeout: 30000 });
+    await privateCard.getByRole('button', { name: 'Edit' }).click();
+
+    const psk = 'unit-private-psk-value';
+    await privateCard.locator('input[type="text"]').fill('a'.repeat(33));
+    await privateCard.locator('input[type="password"]').fill(psk);
+    await privateCard.getByRole('button', { name: 'Save' }).click();
+
+    const message = page.locator('#wifi-save-message');
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await expect(message).toHaveClass(/error-text/);
+    await expect(message).toContainText('Refused:');
+    await expect(message).toContainText('SSID bounds');
+    await expect(message).toContainText('passphrase was applied to both private radios');
+    await expect(message).toContainText('previous SSID with the NEW passphrase');
+
+    // Both writes were made, passphrase first.
+    expect(await configSetCalls(page)).toEqual([
+      { key: 'private_key', value_len: psk.length },
+      { key: 'private_ssid', value_len: 33 },
     ]);
     expect(await page.locator('body').innerText()).not.toContain(psk);
   });

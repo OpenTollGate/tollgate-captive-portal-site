@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { ubusCall } from '../lib/ubus';
+import { isPrivateRadioIface } from '../lib/private-radio';
+import { refusalInApplied } from '../lib/module-reply';
 
 interface WifiIface {
   ifname: string;
@@ -245,6 +247,18 @@ export default function Wifi() {
     setSaveMsgSection(null);
   }
 
+  // The structural half of the private-radio contract (mode, network) lives
+  // on the iface object, not on the section name — see lib/private-radio.ts.
+  function findIfaceBySection(section: string): WifiIface | undefined {
+    for (const radio of Object.values(radios)) {
+      const hit = radio.interfaces?.find(
+        (i) => (i.section || i.ifname) === section,
+      );
+      if (hit) return hit;
+    }
+    return undefined;
+  }
+
   async function saveEdit() {
     if (!editSsid) return;
     // The message is bound to this interface now, while its name is still known.
@@ -257,25 +271,44 @@ export default function Wifi() {
       // the service writes BOTH radios from it. Editing one section by raw UCI
       // here would be reverted at the next service start, and would leave the
       // 2.4 GHz and 5 GHz SSIDs different — so the edit goes through
-      // `config_set` instead, which is the one writer.
-      if (editSsid.startsWith('private_radio')) {
-        const res = await ubusCall('tollgate', 'config_set', {
-          key: 'private_ssid',
-          value: editName,
-        });
-        if (!res.success) {
-          setSaveMsg(res.error || 'Failed to save');
-          return;
-        }
+      // `config_set` instead, which is the one writer. Which sections count as
+      // private is the module's contract, pinned in lib/private-radio.ts.
+      if (isPrivateRadioIface(editSsid, findIfaceBySection(editSsid))) {
+        // The passphrase goes FIRST. A value the module will refuse (WPA2-PSK
+        // bounds) is then refused before anything on the router has changed,
+        // so the operator retries from an untouched state instead of from a
+        // half-applied save.
         if (editPassword) {
           const keyRes = await ubusCall('tollgate', 'config_set', {
             key: 'private_key',
             value: editPassword,
           });
-          if (!keyRes.success) {
-            setSaveMsg(keyRes.error || 'Failed to save');
+          const keyFailure = keyRes.success
+            ? refusalInApplied(keyRes)
+            : `Failed: ${keyRes.error || 'the module could not apply this change'}`;
+          if (keyFailure) {
+            setSaveMsg(keyFailure);
             return;
           }
+        }
+        const res = await ubusCall('tollgate', 'config_set', {
+          key: 'private_ssid',
+          value: editName,
+        });
+        const ssidFailure = res.success
+          ? refusalInApplied(res)
+          : `Failed: ${res.error || 'the module could not apply this change'}`;
+        if (ssidFailure) {
+          // Name the partial state instead of swallowing it: when a passphrase
+          // was sent first and applied, both radios now carry the OLD SSID
+          // with the NEW passphrase, and the operator needs to know the SSID
+          // is the half that must be retried.
+          setSaveMsg(
+            editPassword
+              ? `The passphrase was applied to both private radios, but the SSID change was not — ${ssidFailure}. Both radios currently use the previous SSID with the NEW passphrase; retry the SSID on its own.`
+              : ssidFailure,
+          );
+          return;
         }
         setSaveMsg('saved to both private radios — the service applies it now');
         setEditSsid(null);

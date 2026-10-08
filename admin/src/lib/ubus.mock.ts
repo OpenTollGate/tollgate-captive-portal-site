@@ -26,6 +26,19 @@ function recordConfigSet(key: string, value: string) {
   }
 }
 
+// Raw uci writes, recorded as {config, section} for the same reason: a test
+// must be able to prove a guest-radio edit took the UCI path while proving a
+// private-radio edit did not.
+function recordUciSet(config: unknown, section: unknown) {
+  try {
+    const calls = JSON.parse(window.sessionStorage.getItem('tg.mock.uci_set') || '[]');
+    calls.push({ config: String(config), section: String(section) });
+    window.sessionStorage.setItem('tg.mock.uci_set', JSON.stringify(calls));
+  } catch {
+    // best-effort, tests only
+  }
+}
+
 // A value the module cannot converge is reported the same way whichever reply
 // path carried it: `applied: [{status: 'refused'}]`, with `success` still true.
 // Nothing but a real router (an `admin_access` naming a bridge it does not have)
@@ -38,6 +51,23 @@ function recordConfigSet(key: string, value: string) {
 function mockRefusedKey(): string {
   if (typeof window === 'undefined' || !window.location) return '';
   return new URLSearchParams(window.location.search).get('mockRefuse') || '';
+}
+
+// The refusal detail is the one the module actually sends for that key — its
+// validators (src/cli/operator_settings.go) refuse by bounds for the private
+// credentials and by bridge existence for admin_access — so a spec copies no
+// text the router would never produce.
+function refusalDetail(key: string): string {
+  switch (key) {
+    case 'admin_access':
+      return 'admin_access names a bridge this router does not have; the board keeps its previous scope';
+    case 'private_key':
+      return 'private_key must be between 8 and 63 characters (WPA2-PSK bounds); the router keeps its previous passphrase';
+    case 'private_ssid':
+      return 'private_ssid must be at most 32 bytes (SSID bounds); the router keeps its previous SSID';
+    default:
+      return `${key} was refused; the router keeps its previous value`;
+  }
 }
 
 function refusedReply(key: string, value: string, wholesale = false) {
@@ -58,7 +88,7 @@ function refusedReply(key: string, value: string, wholesale = false) {
         {
           setting: key,
           status: 'refused',
-          detail: `${key} names a bridge this router does not have; the board keeps its previous scope`,
+          detail: refusalDetail(key),
         },
       ],
     },
@@ -133,6 +163,11 @@ const wirelessStatus = {
     config: { channel: 36, hwmode: '11a', htmode: 'VHT80', country: 'NO' },
     interfaces: [
       { ifname: 'wlan1', ssid: `${BRAND.id}-5g`, encryption: 'psk2', hidden: false, mode: 'Master', network: ['lan'] },
+      // The 5 GHz half of the private network. The module provisions
+      // private_radio0 AND private_radio1 with the same credentials
+      // (99-tollgate-setup), so the mock carries both — the WiFi page must
+      // route edits of EITHER through the module's writer.
+      { section: 'private_radio1', ifname: 'wlan1-private', ssid: `${BRAND.id}-private`, encryption: 'psk2+ccmp', hidden: false, mode: 'Master', network: ['private'] },
     ],
   },
 };
@@ -298,7 +333,10 @@ export function mockUbusCall(
       }
       return {};
     },
-    'uci.set': () => ({}),
+    'uci.set': () => {
+      recordUciSet(_params?.config, _params?.section);
+      return {};
+    },
     'uci.commit': () => ({}),
 
     // tollgate --json methods

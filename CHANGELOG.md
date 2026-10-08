@@ -65,7 +65,18 @@ All notable changes to this project are documented here.
     now reverts at the next service start, and which let the 2.4 GHz and 5 GHz
     SSIDs drift apart. The edit goes through `tollgate config_set`
     (`private_ssid`, and `private_key` only when a password was typed), which is
-    the one writer, applies immediately, and writes both radios.
+    the one writer, applies immediately, and writes both radios. Which sections
+    count as private is the module's contract (`wireless.private_radio0/1`,
+    with an AP on the `private` network as the structural fallback), pinned in
+    a shared helper with unit tests — not a string prefix at the call site.
+  - **A half-applied private-radio save says so.** The passphrase is sent
+    FIRST, so a value the module refuses (WPA2-PSK bounds) is refused before
+    anything on the router changed; and if the SSID write is refused or fails
+    after the passphrase applied, the board names the partial state — both
+    radios carry the previous SSID with the NEW passphrase — instead of a bare
+    "failed". The WiFi page also reads the module's `applied[]` replies now,
+    so a refusal (which arrives with `success` still true) is no longer
+    rendered as "saved to both private radios".
   - **A successful save says so.** The WiFi page's save message used to be
     rendered *inside* the edit form, which closes on success — so a successful
     save reported nothing at all while a failure reported in red; and the
