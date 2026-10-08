@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { ubusCall } from '../lib/ubus';
+import { isPrivateRadioIface } from '../lib/private-radio';
+import { refusalInApplied } from '../lib/module-reply';
 
 interface WifiIface {
   ifname: string;
@@ -55,6 +57,15 @@ function shortEncryption(enc: string): string {
   return enc.length > 10 ? enc.substring(0, 10) : enc;
 }
 
+// The private-radio save writes the passphrase before the SSID; this is what
+// the operator is told when the passphrase LANDED but the SSID write did not
+// (a refusal, a `success: false`, or a transport-level throw) — both radios
+// then carry the previous SSID with the NEW passphrase, and that state must
+// be named, not swallowed into a bare failure.
+function partialKeyAppliedMessage(reason: string): string {
+  return `The passphrase was applied to both private radios, but the SSID change was not — ${reason}. Both radios currently use the previous SSID with the NEW passphrase; retry the SSID on its own.`;
+}
+
 export default function Wifi() {
   const [radios, setRadios] = useState<Record<string, WifiRadio>>({});
   const [loading, setLoading] = useState(true);
@@ -62,6 +73,13 @@ export default function Wifi() {
   const [editSsid, setEditSsid] = useState<string | null>(null);
   const [editPassword, setEditPassword] = useState('');
   const [editName, setEditName] = useState('');
+  // Which interface a save message belongs to. The message has to OUTLIVE the
+  // edit form: on success the form closes in the same render that sets the
+  // message, so a message rendered inside the form was never seen at all — a
+  // successful save reported nothing, while a failed one (which leaves the form
+  // open) reported in red. That read as "nothing happened" for the private
+  // radios, whose save now goes through the module.
+  const [saveMsgSection, setSaveMsgSection] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
@@ -235,13 +253,75 @@ export default function Wifi() {
     setEditName(ssid);
     setEditPassword('');
     setSaveMsg('');
+    setSaveMsgSection(null);
+  }
+
+  // The structural half of the private-radio contract (mode, network) lives
+  // on the iface object, not on the section name — see lib/private-radio.ts.
+  function findIfaceBySection(section: string): WifiIface | undefined {
+    for (const radio of Object.values(radios)) {
+      const hit = radio.interfaces?.find(
+        (i) => (i.section || i.ifname) === section,
+      );
+      if (hit) return hit;
+    }
+    return undefined;
   }
 
   async function saveEdit() {
     if (!editSsid) return;
+    // The message is bound to this interface now, while its name is still known.
+    setSaveMsgSection(editSsid);
     setSaving(true);
     setSaveMsg('');
+    // Set once the passphrase write has landed: a later failure on the SSID
+    // write — whatever its shape — leaves a partial state the catch must
+    // name too, not only the refusal paths that check it inline.
+    let privateKeyApplied = false;
     try {
+      // The private (management) radios are owned by the module's config: their
+      // SSID and passphrase are `private_ssid`/`private_key` in config.json, and
+      // the service writes BOTH radios from it. Editing one section by raw UCI
+      // here would be reverted at the next service start, and would leave the
+      // 2.4 GHz and 5 GHz SSIDs different — so the edit goes through
+      // `config_set` instead, which is the one writer. Which sections count as
+      // private is the module's contract, pinned in lib/private-radio.ts.
+      if (isPrivateRadioIface(editSsid, findIfaceBySection(editSsid))) {
+        // The passphrase goes FIRST. A value the module will refuse (WPA2-PSK
+        // bounds) is then refused before anything on the router has changed,
+        // so the operator retries from an untouched state instead of from a
+        // half-applied save.
+        if (editPassword) {
+          const keyRes = await ubusCall('tollgate', 'config_set', {
+            key: 'private_key',
+            value: editPassword,
+          });
+          const keyFailure = keyRes.success
+            ? refusalInApplied(keyRes)
+            : `Failed: ${keyRes.error || 'the module could not apply this change'}`;
+          if (keyFailure) {
+            setSaveMsg(keyFailure);
+            return;
+          }
+          privateKeyApplied = true;
+        }
+        const res = await ubusCall('tollgate', 'config_set', {
+          key: 'private_ssid',
+          value: editName,
+        });
+        const ssidFailure = res.success
+          ? refusalInApplied(res)
+          : `Failed: ${res.error || 'the module could not apply this change'}`;
+        if (ssidFailure) {
+          setSaveMsg(editPassword ? partialKeyAppliedMessage(ssidFailure) : ssidFailure);
+          return;
+        }
+        setSaveMsg('saved to both private radios — the service applies it now');
+        setEditSsid(null);
+        setTimeout(() => fetchStatus(), 2000);
+        return;
+      }
+
       await ubusCall('uci', 'set', {
         config: 'wireless',
         section: editSsid,
@@ -267,7 +347,11 @@ export default function Wifi() {
       setEditSsid(null);
       setTimeout(() => fetchStatus(), 2000);
     } catch (err: any) {
-      setSaveMsg(err.message || 'Failed to save');
+      setSaveMsg(
+        privateKeyApplied
+          ? partialKeyAppliedMessage(err.message || 'the module could not be reached')
+          : err.message || 'Failed to save',
+      );
     } finally {
       setSaving(false);
     }
@@ -448,12 +532,6 @@ export default function Wifi() {
                         Cancel
                       </button>
                     </div>
-                    {saveMsg && saveMsg !== 'saved' && (
-                      <p className="error-text">{saveMsg}</p>
-                    )}
-                    {saveMsg === 'saved' && (
-                      <p className="success-text">Changes applied</p>
-                    )}
                   </div>
                 ) : (
                   <button
@@ -463,6 +541,15 @@ export default function Wifi() {
                   >
                     Edit
                   </button>
+                )}
+                {saveMsg && saveMsgSection === section && (
+                  saveMsg.startsWith('saved') ? (
+                    <p className="success-text" id="wifi-save-message">
+                      {saveMsg === 'saved' ? 'Changes applied' : saveMsg}
+                    </p>
+                  ) : (
+                    <p className="error-text" id="wifi-save-message">{saveMsg}</p>
+                  )
                 )}
               </div>
               );
