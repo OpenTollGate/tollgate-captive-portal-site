@@ -32,6 +32,25 @@ describe('isPrivateRadioIface (the module-owned section contract)', () => {
     ).toBe(true);
   });
 
+  // netifd's `network.wireless status` (the primary real-router path) nests
+  // the UCI values under a per-interface `config` table and carries `network`
+  // as a plain string. A structural fallback that only read the flat mock
+  // shape would be inert exactly where it is supposed to catch a rename.
+  it('reads the netifd status shape: config-nested, network as a string', () => {
+    expect(
+      isPrivateRadioIface('renamed_priv0', {
+        section: 'renamed_priv0',
+        ifname: 'wlan0-priv',
+        config: { mode: 'ap', network: 'private', ssid: 'x' },
+      }),
+    ).toBe(true);
+    expect(
+      isPrivateRadioIface('wlan0-priv', {
+        config: { mode: 'ap', network: 'lan' },
+      }),
+    ).toBe(false);
+  });
+
   it('rejects guest radios, non-AP ifaces, and near-miss names', () => {
     expect(isPrivateRadioIface('wlan0', { mode: 'Master', network: ['lan'] })).toBe(false);
     expect(isPrivateRadioIface('default_radio0', { mode: 'ap', network: ['wan'] })).toBe(false);

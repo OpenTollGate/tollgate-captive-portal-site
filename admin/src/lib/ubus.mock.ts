@@ -53,6 +53,15 @@ function mockRefusedKey(): string {
   return new URLSearchParams(window.location.search).get('mockRefuse') || '';
 }
 
+// A transport-level failure (ubus rejects the call, the connection dies) is a
+// different shape from a module refusal: `ubusCall` throws and there is no
+// reply to inspect at all. `?mockThrow=<key>` makes the mock reject that
+// config_set the same way, so the board's throw path is exercisable too.
+function mockThrowKey(): string {
+  if (typeof window === 'undefined' || !window.location) return '';
+  return new URLSearchParams(window.location.search).get('mockThrow') || '';
+}
+
 // The refusal detail is the one the module actually sends for that key — its
 // validators (src/cli/operator_settings.go) refuse by bounds for the private
 // credentials and by bridge existence for admin_access — so a spec copies no
@@ -149,7 +158,10 @@ const wirelessStatus = {
     up: true,
     config: { channel: 6, hwmode: '11g', htmode: 'HT40', country: 'NO' },
     interfaces: [
-      { ifname: 'wlan0', ssid: BRAND.id, encryption: 'psk2', hidden: false, mode: 'Master', network: ['lan'] },
+      // Guest ifaces carry a section too — netifd always reports one, and a
+      // mock without sections would let the board conflate `ifname` with the
+      // UCI section on the raw-uci edit path.
+      { section: 'default_radio0', ifname: 'wlan0', ssid: BRAND.id, encryption: 'psk2', hidden: false, mode: 'Master', network: ['lan'] },
       // The private (management) SSID, served by its own wifi-iface. Its UCI
       // section name is what the WiFi page keys on to route an edit through
       // `tollgate config_set` instead of raw `uci set` — the module owns these
@@ -162,7 +174,7 @@ const wirelessStatus = {
     up: true,
     config: { channel: 36, hwmode: '11a', htmode: 'VHT80', country: 'NO' },
     interfaces: [
-      { ifname: 'wlan1', ssid: `${BRAND.id}-5g`, encryption: 'psk2', hidden: false, mode: 'Master', network: ['lan'] },
+      { section: 'default_radio1', ifname: 'wlan1', ssid: `${BRAND.id}-5g`, encryption: 'psk2', hidden: false, mode: 'Master', network: ['lan'] },
       // The 5 GHz half of the private network. The module provisions
       // private_radio0 AND private_radio1 with the same credentials
       // (99-tollgate-setup), so the mock carries both — the WiFi page must
@@ -353,6 +365,9 @@ export function mockUbusCall(
       // so a browser test can prove the board SENT it without the secret ever
       // being rendered into the page.
       recordConfigSet(key, value);
+      if (mockThrowKey() === key) {
+        throw new Error('ubus: call failed (connection reset by peer)');
+      }
       if (mockRefusedKey() === key) return refusedReply(key, value);
       const secret = key === 'private_key';
       return {

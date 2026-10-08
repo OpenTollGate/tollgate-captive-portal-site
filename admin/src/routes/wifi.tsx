@@ -57,6 +57,15 @@ function shortEncryption(enc: string): string {
   return enc.length > 10 ? enc.substring(0, 10) : enc;
 }
 
+// The private-radio save writes the passphrase before the SSID; this is what
+// the operator is told when the passphrase LANDED but the SSID write did not
+// (a refusal, a `success: false`, or a transport-level throw) — both radios
+// then carry the previous SSID with the NEW passphrase, and that state must
+// be named, not swallowed into a bare failure.
+function partialKeyAppliedMessage(reason: string): string {
+  return `The passphrase was applied to both private radios, but the SSID change was not — ${reason}. Both radios currently use the previous SSID with the NEW passphrase; retry the SSID on its own.`;
+}
+
 export default function Wifi() {
   const [radios, setRadios] = useState<Record<string, WifiRadio>>({});
   const [loading, setLoading] = useState(true);
@@ -265,6 +274,10 @@ export default function Wifi() {
     setSaveMsgSection(editSsid);
     setSaving(true);
     setSaveMsg('');
+    // Set once the passphrase write has landed: a later failure on the SSID
+    // write — whatever its shape — leaves a partial state the catch must
+    // name too, not only the refusal paths that check it inline.
+    let privateKeyApplied = false;
     try {
       // The private (management) radios are owned by the module's config: their
       // SSID and passphrase are `private_ssid`/`private_key` in config.json, and
@@ -290,6 +303,7 @@ export default function Wifi() {
             setSaveMsg(keyFailure);
             return;
           }
+          privateKeyApplied = true;
         }
         const res = await ubusCall('tollgate', 'config_set', {
           key: 'private_ssid',
@@ -299,15 +313,7 @@ export default function Wifi() {
           ? refusalInApplied(res)
           : `Failed: ${res.error || 'the module could not apply this change'}`;
         if (ssidFailure) {
-          // Name the partial state instead of swallowing it: when a passphrase
-          // was sent first and applied, both radios now carry the OLD SSID
-          // with the NEW passphrase, and the operator needs to know the SSID
-          // is the half that must be retried.
-          setSaveMsg(
-            editPassword
-              ? `The passphrase was applied to both private radios, but the SSID change was not — ${ssidFailure}. Both radios currently use the previous SSID with the NEW passphrase; retry the SSID on its own.`
-              : ssidFailure,
-          );
+          setSaveMsg(editPassword ? partialKeyAppliedMessage(ssidFailure) : ssidFailure);
           return;
         }
         setSaveMsg('saved to both private radios — the service applies it now');
@@ -341,7 +347,11 @@ export default function Wifi() {
       setEditSsid(null);
       setTimeout(() => fetchStatus(), 2000);
     } catch (err: any) {
-      setSaveMsg(err.message || 'Failed to save');
+      setSaveMsg(
+        privateKeyApplied
+          ? partialKeyAppliedMessage(err.message || 'the module could not be reached')
+          : err.message || 'Failed to save',
+      );
     } finally {
       setSaving(false);
     }

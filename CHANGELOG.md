@@ -67,8 +67,9 @@ All notable changes to this project are documented here.
     (`private_ssid`, and `private_key` only when a password was typed), which is
     the one writer, applies immediately, and writes both radios. Which sections
     count as private is the module's contract (`wireless.private_radio0/1`,
-    with an AP on the `private` network as the structural fallback), pinned in
-    a shared helper with unit tests — not a string prefix at the call site.
+    with an AP on the `private` network as the structural fallback, read from
+    both the netifd `config`-nested status shape and the flat fallback), pinned
+    in a shared helper with unit tests — not a string prefix at the call site.
   - **A half-applied private-radio save says so.** The passphrase is sent
     FIRST, so a value the module refuses (WPA2-PSK bounds) is refused before
     anything on the router changed; and if the SSID write is refused or fails

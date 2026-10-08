@@ -228,7 +228,7 @@ test.describe('admin board: private network + administration access', () => {
     });
     expect(await configSetCalls(page)).toEqual([]);
     expect(await uciSetCalls(page)).toEqual([
-      { config: 'wireless', section: 'wlan1' },
+      { config: 'wireless', section: 'default_radio1' },
     ]);
   });
 
@@ -301,6 +301,42 @@ test.describe('admin board: private network + administration access', () => {
     expect(await configSetCalls(page)).toEqual([
       { key: 'private_key', value_len: psk.length },
       { key: 'private_ssid', value_len: 33 },
+    ]);
+    expect(await page.locator('body').innerText()).not.toContain(psk);
+  });
+
+  // A transport-level failure on the SSID write (the ubus call itself throws)
+  // is the third shape a half-applied save can take. It must name the partial
+  // state exactly like a refusal does — the catch path, not the reply
+  // inspection.
+  test('a transport failure on the SSID write names the partial state too', async ({
+    page,
+  }) => {
+    await page.goto('./?mockCredentialState=set&mockThrow=private_ssid#/wifi');
+
+    const privateCard = page
+      .locator('.card-body > div')
+      .filter({ hasText: /-private/ })
+      .first();
+    await expect(privateCard).toBeVisible({ timeout: 30000 });
+    await privateCard.getByRole('button', { name: 'Edit' }).click();
+
+    const psk = 'unit-private-psk-value';
+    await privateCard.locator('input[type="text"]').fill('unit-private-ssid');
+    await privateCard.locator('input[type="password"]').fill(psk);
+    await privateCard.getByRole('button', { name: 'Save' }).click();
+
+    const message = page.locator('#wifi-save-message');
+    await expect(message).toBeVisible({ timeout: 30000 });
+    await expect(message).toHaveClass(/error-text/);
+    await expect(message).toContainText('passphrase was applied to both private radios');
+    await expect(message).toContainText('previous SSID with the NEW passphrase');
+    await expect(message).toContainText('connection reset');
+
+    // The SSID write was attempted — the throw happened after it was sent.
+    expect(await configSetCalls(page)).toEqual([
+      { key: 'private_key', value_len: psk.length },
+      { key: 'private_ssid', value_len: 'unit-private-ssid'.length },
     ]);
     expect(await page.locator('body').innerText()).not.toContain(psk);
   });

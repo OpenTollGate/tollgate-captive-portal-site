@@ -17,25 +17,38 @@
  *
  * Detection accepts either signal. The name is the fast path; the structural
  * one (an AP bound to the `private` network) is the safety net for a
- * module-side rename — the exact case a name prefix alone would miss. ubus
- * reports AP mode as 'Master' while a `uci get` fallback reports 'ap', so
- * both spellings count.
+ * module-side rename — the exact case a name prefix alone would miss.
+ *
+ * Two data shapes carry the structural signal, and both are read:
+ *   - netifd's `network.wireless status` nests the UCI values under a
+ *     per-interface `config` table, with `network` as a plain string;
+ *   - the `uci get` fallback in the WiFi page (and the mock in demo/test
+ *     mode) builds flat entries with `network` as an array. UCI spells AP
+ *     mode 'ap'; the mock's flat entries follow iwinfo's 'Master' — both
+ *     count, so the mock cannot lie about which path the board takes.
  */
 export const PRIVATE_RADIO_SECTION_PREFIX = 'private_radio';
 export const PRIVATE_NETWORK_NAME = 'private';
 
-export function isPrivateRadioIface(
-  section: string,
-  iface?: { mode?: string; network?: string[] },
-): boolean {
-  if (typeof section === 'string' && section.startsWith(PRIVATE_RADIO_SECTION_PREFIX)) {
+interface IfaceLike {
+  mode?: string;
+  network?: string | string[];
+  config?: {
+    mode?: string;
+    network?: string | string[];
+  };
+}
+
+export function isPrivateRadioIface(section: string, iface?: IfaceLike): boolean {
+  if (section.startsWith(PRIVATE_RADIO_SECTION_PREFIX)) {
     return true;
   }
-  const mode = (iface?.mode || '').toLowerCase();
+  const cfg = iface?.config || iface;
+  const mode = String(cfg?.mode || '').toLowerCase();
   const isAp = mode === 'ap' || mode === 'master';
-  return (
-    isAp &&
-    Array.isArray(iface?.network) &&
-    iface.network.includes(PRIVATE_NETWORK_NAME)
-  );
+  if (!isAp) return false;
+  const network = cfg?.network;
+  const nets =
+    typeof network === 'string' ? network.split(/\s+/).filter(Boolean) : network;
+  return Array.isArray(nets) && nets.includes(PRIVATE_NETWORK_NAME);
 }
