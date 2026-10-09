@@ -1,0 +1,70 @@
+name: Build Package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PACKAGE_NAME: "tollgate-captive-portal"
+  NODE_VERSION: "22"
+
+jobs:
+  determine-versioning:
+    runs-on: ubuntu-latest
+    outputs:
+      package_version: ${{ steps.version.outputs.package_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          BASE_VERSION=$(jq -r .version package.json)
+          PACKAGE_VERSION="${BASE_VERSION}.${{ github.run_number }}.${SHORT_SHA}"
+          echo "package_version=${PACKAGE_VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${PACKAGE_VERSION}"
+
+  build-spa:
+    runs-on: ubuntu-latest
+    needs: determine-versioning
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install
+      - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spa-dist
+          path: build/
+
+  package-ipk:
+    needs: [determine-versioning, build-spa]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        architecture:
+          - aarch64_cortex-a53
+          - aarch64_cortex-a72
+          - arm_cortex-a7
+          - mips_24kc
+          - mipsel_24kc
+          - x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: spa-dist
+          path: build/
+      - name: Build ipk
+        run: |
+          chmod +x packaging/build-ipk.sh
+          packaging/build-ipk.sh \
+            "${{ matrix.architecture }}" \
+            "${{ needs.determine-versioning.outputs.package_version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}_${{ needs.determine-versioning.outputs.package_version }}_${{ matrix.architecture }}.ipk
+          path: "*.ipk"
