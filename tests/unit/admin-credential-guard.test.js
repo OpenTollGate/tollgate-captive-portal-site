@@ -59,10 +59,14 @@ describe('credential state probe (pre-auth)', () => {
 
     const status = await fetchCredentialStatus();
 
+    // A router that does not answer the marker question is not a provisional
+    // one: `provisional` defaults to false and is only true on an explicit
+    // answer (see tests/unit/admin-provisional-credential.test.js).
     expect(status).toEqual({
       state: 'set',
       passwordSet: true,
       username: 'root',
+      provisional: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
@@ -152,8 +156,12 @@ describe('credential state probe (pre-auth)', () => {
 
     const status = await fetchCredentialStatus();
 
+    // `provisional` is the /etc/tollgate/admin-credential-provisional marker
+    // state (a generated credential the owner must replace); it is a fact about
+    // the credential, still never a value.
     expect(Object.keys(status).sort()).toEqual([
       'passwordSet',
+      'provisional',
       'state',
       'username',
     ]);

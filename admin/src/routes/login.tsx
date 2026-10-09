@@ -10,7 +10,14 @@ import { navigate } from '../lib/router';
 import { BRAND } from '../brand';
 import ParticleBg from '../components/particle-bg';
 
-export default function LoginPage({ onLoggedIn }: { onLoggedIn?: () => void }) {
+export default function LoginPage({
+  onLoggedIn,
+}: {
+  // The credential facts the page already probed, handed back so the app can
+  // decide whether the forced password choice is owed (a provisional
+  // credential) without a second round trip.
+  onLoggedIn?: (status: CredentialStatus | null) => void;
+}) {
   const mockMode = isMock();
   const [username, setUsername] = useState('root');
   const [password, setPassword] = useState('');
@@ -49,7 +56,7 @@ export default function LoginPage({ onLoggedIn }: { onLoggedIn?: () => void }) {
     setLoading(true);
     try {
       await login(username, password);
-      onLoggedIn?.();
+      onLoggedIn?.(credential);
       navigate('dashboard');
     } catch (err: any) {
       setError(err.message === 'Invalid username or password'
@@ -111,7 +118,7 @@ export default function LoginPage({ onLoggedIn }: { onLoggedIn?: () => void }) {
             // one — and the session it hands out carries this board's ACL
             // (file exec, system.password_set, wallet_drain_cashu). Offering a
             // login form here would hand out root administration to whoever
-            // reaches :8090, so the board refuses instead of pretending to
+            // reaches the board, so the board refuses instead of pretending to
             // authenticate.
             <div
               id="credential-refusal"
@@ -220,6 +227,29 @@ export default function LoginPage({ onLoggedIn }: { onLoggedIn?: () => void }) {
                   or the router did not answer). Sign-in is allowed, but the
                   router itself refuses privileged calls while root has no
                   password.
+                </div>
+              )}
+
+              {credential.provisional && (
+                // The installer GENERATED this router's password (the module's
+                // 99-tollgate-setup could not prompt at install time). The board
+                // will force a choice immediately after sign-in, so say so here
+                // instead of surprising the owner with a second screen.
+                <div
+                  id="credential-provisional"
+                  style={{
+                    fontSize: 'var(--font-size-xsmall)',
+                    color: 'var(--text-dim)',
+                    background: 'rgba(255,159,10,0.1)',
+                    border: '1px solid rgba(255,159,10,0.4)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '0.6rem 0.75rem',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  This router's admin password was <strong>generated at install
+                  time</strong>, not chosen by you. Sign in with it and you will
+                  be asked to pick your own.
                 </div>
               )}
 

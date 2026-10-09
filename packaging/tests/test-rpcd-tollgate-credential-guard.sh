@@ -43,6 +43,7 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 
 BIN="$TMP/bin"
 SHADOW="$TMP/etc/shadow"
+MARKER="$TMP/etc/admin-credential-provisional"
 CALLS="$TMP/tollgate.calls"
 JSON_OUT="$TMP/json.out"
 mkdir -p "$BIN" "$TMP/etc"
@@ -96,10 +97,12 @@ run_method() {
     : > "$CALLS"
     if [ -n "$_in" ]; then
         OUT=$(printf '%s' "$_in" | \
-            TOLLGATE_SHADOW_FILE="$SHADOW" TOLLGATE_CALLS="$CALLS" \
+            TOLLGATE_SHADOW_FILE="$SHADOW" ADMIN_PROVISIONAL_MARKER="$MARKER" \
+            TOLLGATE_CALLS="$CALLS" \
             JSON_OUT="$JSON_OUT" PATH="$BIN:$PATH" sh "$TMP/plugin.sh" call "$_m" 2>&1)
     else
-        OUT=$(TOLLGATE_SHADOW_FILE="$SHADOW" TOLLGATE_CALLS="$CALLS" \
+        OUT=$(TOLLGATE_SHADOW_FILE="$SHADOW" ADMIN_PROVISIONAL_MARKER="$MARKER" \
+            TOLLGATE_CALLS="$CALLS" \
             JSON_OUT="$JSON_OUT" PATH="$BIN:$PATH" sh "$TMP/plugin.sh" call "$_m" 2>&1)
     fi
     RC=$?
@@ -209,13 +212,85 @@ else
     bad "(f5) locked state not reported (out: $OUT)"
 fi
 
+# --- (f6..f9) the provisional marker the board consumes -------------------------
+# 99-tollgate-setup (the module half) MINTS the root password when the operator
+# did not supply one and records that fact — never the value — in
+# /etc/tollgate/admin-credential-provisional. The board forces a password choice
+# at the first login while that marker stands and then drops it. The probe it
+# reads must carry the marker state, and the claim must be the one thing that
+# removes it.
+
+provisional_marker() { printf 'generated, not chosen\n' > "$MARKER"; }
+no_provisional_marker() { rm -f "$MARKER"; }
+
+shadow_set
+no_provisional_marker
+run_method auth_status
+if printf '%s' "$OUT" | grep -q 'b provisional=0'; then
+    ok "(f6) auth_status says provisional=0 when the marker is absent"
+else
+    bad "(f6) a marker-less router was not reported provisional=0 (out: $OUT)"
+fi
+
+provisional_marker
+run_method auth_status
+if printf '%s' "$OUT" | grep -q 'b provisional=1' \
+        && printf '%s' "$OUT" | grep -q 's state=set'; then
+    ok "(f7) auth_status says provisional=1 (state=set) while the marker stands"
+else
+    bad "(f7) the marker was not reported on the pre-auth probe (out: $OUT)"
+fi
+if printf '%s' "$OUT" | grep -q 'generated, not chosen'; then
+    bad "(f8) the marker FILE's contents leaked through the probe"
+else
+    ok "(f8) only the marker's existence is exposed, never its text"
+fi
+
+run_method admin_credential_claim
+if [ "$RC" = 0 ] && [ ! -f "$MARKER" ] \
+        && printf '%s' "$OUT" | grep -q 'b provisional=0'; then
+    ok "(f9) admin_credential_claim removes the marker and reports provisional=0"
+else
+    bad "(f9) the claim did not drop the marker (rc=$RC, exists=$( [ -f "$MARKER" ] && echo yes || echo no ), out: $OUT)"
+fi
+if cli_ran; then
+    bad "(f10) the claim shelled out to the tollgate CLI: $(cat "$CALLS")"
+else
+    ok "(f10) the claim is plugin-local (no CLI, no router action beyond the marker)"
+fi
+
+# The claim is a method that ACTS on the router, so it is behind the same
+# fail-closed gate as every other one: an unusable credential may not drop the
+# marker (that would let a router with no root password walk to the dashboard).
+shadow_empty
+provisional_marker
+run_method admin_credential_claim
+if printf '%s' "$OUT" | grep -q 's error=no-admin-credential' && [ -f "$MARKER" ]; then
+    ok "(f11) the claim is REFUSED while root has no usable credential"
+else
+    bad "(f11) the claim ran (or dropped the marker) on an empty hash: exists=$( [ -f "$MARKER" ] && echo yes || echo no ), out: $OUT"
+fi
+
+shadow_gone
+run_method admin_credential_claim
+if printf '%s' "$OUT" | grep -q 's error=no-admin-credential' && [ -f "$MARKER" ]; then
+    ok "(f12) the claim fails closed when the credential state is unreadable"
+else
+    bad "(f12) the claim did not fail closed on an unreadable shadow (out: $OUT)"
+fi
+
 # --- (g) rpcd needs the method advertised --------------------------------------
 
-OUT=$(TOLLGATE_SHADOW_FILE="$SHADOW" PATH="$BIN:$PATH" sh "$TMP/plugin.sh" list 2>&1)
+OUT=$(TOLLGATE_SHADOW_FILE="$SHADOW" ADMIN_PROVISIONAL_MARKER="$MARKER" PATH="$BIN:$PATH" sh "$TMP/plugin.sh" list 2>&1)
 if printf '%s' "$OUT" | grep -q '"auth_status"'; then
     ok "(g) the plugin's list advertises auth_status (rpcd resolves the method)"
 else
     bad "(g) list does not advertise auth_status"
+fi
+if printf '%s' "$OUT" | grep -q '"admin_credential_claim"'; then
+    ok "(g1) the plugin's list advertises admin_credential_claim"
+else
+    bad "(g1) list does not advertise admin_credential_claim (rpcd would 404 the claim)"
 fi
 for m in config_get config_set wallet_drain_cashu upstream_connect; do
     if ! printf '%s' "$OUT" | grep -q "\"$m\""; then
@@ -266,6 +341,18 @@ else {
   line('(i3) the authenticated group carries write access for password_set/wallet drain',
        !!(grp.write && grp.write.ubus && grp.write.ubus.tollgate),
        'the board mutates state through this group');
+  // The claim drops /etc/tollgate/admin-credential-provisional: it is a WRITE on
+  // the authenticated surface, and the board can only finish the forced password
+  // choice if this group carries it.
+  const writes = (grp.write && grp.write.ubus && grp.write.ubus.tollgate) || [];
+  line('(i5) the authenticated group may claim the provisional credential',
+       writes.includes('admin_credential_claim'),
+       `write methods: ${JSON.stringify(writes)}`);
+  const preWrites =
+    (((acl.unauthenticated || {}).write || {}).ubus || {}).tollgate || [];
+  line('(i6) the pre-auth group may NOT claim it (no session, no marker write)',
+       !preWrites.includes('admin_credential_claim'),
+       'the claim needs a session');
   // The board is a root-capable surface: the guest-side ACL must not be able to
   // reach file exec / password_set / wallet drain from the pre-auth group.
   const pre = acl.unauthenticated;
