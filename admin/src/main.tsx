@@ -8,10 +8,13 @@ import {
   isLoggedIn,
   isMock,
   fetchCredentialStatus,
+  type CredentialStatus,
 } from './lib/ubus';
+import { requiresPasswordChoice } from './lib/provisional';
 import { BRAND } from './brand';
 import Layout from './components/layout';
 import LoginPage from './routes/login';
+import PasswordChoicePage from './routes/password';
 
 // apply the build's brand chrome before first paint
 document.title = `${BRAND.name} Admin`;
@@ -25,6 +28,11 @@ document.title = `${BRAND.name} Admin`;
 function AdminApp() {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
+  // The router's credential facts. `provisional` is the
+  // /etc/tollgate/admin-credential-provisional marker: while it stands the
+  // installer GENERATED this router's password, so the board forces the owner
+  // to choose their own before ANY route renders (see below).
+  const [credential, setCredential] = useState<CredentialStatus | null>(null);
   const route = useRoute();
 
   useEffect(() => {
@@ -39,6 +47,7 @@ function AdminApp() {
         // `locked`/`unknown` as the form itself.
         // (admin/tests/admin-credential-guard.spec.mjs drives this.)
         const status = await fetchCredentialStatus();
+        setCredential(status);
         if (status.state === 'set') {
           setAuthed(true);
         } else {
@@ -51,7 +60,13 @@ function AdminApp() {
       if (isLoggedIn()) {
         const valid = await checkSession();
         setAuthed(valid);
-        if (!valid) navigate('login');
+        if (valid) {
+          // Read the credential facts for the session we already have, so a
+          // reload lands on the forced choice rather than the dashboard.
+          setCredential(await fetchCredentialStatus());
+        } else {
+          navigate('login');
+        }
       } else {
         setAuthed(false);
         navigate('login');
@@ -69,14 +84,20 @@ function AdminApp() {
       window.removeEventListener('tollgate:session-expired', onExpired);
   }, []);
 
+  // The forced password choice owns routing while it is owed: with a
+  // provisional credential the dashboard is not reachable by ANY route (the
+  // hash included), so the redirect below must not race it to a dashboard.
+  const mustChoosePassword = authed && requiresPasswordChoice(credential);
+
   useEffect(() => {
     if (!ready) return;
+    if (mustChoosePassword) return;
     if (route === 'login' && authed) {
       navigate('dashboard');
     } else if (route !== 'login' && !authed) {
       navigate('login');
     }
-  }, [route, authed, ready]);
+  }, [route, authed, ready, mustChoosePassword]);
 
   if (!ready) {
     return (
@@ -94,8 +115,37 @@ function AdminApp() {
     );
   }
 
+  // FAIL CLOSED: a router that answered "the credential is provisional" gets the
+  // forced choice and NOTHING else. This branch is checked before the login
+  // screen and before the layout, so no hash and no route can get past it.
+  if (mustChoosePassword) {
+    return (
+      <PasswordChoicePage
+        onChosen={() =>
+          // The marker is gone: the credential is the owner's own choice now.
+          setCredential((current) =>
+            current ? { ...current, provisional: false } : current
+          )
+        }
+      />
+    );
+  }
+
   if (route === 'login' || !authed) {
-    return <LoginPage onLoggedIn={() => setAuthed(true)} />;
+    return (
+      <LoginPage
+        onLoggedIn={(status) => {
+          // The probe's answer decides whether the board opens or the forced
+          // choice is owed; without it there is nothing to gate on, so one is
+          // taken now (pre-auth, so it works with or without a session).
+          setCredential(status ?? null);
+          if (!status) {
+            (async () => setCredential(await fetchCredentialStatus()))();
+          }
+          setAuthed(true);
+        }}
+      />
+    );
   }
 
   return <Layout />;

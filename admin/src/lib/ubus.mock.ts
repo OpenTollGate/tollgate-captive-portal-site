@@ -39,6 +39,57 @@ function recordUciSet(config: unknown, section: unknown) {
   }
 }
 
+// Every write the board makes through `system.password_set` is recorded as
+// {username, value_len} — NEVER the value — for the same reason config_set is:
+// a browser test must be able to prove the board SENT the owner's chosen
+// password while also proving the rendered page never carried it.
+function recordAdminPasswordSet(username: string, value: string) {
+  try {
+    const calls = JSON.parse(
+      window.sessionStorage.getItem('tg.mock.admin_password_set') || '[]'
+    );
+    calls.push({ username, value_len: value.length });
+    window.sessionStorage.setItem('tg.mock.admin_password_set', JSON.stringify(calls));
+  } catch {
+    // sessionStorage unavailable: recording is best-effort, tests only.
+  }
+}
+
+// The provisional marker, as a mock fact. `?mockProvisional=1` says the
+// installer GENERATED the admin credential (the board must force a password
+// choice); the claim below clears the fact for the rest of the session, so a
+// reload models the router on which
+// /etc/tollgate/admin-credential-provisional is gone. `?mockClaimFail=1` makes
+// the claim fail so the fail-closed path is exercisable without a router.
+function mockProvisionalConfigured(): boolean {
+  if (typeof window === 'undefined' || !window.location) return false;
+  const asked = new URLSearchParams(window.location.search).get('mockProvisional');
+  return asked === '1' || asked === 'true';
+}
+
+function provisionalAlreadyClaimed(): boolean {
+  try {
+    const claims = JSON.parse(
+      window.sessionStorage.getItem('tg.mock.credential_claim') || '[]'
+    );
+    return Array.isArray(claims) && claims.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function recordCredentialClaim() {
+  try {
+    const claims = JSON.parse(
+      window.sessionStorage.getItem('tg.mock.credential_claim') || '[]'
+    );
+    claims.push({ at: now() });
+    window.sessionStorage.setItem('tg.mock.credential_claim', JSON.stringify(claims));
+  } catch {
+    // best-effort, tests only
+  }
+}
+
 // A value the module cannot converge is reported the same way whichever reply
 // path carried it: `applied: [{status: 'refused'}]`, with `success` still true.
 // Nothing but a real router (an `admin_access` naming a bridge it does not have)
@@ -329,7 +380,12 @@ export function mockUbusCall(
     'session.access': () => ({ access: true }),
     'system.board': () => board,
     'system.info': () => info(),
-    'system.password_set': () => ({}),
+    'system.password_set': () => {
+      // The admin board's forced password choice goes through here. Record the
+      // call (username + length only) and answer like rpcd does.
+      recordAdminPasswordSet(String(_params?.username ?? 'root'), String(_params?.password ?? ''));
+      return {};
+    },
     'network.interface.dump': () => interfaceDump,
     // rpcd exposes the wireless object under the `network.` namespace (see
     // openwrt/rpcd/tollgate_acl.json: "network.wireless": ["status","reload"]).
@@ -353,6 +409,25 @@ export function mockUbusCall(
 
     // tollgate --json methods
     'tollgate.auth_status': () => mockCredentialStatus(),
+    'tollgate.admin_credential_claim': () => {
+      // The board finished the forced password choice: the marker is the last
+      // thing to drop. `?mockClaimFail=1` models a router that will not let go
+      // of it (the fail-closed branch: the board must stay shut).
+      if (typeof window !== 'undefined' && window.location
+          && new URLSearchParams(window.location.search).get('mockClaimFail') === '1') {
+        return {
+          success: false,
+          provisional: true,
+          error: 'the provisional credential marker could not be removed',
+        };
+      }
+      recordCredentialClaim();
+      return {
+        success: true,
+        provisional: false,
+        message: 'the admin credential is now the operator’s own',
+      };
+    },
     'tollgate.config_schema': () => mockConfigSchema,
     'tollgate.config_get': () => mockConfigGet,
     'tollgate.config_set': () => {
@@ -452,10 +527,17 @@ export function mockLogin(username: string, _password: string): Promise<any> {
 // `?mockCredentialState=empty` — which is how the board's fail-closed screen
 // is exercised end-to-end (admin/tests/admin-credential-guard.spec.mjs)
 // without a router.
+//
+// `?mockProvisional=1` additionally reports the install-time provisional marker
+// (the credential was GENERATED, not chosen), which is what drives the forced
+// password choice at first login. Claiming it (the board's
+// `admin_credential_claim`) clears the fact, so a reload models a router whose
+// /etc/tollgate/admin-credential-provisional is gone.
 export function mockCredentialStatus(): {
   state: string;
   password_set: boolean;
   username: string;
+  provisional: boolean;
 } {
   let state = 'set';
   if (typeof window !== 'undefined' && window.location) {
@@ -467,7 +549,12 @@ export function mockCredentialStatus(): {
   if (state !== 'set' && state !== 'locked' && state !== 'empty') {
     state = 'unknown';
   }
-  return { state, password_set: state === 'set', username: 'root' };
+  return {
+    state,
+    password_set: state === 'set',
+    username: 'root',
+    provisional: mockProvisionalConfigured() && !provisionalAlreadyClaimed(),
+  };
 }
 
 export function mockSessionId(): string {

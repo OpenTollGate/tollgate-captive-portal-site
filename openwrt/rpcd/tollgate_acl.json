@@ -1,6 +1,6 @@
 {
   "unauthenticated": {
-    "description": "Tollgate credential probe (the `tollgate auth_status` method), callable WITHOUT a session. The :8090 admin board asks whether the router has a usable root credential before it renders a login form, so it can refuse to run against an unset/empty root hash (rpcd's rpc_login_test_password() accepts ANY password while the shadow hash is empty). Exposes the credential STATE only — never a hash or a password — and grants nothing else: no write and no list access for a caller with no session.",
+    "description": "Tollgate credential probe (the `tollgate auth_status` method), callable WITHOUT a session. The admin board asks two things of this one probe before it renders a login form: whether the router has a usable root credential (it refuses to run against an unset/empty root hash, because rpcd's rpc_login_test_password() accepts ANY password while the shadow hash is empty), and whether that credential is PROVISIONAL — i.e. the install-time marker /etc/tollgate/admin-credential-provisional stands, meaning the password was generated rather than chosen, so the board forces the owner to pick their own before it becomes usable. Exposes the credential STATE only — never a hash, never a password, never the marker's text — and grants nothing else: no write and no list access for a caller with no session.",
     "read": {
       "ubus": {
         "tollgate": ["auth_status"]
@@ -47,7 +47,8 @@
           "wallet_drain_cashu",
           "activate",
           "upstream_connect",
-          "upstream_remove"
+          "upstream_remove",
+          "admin_credential_claim"
         ],
         "network.wireless": ["reload"],
         "system": ["password_set"],
