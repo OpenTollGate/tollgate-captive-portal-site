@@ -80,6 +80,7 @@ case "$1" in
   list)
     echo '{
       "auth_status":{},
+      "admin_credential_setup":{"password":"string","password2":"string","wifi_passphrase":"string"},
       "admin_credential_claim":{},
       "config_schema":{},
       "config_get":{},
@@ -126,6 +127,77 @@ case "$1" in
             json_add_boolean "provisional" 1
         else
             json_add_boolean "provisional" 0
+        fi
+        json_dump
+        exit 0
+    fi
+
+    # FIRST-RUN, PRE-AUTH: while the install-time marker stands, the owner
+    # chooses their OWN root password and private-WiFi passphrase WITHOUT a
+    # session. This is the only method that runs before authentication, and only
+    # because the generated credential is deliberately never printed — there is
+    # nothing to log in with until the owner sets one. Guarded to the provisional
+    # window: it refuses the moment the marker is gone, and it is reachable only
+    # on the management path (the board is not on the captive/guest network).
+    # It sets ONLY the root password and the private radios' PSK; nothing else.
+    if [ "$2" = "admin_credential_setup" ]; then
+        if ! admin_credential_provisional; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_string "error" "not-provisional"
+            json_add_string "message" "this router's credential is not provisional; the first-run setup is disabled"
+            json_dump
+            exit 0
+        fi
+        INPUT=$(cat)
+        PW=$(echo "$INPUT" | jsonfilter -e '@.password' 2>/dev/null)
+        PW2=$(echo "$INPUT" | jsonfilter -e '@.password2' 2>/dev/null)
+        WIFI=$(echo "$INPUT" | jsonfilter -e '@.wifi_passphrase' 2>/dev/null)
+        if [ "${#PW}" -lt 8 ]; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_string "error" "weak-password"
+            json_add_string "message" "Use at least 8 characters for the admin password"
+            json_dump
+            exit 0
+        fi
+        if [ -n "$PW2" ] && [ "$PW" != "$PW2" ]; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_string "error" "mismatch"
+            json_add_string "message" "The two admin passwords do not match"
+            json_dump
+            exit 0
+        fi
+        printf '%s\n%s\n' "$PW" "$PW" | passwd root >/dev/null 2>&1
+        case "$(root_hash_state)" in
+            set|locked) : ;;
+            *)
+                json_init
+                json_add_boolean "success" 0
+                json_add_string "error" "password-not-applied"
+                json_add_string "message" "the router did not accept the new admin password"
+                json_dump
+                exit 0
+                ;;
+        esac
+        if [ -n "$WIFI" ] && [ "${#WIFI}" -ge 8 ] && [ "${#WIFI}" -le 63 ]; then
+            uci -q set wireless.private_radio0.key="$WIFI" 2>/dev/null
+            uci -q set wireless.private_radio1.key="$WIFI" 2>/dev/null
+            uci -q commit wireless 2>/dev/null
+            ubus call network.wireless reload >/dev/null 2>&1
+        fi
+        rm -f "$ADMIN_PROVISIONAL_MARKER" 2>/dev/null
+        json_init
+        if admin_credential_provisional; then
+            json_add_boolean "success" 0
+            json_add_boolean "provisional" 1
+            json_add_string "error" "marker-not-removed"
+            json_add_string "message" "the admin password was set but the first-run marker could not be cleared; retry"
+        else
+            json_add_boolean "success" 1
+            json_add_boolean "provisional" 0
+            json_add_string "message" "your admin password is set; sign in with it"
         fi
         json_dump
         exit 0
