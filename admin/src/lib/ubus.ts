@@ -330,6 +330,54 @@ export async function claimAdminCredential(): Promise<void> {
   }
 }
 
+// adminCredentialSetup is the FIRST-RUN, PRE-AUTH method. While the router's
+// install-time marker stands, it sets the owner's own root password AND the
+// private-WiFi passphrase in ONE call, WITHOUT a session — the generated
+// credential is deliberately never printed, so there is nothing to log in with
+// until the owner sets one. The router refuses the method the moment the marker
+// is gone, so a replay after setup is inert. Sent with the zero session (the
+// `unauthenticated` ACL grants exactly this one method); the values travel in
+// the request body and are never logged or kept.
+export async function adminCredentialSetup(
+  password: string,
+  password2: string,
+  wifiPassphrase: string
+): Promise<void> {
+  if (password.trim() === '') {
+    throw new Error('Enter the new admin password');
+  }
+  if (MOCK) {
+    return;
+  }
+  const res = await fetch(UBUS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: ++rpcId,
+      method: 'call',
+      params: [
+        UBUS_ZERO,
+        'tollgate',
+        'admin_credential_setup',
+        { password, password2, wifi_passphrase: wifiPassphrase },
+      ],
+    }),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(`ubus error: ${json.error.message || 'unknown'}`);
+  if (!json.result) throw new Error('No result from ubus');
+  if (json.result[0] !== 0) {
+    throw new Error(`ubus error ${json.result[0]}`);
+  }
+  const data = json.result[1];
+  if (data?.success === false) {
+    throw new Error(
+      String(data?.message || data?.error || 'the router refused the first-run setup')
+    );
+  }
+}
+
 export function logout() {
   localStorage.removeItem(SESSION_USER);
   clearSession();
