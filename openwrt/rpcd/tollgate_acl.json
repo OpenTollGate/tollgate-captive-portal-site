@@ -5,6 +5,11 @@
       "ubus": {
         "tollgate": ["auth_status"]
       }
+    },
+    "write": {
+      "ubus": {
+        "tollgate": ["admin_credential_setup"]
+      }
     }
   },
   "tollgate": {

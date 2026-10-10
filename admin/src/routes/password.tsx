@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { setRootPassword, claimAdminCredential } from '../lib/ubus';
+import { adminCredentialSetup } from '../lib/ubus';
 import {
   MIN_ADMIN_PASSWORD_LENGTH,
   PROVISIONAL_MARKER_PATH,
@@ -36,6 +36,7 @@ export default function PasswordChoicePage({
 }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [wifi, setWifi] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState('');
@@ -50,13 +51,13 @@ export default function PasswordChoicePage({
     setError('');
     setBusy(true);
     try {
-      setStep('Setting your password on the router…');
-      await setRootPassword(password);
-      setStep('Dropping the install-time credential marker…');
-      await claimAdminCredential();
-      // The password is not needed again: the component unmounts here.
+      setStep('Setting your admin password (and WiFi, if given) on the router…');
+      // PRE-AUTH, one-shot: sets the root password AND the private-WiFi
+      // passphrase while the install-time marker stands, then drops the marker.
+      await adminCredentialSetup(password, confirm, wifi);
       setPassword('');
       setConfirm('');
+      setWifi('');
       onChosen();
     } catch (err: any) {
       setStep('');
@@ -145,10 +146,11 @@ export default function PasswordChoicePage({
                 lineHeight: 1.5,
               }}
             >
-              This router's admin password was <strong>generated for you</strong>{' '}
-              at install time — it was shown once and the log it was printed to
-              is gone. Pick your own now; the generated one stops working the
-              moment you do.
+              This router's admin password was <strong>generated at install</strong>{' '}
+              and deliberately <strong>never printed</strong>. Choose your own
+              now — and set the private WiFi password too, so you do not have to
+              hunt for it later. The generated admin password stops working the
+              moment you set this.
             </p>
 
             <div className="input-group">
@@ -181,6 +183,21 @@ export default function PasswordChoicePage({
                   setConfirm((e.target as HTMLInputElement).value)
                 }
                 autocomplete="new-password"
+              />
+            </div>
+
+            <div className="input-group">
+              <label className="input-label" htmlFor="wifi-passphrase">
+                Private WiFi password (optional)
+              </label>
+              <input
+                id="wifi-passphrase"
+                type="password"
+                className="input"
+                value={wifi}
+                onInput={(e) => setWifi((e.target as HTMLInputElement).value)}
+                autocomplete="new-password"
+                placeholder="Leave blank to keep the current one"
               />
             </div>
 
