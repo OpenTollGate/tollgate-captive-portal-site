@@ -57,14 +57,15 @@ function AdminApp() {
         setReady(true);
         return;
       }
+      // Pre-auth credential probe: the board must know whether a FIRST-RUN
+      // password choice is owed BEFORE it has (or needs) a session — the
+      // generated credential is never printed, so there is nothing to log in
+      // with until the owner sets one.
+      setCredential(await fetchCredentialStatus());
       if (isLoggedIn()) {
         const valid = await checkSession();
         setAuthed(valid);
-        if (valid) {
-          // Read the credential facts for the session we already have, so a
-          // reload lands on the forced choice rather than the dashboard.
-          setCredential(await fetchCredentialStatus());
-        } else {
+        if (!valid) {
           navigate('login');
         }
       } else {
@@ -84,10 +85,11 @@ function AdminApp() {
       window.removeEventListener('tollgate:session-expired', onExpired);
   }, []);
 
-  // The forced password choice owns routing while it is owed: with a
-  // provisional credential the dashboard is not reachable by ANY route (the
-  // hash included), so the redirect below must not race it to a dashboard.
-  const mustChoosePassword = authed && requiresPasswordChoice(credential);
+  // The forced first-run choice owns routing while it is owed. It is a
+  // PRE-AUTH gate now (the generated credential is never printed), so it does
+  // not depend on `authed`: with a provisional credential the dashboard and the
+  // login screen are both unreachable by ANY route.
+  const mustChoosePassword = requiresPasswordChoice(credential);
 
   useEffect(() => {
     if (!ready) return;
