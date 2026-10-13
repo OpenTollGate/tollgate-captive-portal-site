@@ -355,6 +355,14 @@ export async function adminCredentialSetup(
     throw new Error('Enter the new admin password');
   }
   if (MOCK) {
+    // The real method sets the root password AND drops the marker in ONE
+    // pre-auth round trip. The mock reproduces the two observable effects the
+    // specs assert on — `system.password_set` (records the length only) then
+    // `admin_credential_claim` (which honours ?mockClaimFail=1 and clears the
+    // provisional fact) — so the fail-closed and success paths are exercisable
+    // without a router.
+    await setRootPassword(password);
+    await claimAdminCredential();
     return;
   }
   const res = await fetch(UBUS_URL, {

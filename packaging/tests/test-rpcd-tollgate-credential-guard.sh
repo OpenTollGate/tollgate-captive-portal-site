@@ -320,7 +320,13 @@ else {
   line('(h2) it grants exactly ["auth_status"]',
        JSON.stringify([...methods].sort()) === JSON.stringify(['auth_status']),
        `granted: ${JSON.stringify(methods)}`);
-  line('(h3) it grants no write access', writes.length === 0, JSON.stringify(writes));
+  // The ONE sanctioned pre-auth write is the first-run `admin_credential_setup`
+  // (#70): it runs only while the install-time marker stands, and it is how the
+  // board lets the owner choose their own admin password with NO session. Any
+  // OTHER write from a session-less caller would be a hole.
+  line('(h3) its only write is the pre-auth admin_credential_setup',
+       JSON.stringify([...writes].sort()) === JSON.stringify(['admin_credential_setup']),
+       JSON.stringify(writes));
   line('(h4) it grants no list access', lists.length === 0, JSON.stringify(lists));
   line('(h5) the description says what is exposed and why',
        typeof pre.description === 'string' && /auth_status/.test(pre.description));
