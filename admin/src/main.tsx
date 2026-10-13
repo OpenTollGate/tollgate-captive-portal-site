@@ -10,7 +10,7 @@ import {
   fetchCredentialStatus,
   type CredentialStatus,
 } from './lib/ubus';
-import { requiresPasswordChoice } from './lib/provisional';
+import { requiresPasswordChoice, requiresWifiChoice } from './lib/provisional';
 import { BRAND } from './brand';
 import Layout from './components/layout';
 import LoginPage from './routes/login';
@@ -85,11 +85,13 @@ function AdminApp() {
       window.removeEventListener('tollgate:session-expired', onExpired);
   }, []);
 
-  // The forced first-run choice owns routing while it is owed. It is a
-  // PRE-AUTH gate now (the generated credential is never printed), so it does
-  // not depend on `authed`: with a provisional credential the dashboard and the
+  // The forced first-run choice owns routing while it is owed (an admin marker,
+  // a private-WiFi marker, or both). It is a PRE-AUTH gate now (the install-time
+  // credential is the fixed package default, never printed), so it does not
+  // depend on `authed`: with a provisional credential the dashboard and the
   // login screen are both unreachable by ANY route.
   const mustChoosePassword = requiresPasswordChoice(credential);
+  const mustChooseWifi = requiresWifiChoice(credential);
 
   useEffect(() => {
     if (!ready) return;
@@ -123,10 +125,17 @@ function AdminApp() {
   if (mustChoosePassword) {
     return (
       <PasswordChoicePage
+        wifiRequired={mustChooseWifi}
         onChosen={() =>
-          // The marker is gone: the credential is the owner's own choice now.
+          // The markers are gone: the credentials are the owner's own choice.
           setCredential((current) =>
-            current ? { ...current, provisional: false } : current
+            current
+              ? {
+                  ...current,
+                  provisional: false,
+                  privateWifiProvisional: false,
+                }
+              : current
           )
         }
       />

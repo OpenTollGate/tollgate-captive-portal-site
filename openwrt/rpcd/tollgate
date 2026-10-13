@@ -28,17 +28,21 @@
 # credential-less and nothing here refuses on it.
 SHADOW_FILE="${TOLLGATE_SHADOW_FILE:-/etc/shadow}"
 
-# The install-time marker the module's packaging/files/etc/uci-defaults/
-# 99-tollgate-setup drops when it had to MINT the admin password (the operator
-# can only choose one through TOLLGATE_ADMIN_PASSWORD, and uci-defaults run with
-# no controlling terminal). It records a FACT — the credential was generated,
-# not chosen — and deliberately no secret, because the file is world-readable.
+# The install-time markers the module's packaging/files/etc/uci-defaults/
+# 99-tollgate-setup drops when it installed a FIXED DEFAULT credential rather
+# than one the operator chose (the installer can only hand one in through
+# TOLLGATE_ADMIN_PASSWORD, and uci-defaults run with no controlling terminal).
+# Each records a FACT — the credential is the default, not a chosen one — and
+# deliberately no secret, because the file is world-readable.
 #
-# `auth_status` reports its existence and `admin_credential_claim` removes it:
-# that is the whole client contract for the board's forced password choice. The
-# default path is the module's own, and it is overridable so the offline tests
-# can point at a throw-away file (packaging/tests/).
+# `auth_status` reports their existence; the first-run `admin_credential_setup`
+# clears the admin one (always, once the owner's own password is set) and the
+# WiFi one (only once the owner's own passphrase is set). That is the whole
+# client contract for the board's forced credential choice. The default paths
+# are the module's own, and they are overridable so the offline tests can point
+# at throw-away files (packaging/tests/).
 ADMIN_PROVISIONAL_MARKER="${ADMIN_PROVISIONAL_MARKER:-/etc/tollgate/admin-credential-provisional}"
+PRIVATE_WIFI_PROVISIONAL_MARKER="${PRIVATE_WIFI_PROVISIONAL_MARKER:-/etc/tollgate/private-wifi-credential-provisional}"
 
 root_hash_state() {
     local h
@@ -55,6 +59,13 @@ root_hash_state() {
 # only — the file's text is never read, never parsed and never emitted.
 admin_credential_provisional() {
     [ -f "$ADMIN_PROVISIONAL_MARKER" ]
+}
+
+# private_wifi_provisional: true while the private (management) WiFi key is the
+# package DEFAULT. Same contract as the admin marker, one level down: the board
+# forces the owner to choose a WiFi passphrase too.
+private_wifi_provisional() {
+    [ -f "$PRIVATE_WIFI_PROVISIONAL_MARKER" ]
 }
 
 # credential_usable: true when root's hash is `set` (only the real password
@@ -128,6 +139,13 @@ case "$1" in
         else
             json_add_boolean "provisional" 0
         fi
+        # Companion fact for the private (management) WiFi, so the board can
+        # force a WiFi passphrase choice too. Existence only.
+        if private_wifi_provisional; then
+            json_add_boolean "private_wifi_provisional" 1
+        else
+            json_add_boolean "private_wifi_provisional" 0
+        fi
         json_dump
         exit 0
     fi
@@ -186,6 +204,11 @@ case "$1" in
             uci -q set wireless.private_radio1.key="$WIFI" 2>/dev/null
             uci -q commit wireless 2>/dev/null
             ubus call network.wireless reload >/dev/null 2>&1
+            # The owner's own passphrase now stands: drop the WiFi marker so the
+            # board stops forcing a WiFi choice. It is LEFT IN PLACE when the
+            # WiFi was not set, so the forced choice persists — the UI requires
+            # the field whenever this marker stands.
+            rm -f "$PRIVATE_WIFI_PROVISIONAL_MARKER" 2>/dev/null
         fi
         rm -f "$ADMIN_PROVISIONAL_MARKER" 2>/dev/null
         json_init

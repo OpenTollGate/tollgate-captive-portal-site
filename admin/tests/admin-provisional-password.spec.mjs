@@ -125,4 +125,33 @@ test.describe('admin board: forced password choice at first login', () => {
     await expect(page.locator('.app-header')).toBeVisible({ timeout: 30000 });
     await expect(page.locator('#provisional-password-choice')).toHaveCount(0);
   });
+
+  test('a defaulted private-WiFi key opens the forced screen and REQUIRES a WiFi passphrase', async ({
+    page,
+  }) => {
+    // `?mockWifiProvisional=1` models /etc/tollgate/private-wifi-credential-provisional
+    // standing: the management WiFi key is the package default. The board must
+    // gate even with no admin marker, and the WiFi field must be required.
+    await page.goto('./?mockWifiProvisional=1');
+    await expect(page.locator('#provisional-password-choice')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('.app-header')).toHaveCount(0);
+
+    const wifiLabel = page.locator('#provisional-password-choice label[for="wifi-passphrase"]');
+    await expect(wifiLabel).toContainText(/required/i);
+
+    const chosen = 'a-good-enough-one';
+    await page.locator('#new-password').fill(chosen);
+    await page.locator('#confirm-password').fill(chosen);
+    // Submitting with NO WiFi passphrase is refused before any round trip.
+    await page.locator('#provisional-password-choice button[type="submit"]').click();
+    await expect(page.locator('#provisional-error')).toContainText(/WiFi/i);
+    await expect(page.locator('.app-header')).toHaveCount(0);
+  });
+
+  test('with only the admin marker the WiFi passphrase stays optional', async ({ page }) => {
+    await page.goto('./?mockProvisional=1');
+    await expect(page.locator('#provisional-password-choice')).toBeVisible({ timeout: 30000 });
+    const wifiLabel = page.locator('#provisional-password-choice label[for="wifi-passphrase"]');
+    await expect(wifiLabel).toContainText(/optional/i);
+  });
 });

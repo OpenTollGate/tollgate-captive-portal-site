@@ -67,6 +67,15 @@ function mockProvisionalConfigured(): boolean {
   return asked === '1' || asked === 'true';
 }
 
+// The private-WiFi companion marker. `?mockWifiProvisional=1` says the private
+// (management) WiFi key is still the package default, so the first-run screen
+// must REQUIRE a WiFi passphrase.
+function mockWifiProvisionalConfigured(): boolean {
+  if (typeof window === 'undefined' || !window.location) return false;
+  const asked = new URLSearchParams(window.location.search).get('mockWifiProvisional');
+  return asked === '1' || asked === 'true';
+}
+
 function provisionalAlreadyClaimed(): boolean {
   try {
     const claims = JSON.parse(
@@ -538,6 +547,7 @@ export function mockCredentialStatus(): {
   password_set: boolean;
   username: string;
   provisional: boolean;
+  private_wifi_provisional: boolean;
 } {
   let state = 'set';
   if (typeof window !== 'undefined' && window.location) {
@@ -554,6 +564,8 @@ export function mockCredentialStatus(): {
     password_set: state === 'set',
     username: 'root',
     provisional: mockProvisionalConfigured() && !provisionalAlreadyClaimed(),
+    private_wifi_provisional:
+      mockWifiProvisionalConfigured() && !provisionalAlreadyClaimed(),
   };
 }
 

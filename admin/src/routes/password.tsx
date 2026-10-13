@@ -3,6 +3,7 @@ import { adminCredentialSetup } from '../lib/ubus';
 import {
   MIN_ADMIN_PASSWORD_LENGTH,
   PROVISIONAL_MARKER_PATH,
+  PRIVATE_WIFI_PROVISIONAL_MARKER_PATH,
   validatePasswordChoice,
 } from '../lib/provisional';
 import { BRAND } from '../brand';
@@ -10,29 +11,30 @@ import { withBase } from '../lib/paths';
 import ParticleBg from '../components/particle-bg';
 
 /**
- * The forced password choice at first login.
+ * The forced credential choice at first login.
  *
- * Reached only while /etc/tollgate/admin-credential-provisional stands, i.e.
- * when the installer GENERATED this router's admin password instead of the
- * operator choosing one (nothing at install time can prompt: uci-defaults run
- * from the package manager with no controlling terminal, so a chosen password
- * can only arrive through TOLLGATE_ADMIN_PASSWORD).
+ * Reached while /etc/tollgate/admin-credential-provisional stands (the admin
+ * password is the package default `TollGate`) or
+ * /etc/tollgate/private-wifi-credential-provisional stands (the private WiFi key
+ * is the default), or both. Nothing at install time can prompt: uci-defaults run
+ * from the package manager with no controlling terminal, so a chosen credential
+ * can only arrive through the installer's advanced fields or the environment.
  *
- * The generated password was printed once into an install log that the next
- * full-setup run truncates, so leaving it in place is how a board ends up on a
- * credential nobody knows. This screen is the only route out: it is mounted by
- * main.tsx INSTEAD of the dashboard and instead of every other route, so the
- * board is not usable until the owner's own password is set and the marker is
- * gone.
+ * A board left on the known default would be reachable with a value anyone can
+ * read off the package, so this screen is the only route out: main.tsx mounts it
+ * INSTEAD of the dashboard and instead of every other route, so the board is not
+ * usable until the owner's own credentials are set and the markers are gone.
  *
- * Order matters and is enforced here: the router sets the owner's password
- * FIRST, and only then is the marker dropped. A router that refuses either step
- * keeps the operator on this screen — no silent walk to the dashboard.
+ * Order matters and is enforced here: the router sets the owner's credentials
+ * FIRST, and only then are the markers dropped. A router that refuses either
+ * step keeps the operator on this screen — no silent walk to the dashboard.
  */
 export default function PasswordChoicePage({
   onChosen,
+  wifiRequired = false,
 }: {
   onChosen: () => void;
+  wifiRequired?: boolean;
 }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -48,12 +50,18 @@ export default function PasswordChoicePage({
       setError(problem);
       return;
     }
+    if (wifiRequired && wifi.trim().length < MIN_ADMIN_PASSWORD_LENGTH) {
+      setError(
+        `Choose a management WiFi password too — the installed one is the default. Use at least ${MIN_ADMIN_PASSWORD_LENGTH} characters.`
+      );
+      return;
+    }
     setError('');
     setBusy(true);
     try {
-      setStep('Setting your admin password (and WiFi, if given) on the router…');
+      setStep('Setting your admin password (and WiFi) on the router…');
       // PRE-AUTH, one-shot: sets the root password AND the private-WiFi
-      // passphrase while the install-time marker stands, then drops the marker.
+      // passphrase while the install-time markers stand, then drops them.
       await adminCredentialSetup(password, confirm, wifi);
       setPassword('');
       setConfirm('');
@@ -135,7 +143,7 @@ export default function PasswordChoicePage({
                 textTransform: 'uppercase' as const,
               }}
             >
-              Choose your own admin password
+              Choose your own password
             </h2>
 
             <p
@@ -146,11 +154,12 @@ export default function PasswordChoicePage({
                 lineHeight: 1.5,
               }}
             >
-              This router's admin password was <strong>generated at install</strong>{' '}
-              and deliberately <strong>never printed</strong>. Choose your own
-              now — and set the private WiFi password too, so you do not have to
-              hunt for it later. The generated admin password stops working the
-              moment you set this.
+              This router was installed with a{' '}
+              <strong>default password</strong> (<code>TollGate</code>) for the
+              admin board
+              {wifiRequired ? ' and the management WiFi' : ''}. Choose your own
+              now so nobody who knows the default can reach your router. The
+              default stops working the moment you set this.
             </p>
 
             <div className="input-group">
@@ -188,7 +197,8 @@ export default function PasswordChoicePage({
 
             <div className="input-group">
               <label className="input-label" htmlFor="wifi-passphrase">
-                Private WiFi password (optional)
+                Management WiFi password{' '}
+                {wifiRequired ? '(required)' : '(optional)'}
               </label>
               <input
                 id="wifi-passphrase"
@@ -197,7 +207,11 @@ export default function PasswordChoicePage({
                 value={wifi}
                 onInput={(e) => setWifi((e.target as HTMLInputElement).value)}
                 autocomplete="new-password"
-                placeholder="Leave blank to keep the current one"
+                placeholder={
+                  wifiRequired
+                    ? 'Choose a new management WiFi password'
+                    : 'Leave blank to keep the current one'
+                }
               />
             </div>
 
@@ -270,8 +284,16 @@ export default function PasswordChoicePage({
               }}
             >
               The board stays closed until this is done. The router records the
-              marker <code>{PROVISIONAL_MARKER_PATH}</code> while a generated
-              password is in use, and removes it once you choose your own.
+              marker <code>{PROVISIONAL_MARKER_PATH}</code>
+              {wifiRequired ? (
+                <>
+                  {' '}
+                  (and, for the WiFi,{' '}
+                  <code>{PRIVATE_WIFI_PROVISIONAL_MARKER_PATH}</code>)
+                </>
+              ) : null}{' '}
+              while a default credential is in use, and removes it once you
+              choose your own.
             </p>
           </form>
         </div>
