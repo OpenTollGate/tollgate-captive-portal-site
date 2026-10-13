@@ -1,25 +1,26 @@
 /**
- * The install-time provisional admin credential.
+ * The install-time provisional credentials.
  *
  * The module's packaging/files/etc/uci-defaults/99-tollgate-setup runs from the
  * package manager with no controlling terminal, so an operator can only choose
  * the router's admin password by handing it in the environment
- * (`TOLLGATE_ADMIN_PASSWORD`). When they do not, the module MINTS one and
- * records that FACT — never the value — in a marker file:
+ * (`TOLLGATE_ADMIN_PASSWORD`). When they do not, the module installs a FIXED
+ * default (`TollGate`) and records that FACT — never the value — in marker
+ * files:
  *
  *   /etc/tollgate/admin-credential-provisional
+ *   /etc/tollgate/private-wifi-credential-provisional
  *
- * The marker is world-readable and deliberately secret-free. Its presence is
- * the contract "this credential was generated, the owner has not chosen one",
- * and its absence is "the credential is the operator's own choice". Nothing
- * consumed it before this module: a router whose generated password was printed
- * once into a log — a log the next full-setup run truncates — stayed on a
- * generated credential forever.
+ * The markers are world-readable and deliberately secret-free. Their presence is
+ * the contract "this credential is the package default, the owner has not chosen
+ * one", and their absence is "the credential is the owner's own choice". A
+ * router left on the default would otherwise be reachable with a value anyone
+ * can read off the package.
  *
  * This module is the client half: PURE logic, no DOM, no `location`, no ubus,
  * so both the gate and the password policy are unit-testable without a browser.
- * The board reads the marker through the `tollgate auth_status` probe (see
- * lib/ubus.ts) and drops it with `tollgate admin_credential_claim`.
+ * The board reads the markers through the `tollgate auth_status` probe (see
+ * lib/ubus.ts) and clears them through `admin_credential_setup`.
  */
 
 /**
@@ -29,6 +30,13 @@
  */
 export const PROVISIONAL_MARKER_PATH =
   '/etc/tollgate/admin-credential-provisional';
+
+/**
+ * The private (management) WiFi companion marker
+ * (99-tollgate-setup: PRIVATE_WIFI_PROVISIONAL_MARKER).
+ */
+export const PRIVATE_WIFI_PROVISIONAL_MARKER_PATH =
+  '/etc/tollgate/private-wifi-credential-provisional';
 
 /**
  * A generated credential the owner is expected to replace. The router enforces
@@ -41,15 +49,17 @@ export const MIN_ADMIN_PASSWORD_LENGTH = 8;
 
 /** The credential facts the pre-auth probe reports (subset of CredentialStatus). */
 export interface ProvisionalCredential {
-  /** True only when the router answered that the marker stands. */
+  /** True only when the router answered that the ADMIN marker stands. */
   provisional?: boolean;
+  /** True only when the router answered that the private-WiFi marker stands. */
+  privateWifiProvisional?: boolean;
 }
 
 /**
  * The forced-choice gate. Fails CLOSED in the only direction the contract
- * allows: a router that ANSWERED "the marker stands" keeps the board shut until
- * the owner chooses a password. A router that could not be asked at all
- * (`provisional` absent, or `state: unknown`) is NOT treated as provisional —
+ * allows: a router that ANSWERED "a marker stands" keeps the board shut until
+ * the owner chooses their own credentials. A router that could not be asked at
+ * all (both flags absent, or `state: unknown`) is NOT treated as provisional —
  * otherwise an older package, a broken plugin or a flapping link would strand a
  * correctly provisioned owner on the forced screen forever, which is a worse
  * failure than the one being fixed.
@@ -57,7 +67,22 @@ export interface ProvisionalCredential {
 export function requiresPasswordChoice(
   credential?: ProvisionalCredential | null
 ): boolean {
-  return credential?.provisional === true;
+  return (
+    credential?.provisional === true ||
+    credential?.privateWifiProvisional === true
+  );
+}
+
+/**
+ * True when the private (management) WiFi key is still the package default, so
+ * the first-run screen must REQUIRE a WiFi passphrase (the admin password is
+ * always required there). A router that could not be asked is `false` — the
+ * WiFi field stays optional, never a hard block.
+ */
+export function requiresWifiChoice(
+  credential?: ProvisionalCredential | null
+): boolean {
+  return credential?.privateWifiProvisional === true;
 }
 
 /**
