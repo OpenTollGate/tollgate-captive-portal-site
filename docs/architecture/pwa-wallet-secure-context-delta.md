@@ -6,6 +6,13 @@
 measured on Chrome for Testing 156.0.8078.4).
 **Status:** implemented + measured. Supersedes **one** recommendation in the parent delta.
 
+> **A note on the parent link.** The parent ADR delta is not on `main` yet — it arrives with
+> its own docs PR, **#74** (`docs/pwa-wallet-adr-delta`). Until that merges, the §3/§6.3
+> references below and the same references in the source comments point at a file that exists
+> only on #74's branch. That is deliberate (the two are one design conversation) and it is
+> recorded here so a reader on `main` knows why the link 404s rather than assuming the
+> document was deleted. If #74 is closed instead of merged, re-point these at this file.
+
 ---
 
 ## 1. What this delta changes in the parent, and why
