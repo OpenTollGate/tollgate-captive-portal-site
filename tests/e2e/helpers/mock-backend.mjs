@@ -19,6 +19,26 @@ const MOCK_TOLLGATE_DETAILS = {
   sig: 'b'.repeat(128),
 };
 
+// The stub must export EVERY name src/components/Cashu.jsx imports from
+// src/helpers/cashu.js. ESM is strict: one missing export aborts the whole
+// module graph ("does not provide an export named 'X'"), the SPA never
+// hydrates, and every test that waited on a selector times out — which is what
+// took down all 10 setupMockBackend tests.
+//
+// Cashu.jsx imports five names:
+//   validateToken, submitToken, canSubmitAnyway, mintUrlFromToken, findMintOption
+// The first three were stubbed; the last three (canSubmitAnyway,
+// mintUrlFromToken, findMintOption) were added to Cashu.jsx by #55/#61 and the
+// stub was never updated to match.
+//
+// Semantics for the additions:
+//   * canSubmitAnyway: the affordance is for a client-side decode refusal
+//     (CU102). The stub's validateToken accepts every 'cashu…' token, so there
+//     is never a decode refusal to hedge — false is the faithful answer.
+//   * mintUrlFromToken / findMintOption: these drive auto-selecting the access
+//     option a pasted note came from. The test token is an undecodable
+//     placeholder, so returning null matches Cashu.jsx's documented
+//     "undecodable / partial input: stay quiet and change nothing" path.
 const CASHU_HELPER_STUB = `
 export const validateToken = (token, mint, i18n) => {
   if (!token || typeof token !== 'string' || !token.startsWith('cashu')) {
@@ -27,7 +47,10 @@ export const validateToken = (token, mint, i18n) => {
   return { status: 1, value: { amount: 420, unit: 'sat', isValid: true, hasProofs: true, proofCount: 1 } };
 };
 export const submitToken = async () => ({ status: 1, label: 'ok', message: 'ok' });
+export const canSubmitAnyway = () => false;
 export const extractProofsFromToken = () => [];
+export const mintUrlFromToken = () => null;
+export const findMintOption = () => null;
 `;
 
 export const TEST_TOKEN = 'cashuBtest123MockTokenForE2E';
