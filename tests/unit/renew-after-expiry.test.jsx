@@ -46,6 +46,21 @@ vi.mock('../../src/helpers/cashu.js', () => ({
   submitToken: async () => ({ status: 1, label: 'ok', message: 'ok' }),
   canSubmitAnyway: () => false,
   extractProofsFromToken: () => [],
+  // Cashu.jsx imports these too (added in #61, "auto-select the access option
+  // the pasted note came from") and a module mock must stub EVERY export the
+  // importer uses — otherwise Vitest throws
+  //   No "mintUrlFromToken" export is defined on the ... mock
+  // inside the component's useEffect, the render aborts, and every assertion
+  // downstream of the purchase CTA fails. This mock predates #61, so these two
+  // were simply missing; the STALE MOCK was the failure, not the product.
+  //
+  // The test's TOKEN is an undecodable placeholder, so `mintUrlFromToken`
+  // returning null is the faithful shape: Cashu.jsx then takes its documented
+  // "undecodable / partial input: stay quiet and change nothing" path and
+  // leaves the manual mint selection alone — exactly the pre-#61 behaviour
+  // this suite is meant to exercise.
+  mintUrlFromToken: () => null,
+  findMintOption: () => null,
 }));
 
 // no network: the mint's swap fee is skipped, exactly as in production when the
