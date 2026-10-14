@@ -317,7 +317,8 @@ marked **[measured]** is first-hand output from the rig in
 `DOSSIER-vendor-origin-and-selfsigned.md` §0.2 — headed Chrome for Testing **156.0.8078.4**,
 real pointer clicks under Xvfb+openbox, and a genuine **public → private** address-space
 transition (the initiator is a *global IPv6* address on the same host). Raw tool output is
-in `EVIDENCE-vendor-origin-and-selfsigned.md`. Citation form: **[D:origin §N]**.
+reproduced in `docs/analysis/EVIDENCE-vendor-origin-and-selfsigned.md` (§E1–§E7) — shipped in
+this PR so a reviewer can check the `[measured]` lines directly. Citation form: **[D:origin §N]**.
 
 #### 3.6.1 The self-signed split, with the measured evidence
 
@@ -561,7 +562,8 @@ unblocked, while C is where this design must land once routers have WAN.
   `OPTIONS` with 204.** Expose the exact origin (`https://portal.orangesync.tech`) rather
   than `*` now, so credentials can be added later without a break. **This is a MODULE-side
   change and therefore lands in W3's PR — not in the portal PR.** Note also that `:2121` is
-  the Go module's **own** `net/http` listener (`src/main.go:424`), so CORS belongs in a Go
+  the Go module's **own** `net/http` listener (`src/main.go:424` — `apiListenAddr = ":2121"`, read
+  at the pinned module SHA `cf7cad34677e87e775e7f16786b1bbf18c4bc8bc`), so CORS belongs in a Go
   middleware: putting it in uhttpd or nodogsplash is a guaranteed no-op. CORS is
   **non-negotiable and orthogonal to the permission** — both were measured failing
   independently (permission granted with no `ACAO` ⇒ still fails; `ACAO` present with no
@@ -735,9 +737,12 @@ Second-order losses that are easy to miss, and which a captive portal makes
 - iOS Safari deletes script-writable storage — WebKit's own list names **IndexedDB** first, then
   LocalStorage, media keys, sessionStorage, and service-worker registrations and cache — for origins
   unused for ~7 days of Safari use (ITP). The cap is published as a **cookie** cap with
-  script-writable storage *aligned* to it, and the home-screen carve-out does not name IndexedDB, so
-  the install's protective scope is `UNVERIFIED` (§5.6.5). A captive-portal session wallet the user
-  only revisits will be silently wiped. This is arguably a **bigger practical risk than device
+  script-writable storage *aligned* to it; WebKit's Tracking Prevention policy separately states that
+  the **first-party domain of home screen web applications is exempt** from that cap over *all*
+  script-writeable storage — the class IndexedDB is enumerated in — so installing takes the origin
+  out of the eviction path **as documented policy** (WebKit-only; whether a given iOS build behaves
+  accordingly is a field check, §5.6.5). A captive-portal session wallet the user only revisits and
+  never installs will be silently wiped. This is arguably a **bigger practical risk than device
   theft** [D:wallet §4.3].
 - A second device is a separate wallet with zero balance. There is no "sign in".
 
@@ -947,45 +952,58 @@ not by the storage mechanism.**
 | Event | Seed in IndexedDB | Encrypted export (off-device) | PRF-wrapped key | FSA secret file | Net outcome |
 |---|---|---|---|---|---|
 | **`Clear-Site-Data: "storage"` / "clear site data"** | **DESTROYED** (total, by definition) | survives | **passkey survives** — platform keychain, re-derivable | handle record destroyed, **the file on disk SURVIVES** | Recoverable if *any* of export / FSA file / working PRF passkey exists. Otherwise **the balance ≤ `T` is lost — by design, and disclosed.** |
-| **iOS ITP 7-day cap** | **At risk in a Safari tab; whether the install protects the IndexedDB bucket is `UNVERIFIED` (§5.6.5).** | survives | n/a on iOS today (PRF `create()`-only) | n/a on iOS | The cap is published by WebKit as a **cookie** cap with script-writable storage *aligned* to it; the home-screen carve-out does not name IndexedDB. **Do not depend on the install for this row** — recoverability is the export, and the loss is capped at `T`. |
+| **iOS ITP 7-day cap** | **At risk in a Safari tab, and *out of the eviction path* once installed to the Home Screen — as documented policy, WebKit-only, with the in-practice behaviour a field check (§5.6.5).** | survives | n/a on iOS today (PRF `create()`-only) | n/a on iOS | The cap is published by WebKit as a **cookie** cap with script-writable storage *aligned* to it, **and** the policy page exempts the home-screen first-party domain from that cap on *all* script-writeable storage — the class IndexedDB is enumerated in. **Do not depend on the install for this row** — the exemption does not reach `Clear-Site-Data`/profile reset/device loss, so recoverability is still the export, and the loss is still capped at `T`. |
 | **OS storage-pressure eviction** | survives if `persist()` granted; else evictable *without interrupting the user* | survives | survives | survives | Lowest-risk mode. Request `persist()` early, at a moment of user intent. |
 | **Device loss / theft** | gone | **survives — this is the export's purpose** | **survives** — passkey syncs; key re-derives | gone unless the user copied the file off | Recoverable via export or synced passkey. **Not recoverable from device-local storage alone — and this ADR must not pretend otherwise.** |
 | **Browser change / reset** | gone | survives | platform-dependent; a new passkey = **new PRF = old ciphertext unreadable** | survives if re-granted | The export is the only browser-independent rail. |
 | **Private browsing / one-shot captive-portal context** | lost at session end | survives only if the export was completed in that session | n/a | survives (written to the user's FS) | **Assume this happens.** Never create funds-bearing state the user has not exported without disclosing it. |
 
-#### 5.6.4 Install-to-home-screen is RECOMMENDED and materially better — but it is NOT the proof store's durability guarantee
+#### 5.6.4 Install-to-home-screen is RECOMMENDED and materially better — and on iOS it is *documented* to take the wallet's storage out of the 7-day eviction path
 
-> **CORRECTED 2026-10-14 — this subsection previously overstated the claim.** It said the install
-> means *"Apple has stated it will not evict this app's data"* and that the evicted class is
-> *"script-writable storage — explicitly including IndexedDB."* Both of those are **stronger than the
-> published sources support.** The correction, the pinned evidence, and the exact wording that may
-> and may not be used are recorded in **§5.6.5**; §5.6.3's table row and the two cross-references at
-> §6.6.5/§6.6.6 have been re-scoped to match. **Read §5.6.5 before quoting this subsection.**
+> **REVISED 2026-10-14 (second correction — this one in the *strengthening* direction).** An earlier
+> revision of this subsection overstated the claim as *"Apple has stated it will not evict this
+> app's data"*; the first correction (below, kept for the record) removed that and then
+> **over-corrected**, labelling the home-screen carve-out's reach into IndexedDB as `UNVERIFIED`.
+> **That was itself wrong**: WebKit publishes the exemption *normatively* — the Tracking Prevention
+> policy page's section *"Home Screen Web Application Domain Exempt From ITP"* says the home-screen
+> web application's first-party domain *"is exempt from ITP's 7-day cap on all script-writeable
+> storage"*, and ITP's 7-day section enumerates IndexedDB as a script-writeable storage form. The
+> settled/unsettled split is spelled out in **§5.6.5**, which is the authoritative subsection and
+> which this one now follows. **Read §5.6.5 before quoting this subsection.**
+>
+> What remains true from the first correction: the install is **not** a *data-durability guarantee*
+> for the wallet — the policy is documented, its in-practice behaviour on a current iOS is not
+> measured here, it covers WebKit engines only, and it says nothing about `Clear-Site-Data`, a
+> profile reset, or device loss. The durability story is still the `T` cap plus the export (§5.6.1–§5.6.3).
 
-What the install provably buys the wallet, and it is worth having:
+What the install buys the wallet, and the list is now longer than the capability set:
 
 - a **stable app identity** and standalone launch (§3.3; the manifest `id` defect is §6.3);
 - an **install-gated** capability set — Periodic Background Sync is `CONTENT_SETTING_BLOCK` without
   it, and on iOS there is **no service worker at all** without it ([SB §3.2]);
 - a **longer-lived service-worker registration**, which is what makes L1 (§6.6.4) reachable at all
-  rather than moot.
+  rather than moot;
+- **on iOS, exemption from ITP's 7-day eviction of script-writeable storage** — WebKit's documented
+  policy, quoted and scoped in **§5.6.5(a)–(b)**: the exemption is granted to the home-screen web
+  application's first-party domain over the whole class of script-writeable storage, and IndexedDB
+  is in that class. This is a **policy** statement, not a field measurement, and it is WebKit-only.
 
-What it must **not** be claimed to buy: **protection of the wallet's IndexedDB proof store.** The
-seven-day cap is, in WebKit's own framing, a **cookie** cap — *"ITP deletes all cookies created in
-JavaScript and all other script-writeable storage after 7 days of no user interaction with the
-website"* (`https://webkit.org/tracking-prevention/`, fetched 2026-10-14) — and the home-screen
-carve-out is one sentence of **expectation** about *"the first-party in such a web application"*
-whose *"website data"* it says it does not expect to see deleted, **not** a named guarantee about
-IndexedDB (`https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/`, 2020-03-24).
-The precise scope of the carve-out is therefore **`UNVERIFIED`** (§5.6.5), and it is **not** what the
-wallet's durability rests on.
+**What it must still not be claimed to buy — unchanged by the above:** protection against
+`Clear-Site-Data: "storage"`, a profile reset, private browsing, device loss, or any non-WebKit
+engine; and it is **not** the reason the ecash survives. The exemption is expressed with
+*"all script-writeable storage"* as the class and does not contain the literal string "IndexedDB",
+and whether a given install on a given iOS build behaves accordingly is a **field check (§11(10),
+labelled `must-verify-on-device`)**. So label its status precisely: the **policy** claim is
+`VERIFIED` as documented (§5.6.5(e)); the **in-practice** claim is not.
 
 **The durability story that does not depend on the install is the one in §5.6.1–§5.6.3:** keep the
 device-local balance below `T`, offer the one-tap encrypted export once balance ≥ `T`, and accept
 that before the reveal the wallet is a **petty-cash purse** whose loss is capped and disclosed. The
-install remains **recommended** and remains a first-order *capability* requirement — it is the
-*gate* for background work and for a real service worker — but the ecash's survival is a function of
-the **export** and the **cap**, not of the install.
+install is **recommended**, is a first-order *capability* requirement — it is the *gate* for
+background work and for a real service worker — and on iOS is additionally **documented** to remove
+the storage from ITP's eviction path; but the ecash's survival is still a function of the **export**
+and the **cap**, because none of the install's protections reach `Clear-Site-Data`, a profile reset
+or device loss.
 
 #### 5.6.5 The iOS 7-day eviction claim — precise scope, pinned evidence, and the wording that is permitted
 
@@ -994,7 +1012,8 @@ eviction. It is the kind of claim that is *remembered* more strongly than it was
 so the evidence is quoted here verbatim and the permitted wording is pinned to it. **No other part
 of this ADR may state a stronger version than what follows.**
 
-**(a) What WebKit actually published, quoted.**
+**(a) What WebKit actually published, quoted — the blog post, and then the normative policy page
+this ADR previously failed to cite.**
 `https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/` (2020-03-24), section
 *"7-Day Cap on All Script-Writeable Storage"*, says: *"we announced that ITP would cap the expiry of
 client-side cookies to seven days… Now ITP has aligned the remaining script-writable storage forms
@@ -1005,14 +1024,44 @@ cache**, and the same post's home-screen paragraph reads: *"Web applications add
 screen are not part of Safari and thus have their own counter of days of use… We do not expect the
 first-party in such a web application to have its website data deleted."*
 
-**(b) Which of those two quotations is load-bearing for a bearer-value wallet.** The *home-screen*
-sentence, and it is weaker than it reads. It is (i) a sentence of **expectation** (*"we do not
-expect"*), (ii) about a **generic** unit — *"the first-party"*, *"its website data"* — and (iii) in a
-post whose **declared subject is cookies**. So it supports the statement *"Apple states it does not
-expect an installed home-screen web app's website data to be evicted on the Safari counter"* and
-**nothing stronger**; it does **not** name IndexedDB, and it does **not** say "IndexedDB survives on
-the install". **Whether the carve-out as implemented today covers the IndexedDB bucket is
-therefore `UNVERIFIED`** and is recorded as an open field-check (§11(10)).
+**That post is a 2020 announcement. The rule it announces is published normatively at
+`https://webkit.org/tracking-prevention/` (fetched 2026-10-14), and that page carries a section the
+blog post does not — the one this ADR previously missed** — titled **"Home Screen Web Application
+Domain Exempt From ITP"**:
+
+> The first-party domain of home screen web applications is exempt from ITP's 7-day cap on all
+> script-writeable storage, i.e. ITP always skips that domain in its website data removal
+> algorithm. In addition, the website data of home screen web applications is kept isolated from
+> Safari and thus will not be affected by ITP's classification of tracking behavior in Safari.
+
+Under **Cookies** on the same page, the cap's own definition: *"ITP deletes all cookies created in
+JavaScript and all other script-writeable storage after 7 days of no user interaction with the
+website."*
+
+**(b) Which of those is load-bearing for a bearer-value wallet, and what it does and does not
+settle.** Three statements, in increasing strength, must not be collapsed:
+
+1. **The install takes the origin out of ITP's eviction path — normative, settled.** The policy
+   page's exemption is granted to **"the first-party domain of home screen web applications"**, and
+   the cap it is exempted from is over **"all script-writeable storage"**. The adjacent 7-day
+   section enumerates the class it means, and **IndexedDB is in it**. So on WebKit's own wording the
+   exemption reaches the wallet's proof store. That is the strongest claim this ADR makes about the
+   install, and it is **`VERIFIED` as documented policy** — not as a measurement.
+2. **The 2020 blog post's home-screen sentence is the weaker half, and it is no longer the
+   load-bearing citation.** It is (i) a sentence of **expectation** (*"we do not expect"*), (ii)
+   about a **generic** unit — *"the first-party"*, *"its website data"* — and (iii) in a post whose
+   declared subject is cookies. It supports *"Apple states it does not expect an installed
+   home-screen web app's website data to be evicted on the Safari counter"* and nothing stronger.
+   The policy page's exemption sentence is what carries the point; the post is corroboration.
+3. **What neither settles: that a given install on a current iOS build behaves accordingly.**
+   Everything above is **WebKit's documented policy**, not an independent field measurement, and it
+   covers **WebKit engines only** — nothing here speaks to a non-WebKit engine, and nothing here is
+   a measurement of a real installed wallet reading its IndexedDB bucket back after seven days.
+   Whether a specific install on a specific iOS version is in fact exempt remains a **field check
+   (§11(10))**, and the correct label for that half is **`must-verify-on-device`** — *not*
+   `UNVERIFIED` for the policy claim, which is settled. Do **not** overclaim the other way either:
+   the exemption paragraph does not contain the literal string "IndexedDB"; the claim rests on the
+   *class* being named ("all script-writeable storage") and IndexedDB being enumerated in it.
 
 **(c) The correction to the widespread "script-writable storage cap ⇒ IndexedDB is capped" reading.**
 Two independent observations weaken it, and both are primary:
@@ -1024,7 +1073,11 @@ Two independent observations weaken it, and both are primary:
   (`https://webkit.org/tracking-prevention/`, fetched 2026-10-14). The heading is on the **cookie**
   family, and the enumerated *"latter storage forms"* are the ones the blog post already listed.
   There is no independent statement anywhere in the policy that gives **IndexedDB** a seven-day
-  lifetime of its own.
+  lifetime of its own. **Note carefully what this bullet does and does not say: it says the cap has
+  no *IndexedDB-specific* clause of its own. It is NOT a statement that the home-screen exemption
+  fails to reach IndexedDB — that exemption names the whole class ("all script-writeable storage"),
+  and bullet (b)1 settles it. The two readings were conflated in an earlier revision of this
+  subsection and that conflation is the error this revision corrects.**
 - **Other user agents classify IndexedDB as *non-cookie* storage.** Mozilla, in its own words, ships
   a policy "designed as an alternative to the **older cookie policies**"
   (`https://developer.mozilla.org/en-US/docs/Web/Privacy/Storage_access_policy`), whose blocked sets
@@ -1037,26 +1090,45 @@ Two independent observations weaken it, and both are primary:
   meaningful distinction rather than a technicality
   (`https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria`).
 
-**So the correction is this: the 7-day cap is a COOKIE cap, with script-writable storage *aligned to*
-it (localStorage being the documented implementation side-effect — WebKit's own justification is
-that third-party scripts *"moved to other means of first-party storage such as LocalStorage"*).** It
-is **not** a published, IndexedDB-specific eviction guarantee, and any sentence that treats
-"In 7 days iOS deletes the wallet's IndexedDB" — **or** its converse, "the install guarantees the
-wallet's IndexedDB survives" — as *settled* is **unverified and must not be stated as fact**.
-**`UNVERIFIED` is the label for both directions.** This is not a licence to weaken the design: the
-mitigations in §5.6.1–§5.6.3 never depended on either direction, because they bound the loss at `T`
-and rely on the **export** for durability.
+**So the correction to the *cookie* reading stands — the 7-day cap is a COOKIE cap, with
+script-writable storage *aligned to* it (localStorage being the documented implementation
+side-effect — WebKit's own justification is that third-party scripts *"moved to other means of
+first-party storage such as LocalStorage"*). What the earlier revision of this subsection then did
+with that correction was wrong, because it collapsed two *different* directions into a single label:**
+
+- **"In 7 days iOS deletes the wallet's IndexedDB" — still not settled, and still must not be
+  asserted.** There is no IndexedDB-specific seven-day clause anywhere in WebKit's policy, so a flat
+  statement of this kind remains **`UNVERIFIED`**. (It is also the converse of the prohibition in
+  §5.6.6 item 10, and equally forbidden in user-facing text.)
+- **"The install exempts the wallet's IndexedDB from the 7-day cap" — settled as *documented
+  policy*.** The policy page's exemption names the class ("all script-writeable storage") that
+  IndexedDB is enumerated in, so this direction is **`VERIFIED` as WebKit's documented rule**
+  (bullets (a)–(b) above). Only its *in-practice* half — that a real install on a current iOS
+  behaves this way — remains `must-verify-on-device` (§11(10)).
+
+The design consequences are unchanged in either direction, and that is why this is a correction and
+not a design change: the mitigations in §5.6.1–§5.6.3 bound the loss at `T` and rely on the
+**export** for durability, so they never rested on the eviction question. What *does* change is that
+the install is now a **documented** protective factor rather than a hoped-for one — which strengthens
+§5.6.4's recommendation without licensing the sentence §5.6.6 forbids.
 
 **(d) The permitted wording.** Use exactly this:
 
 > On iOS, adding the portal to the Home Screen is **recommended** and is a **capability**
 > requirement — it is what makes a service-worker registration and any background wake possible at
-> all ([SB §3.2]). Apple's published statement is that it does *not expect* an installed
-> home-screen web app's *"website data"* to be deleted on Safari's seven-day non-use counter
-> (`https://webkit.org/blog/10218/`, 2020-03-24). That statement does **not** name IndexedDB, so
-> whether it protects the wallet's proof store is **`UNVERIFIED`** (§5.6.5(b)). The wallet's
-> durability therefore rests on the **balance cap `T`** and the **one-tap encrypted export**, not on
-> the install — and the seven-day cap remains a real risk to **cookie-backed** state either way.
+> all ([SB §3.2]) — **and it is also documented to take the wallet's storage out of ITP's 7-day
+> eviction path**: WebKit's Tracking Prevention policy states that *"the first-party domain of home
+> screen web applications is exempt from ITP's 7-day cap on all script-writeable storage"*, and
+> IndexedDB is one of the script-writeable storage forms ITP's 7-day section enumerates, so on
+> WebKit's own wording the exemption reaches the wallet's proof store
+> (`https://webkit.org/tracking-prevention/`, section *"Home Screen Web Application Domain Exempt
+> From ITP"*, fetched 2026-10-14). That is WebKit's **documented policy**, not an independent field
+> measurement, and it says nothing about non-WebKit engines; that a specific install on a current
+> iOS actually behaves this way is still a field check (§11(10)). Apple's 2020 announcement adds a
+> weaker sentence of *expectation* about *"website data"* generically
+> (`https://webkit.org/blog/10218/`, 2020-03-24). The wallet's durability promise nonetheless rests
+> on the **balance cap `T`** and the **one-tap encrypted export**, not on the install — and the
+> seven-day cap remains a real risk to **cookie-backed** state either way.
 
 **(e) `VERIFIED` vs `UNVERIFIED`, so a reader can tell them apart.**
 
@@ -1066,8 +1138,10 @@ and rely on the **export** for durability.
 | The cap is described by WebKit in cookie terms, with script-writable storage *aligned* to it | **VERIFIED** — policy page heading + quoted justification |
 | Firefox/MDN classify IndexedDB as *storage*, not *cookies* | **VERIFIED** — MDN Storage Access Policy, per-API block enumeration |
 | Home-screen web apps are on their own day-counter | **VERIFIED** — same post, quoted above |
-| **The carve-out protects the wallet's IndexedDB bucket in practice** | **`UNVERIFIED`** — not named; a field check (§11(10)); do not assert it in either direction |
-| **Install-to-home-screen is required because otherwise the ecash is deleted in 7 days** | **`UNVERIFIED` as stated** — the correct statement is that the install is a *capability* requirement (§5.6.4) and the export is the durability rail |
+| **WebKit's policy exempts the home-screen web application's first-party domain from the 7-day cap on *all script-writeable storage* — the class IndexedDB is enumerated in** | **`VERIFIED` as WebKit's documented policy** — `https://webkit.org/tracking-prevention/`, section *"Home Screen Web Application Domain Exempt From ITP"*, quoted verbatim in (a). **The exemption paragraph does not contain the literal string "IndexedDB"**; the claim rests on the class being named and IndexedDB being in it. No longer `UNVERIFIED`. |
+| **That a *specific* install on a *current* iOS build actually behaves this way** | **`must-verify-on-device`** — the policy is settled; the in-practice behaviour is not measured here, and it is a field check (§11(10)). A layer below (b)1, not a contradiction of it. |
+| **WebKit's documented exemption is the *only* thing this settles: non-WebKit engines are not covered** | **`VERIFIED` as a scoping statement** — the policy is WebKit's; nothing here speaks for another engine, and no broader claim may be derived. |
+| **Install-to-home-screen is required because otherwise the ecash is deleted in 7 days** | **`UNVERIFIED` as stated** — the correct statement is that the install is a *capability* requirement (§5.6.4), it is *documented* to remove the storage from ITP's eviction path ((b)1), and the export is the durability rail |
 
 The WebKit source *files* were also checked, so the reader knows the limit of the check: the
 `monitoredDataTypes()` set that ITP acts on — read from
@@ -1076,8 +1150,12 @@ The WebKit source *files* were also checked, so the reader knows the limit of th
 SessionStorage, ServiceWorkerRegistrations, FileSystem, ScreenTime, EnhancedSecurityRecord`, i.e. the
 post's list is confirmed in code; but the *algorithm that selects which of them to delete for a given
 origin* lives in the classifier's own task buckets, which is where the home-screen carve-out would be
-implemented and which this ADR did **not** audit. **Stated so the claim's boundary is visible: the
-list is verified, the carve-out's per-type behaviour is not.**
+implemented and which this ADR did **not** audit. **Stated so the claim's boundary is visible, and it
+is now the *only* boundary left on this point: the list is verified in code, and the exemption is
+verified as *documented policy* (the policy page's own section, quoted in (a)) — but the ADR has not
+read the classifier's per-type selection logic, so what the implementation does for a given type on
+a given build is a device field check (§11(10), `must-verify-on-device`), not something this
+document asserts.**
 
 #### 5.6.6 What this ADR must NOT claim about secret storage
 
@@ -1094,8 +1172,8 @@ Each is FALSE, and each is the kind of sentence that gets written by accident:
 | "We can read the seed back out of the password manager." | `PasswordCredential` is Chrome-only and not read-back. |
 | "Restore from the seed alone." | **NUT-09 needs three things: seed + per-keyset counter + mint URL(s)** — and only `secretsPolicy: 'deterministic'` outputs are recoverable at all. Any backup blob must carry all three with the counter at a defined height. |
 | "Top up via a locked quote and restore later." | **NUT-20 locked quotes are NOT seed-recoverable.** Exclude them from the auto-top-up loop. |
-| "Add to Home Screen on iOS and your money is safe — the install exempts the wallet from the 7-day deletion." | **The scope of the carve-out is `UNVERIFIED` (§5.6.5).** WebKit's carve-out is about *"website data"* generically and does not name IndexedDB; the 7-day cap is published as a **cookie** cap with script-writable storage aligned to it. The install is a *capability* requirement; durability is the `T` cap plus the export. |
-| "In 7 days iOS deletes the wallet's IndexedDB." | **Also `UNVERIFIED` as a flat statement** (§5.6.5(c)). It is the `UNVERIFIED` converse of the row above, and the same rule applies: label it, do not assert it. |
+| "Add to Home Screen on iOS and your money is safe — the install exempts the wallet from the 7-day deletion." | **Still forbidden, but the reason is now narrower than an earlier revision said.** The exemption *is* documented (WebKit's policy names the home-screen first-party domain as exempt from the 7-day cap on all script-writeable storage, the class IndexedDB is in — §5.6.5). What makes the sentence false is everything the exemption does **not** cover: `Clear-Site-Data: "storage"`, a profile reset, private browsing, device loss, and any non-WebKit engine — plus the fact that it is documented **policy** whose in-practice behaviour on a current iOS is a field check (§11(10)). The install is a *capability* requirement and a documented ITP-exemption; durability is the `T` cap plus the export. |
+| "In 7 days iOS deletes the wallet's IndexedDB." | **`UNVERIFIED` as a flat statement** (§5.6.5(c)) — there is no IndexedDB-specific seven-day clause in WebKit's policy, so the converse claim is not settled either. Label it, do not assert it. |
 
 ---
 
@@ -1219,7 +1297,9 @@ described at the strength the platforms' own sources support, and anything that 
 not be pinned to one of those sources is labelled **`UNVERIFIED`** rather than softened
 into vague language. That applies in both directions — a claim is not made *stronger*
 to look better, and it is not made *weaker* to look cautious (§5.6.5 is the worked
-example).
+example, and it was made to work in **both** directions on the same point: an early
+revision strengthened it beyond the sources, a later one weakened it beyond them, and
+the cited normative wording is what settled it).
 
 #### 6.6.1 The requirement, in the operator's own words
 
@@ -1437,8 +1517,9 @@ Cashu's own state primitives:
 6. **Storage must be durable and origin-scoped** — IndexedDB, not memory (Chrome's own
    warning: *"Any global variables you set will be lost if the service worker shuts
    down. Instead of using global variables, save values to storage."*). **Do not
-   justify this by the iOS ITP carve-out** — that carve-out does not name IndexedDB and
-   its scope is `UNVERIFIED` (§5.6.5). Durability here comes from the journal being
+   justify this by the iOS ITP exemption alone** — that exemption is documented policy and WebKit-only
+   (§5.6.5), its in-practice behaviour is a field check, and it does not reach `Clear-Site-Data`, a
+   profile reset or device loss. Durability here comes from the journal being
    origin-scoped and from the balance being capped at `T` (§5.4, §5.6.4).
 7. **Bounded abandonment.** If the address/entitlement changed, mark the intent
    `abandoned_rotated` and **stop**. Retrying a melt whose invoice belonged to a dead
@@ -1464,10 +1545,15 @@ creates wakes.
 - **Degradation, not failure**: *"with background execution and push both
   unavailable, all value is still delivered on the next foreground open."*
 - **On iOS the Home Screen install is REQUIRED for CAPABILITY — a real service worker and any
-  background wake — and is RECOMMENDED for identity and registration lifetime, but it is NOT
-  promised as proof-store data durability.** Apple's published carve-out is about *"website data"*
-  generically and does not name IndexedDB; its scope is `UNVERIFIED` (§5.6.5). The wallet's
-  durability promise is the `T` cap plus the one-tap encrypted export (§5.6.4).
+   background wake — RECOMMENDED for identity and registration lifetime, and *documented* to take
+   the wallet's storage out of ITP's 7-day eviction path; it is still NOT a promise of proof-store
+   data durability.** WebKit's Tracking Prevention policy states the exemption normatively
+   (§5.6.5(a)–(b)): the home-screen web application's first-party domain is exempt from the 7-day
+   cap on *all* script-writeable storage, and IndexedDB is enumerated in that class. That is
+   documented policy, WebKit-only, and its in-practice behaviour on a current iOS is a field check
+   (§11(10)); the exemption also does not reach `Clear-Site-Data`, a profile reset or device loss —
+   which is why the wallet's durability promise remains the `T` cap plus the one-tap encrypted
+   export (§5.6.4).
 - **The pre-auth reachability assumption is declared** (§6.6.7), because the design's
   honesty depends on which way the module answers.
 
@@ -1503,13 +1589,17 @@ re-derive the claim from the same sources and believe it was never checked. Spik
    Chrome's installability criteria require HTTPS or loopback and every background API is
    secure-context-gated, and the portal is served on `http://<router-lan-ip>:2051` [SB §0][SB 26][SB 27][SB 28].
 9. ❌ **"Add to Home Screen on iOS and your money is safe — the install stops the 7-day deletion."**
-   Apple's published carve-out is a sentence of *expectation* about *"the first-party"*'s *"website
-   data"* and **does not name IndexedDB**; the 7-day cap is published by WebKit as a **cookie** cap
-   with script-writable storage *aligned* to it §5.6.5(a)–(c). The install is a **capability**
-   requirement (§5.6.4); durability is the `T` cap plus the export.
-10. ❌ **"In 7 days iOS deletes the wallet's IndexedDB."** The `UNVERIFIED` converse of item 9, and
-    equally not permitted as a flat statement §5.6.5(c). **Label it, do not assert it in either
-    direction.**
+   Still forbidden, for a narrower reason than an earlier revision gave. WebKit's policy **does**
+   document the exemption: the home-screen web application's first-party domain *"is exempt from
+   ITP's 7-day cap on all script-writeable storage"*, the class IndexedDB is enumerated in (§5.6.5(a)–(b)).
+   The sentence is false because the exemption does not cover `Clear-Site-Data: "storage"`, a
+   profile reset, private browsing, device loss, or any non-WebKit engine, and because it is
+   documented **policy** whose in-practice behaviour on a current iOS remains a field check
+   (§11(10)). The install is a **capability** requirement and a documented ITP-exemption (§5.6.4);
+   durability is the `T` cap plus the export.
+10. ❌ **"In 7 days iOS deletes the wallet's IndexedDB."** `UNVERIFIED` as a flat statement — there is
+    no IndexedDB-specific seven-day clause in WebKit's policy, so this converse is not settled
+    either §5.6.5(c). **Label it, do not assert it in either direction.**
 11. ❌ **"Background sync registration is free and always available."** Registration *"may only be
     made while the main app is open"*, i.e. the platform grants durability of the attempt, **not**
     freedom to schedule it [SB §2.4][SB 29] — and Periodic Background Sync is
@@ -1525,20 +1615,47 @@ entitlement lapses. The deadlock is that the payment leg normally **rides throug
 venue leg — if the client has no entitlement it typically has no path to the
 mint, so it cannot pay.
 
-**Verified on the live router `tollgate-A04E` (rc4) from the running nodogsplash ruleset.**
-The pre-auth allow-list is a **closed port list**:
+**Verified on the live router `tollgate-A04E` (rc4) from the running nodogsplash ruleset.** The
+pre-auth allow-list is a **closed port list** — nodogsplash renders it as the gate's
+`users-to-router` `FirewallRule` set, **11 entries verbatim from the running config**. The ruleset
+as captured also contains an **empty `preauthenticated-users` block**, which is a real and
+load-bearing detail, not a rendering artifact: the port list that actually governs a pre-auth
+client is `users-to-router`, so anyone reading only the `preauthenticated-users` block would find
+it empty and conclude nothing was allowed:
 
 ```
 FirewallRuleSet preauthenticated-users {
-  allow tcp port 22 | 23 | 53 | 80 | 2121 | 2050 | 2051 | 443
-  allow udp port 53 | 67 | 123
+}
+FirewallRuleSet users-to-router {
+  FirewallRule allow tcp port 22
+  FirewallRule allow tcp port 23
+  FirewallRule allow tcp port 53
+  FirewallRule allow udp port 53
+  FirewallRule allow udp port 67
+  FirewallRule allow tcp port 80
+  FirewallRule allow tcp port 2121
+  FirewallRule allow tcp port 2050
+  FirewallRule allow tcp port 2051
+  FirewallRule allow udp port 123
+  FirewallRule allow tcp port 443
 }
 ```
 
-Everything else is `REJECT` (icmp-port-unreachable). The only permitted `443` destination is the
+Which is tcp `22 | 23 | 53 | 80 | 2121 | 2050 | 2051 | 443` plus udp `53 | 67 | 123`, and nothing
+else. Everything else is `REJECT` (icmp-port-unreachable). The only permitted `443` destination is the
 router's own uhttpd — **no general internet, therefore no mint.** (TollGate already advertised
 `kind:21023 no-reachable-mints` when there is no uplink, i.e. mint reachability was already
 treated as a payment precondition; the ruleset is what makes that concrete for the walled garden.)
+
+**One maintenance note that must not be read off this capture as the intended end-state:** the
+module's own writer (`packaging/files/etc/uci-defaults/99-tollgate-setup`,
+`assert_nodogsplash_allow_entries()`) **deliberately removes** `allow tcp port 443` and
+`allow tcp port 8080` from this list — LuCI is an admin surface and must not answer a guest
+(the removal is re-asserted on both setup paths because an older build and `tollgate-cli ssl enable`
+still write `:443`). The captured router is running **rc4 as shipped**, so its `:443` entry is the
+pre-convergence state. **The captured list is what the rc4 gate is; the module writer's target list
+drops `:443` — and this does not change the conclusion below, because the router's own uhttpd is
+still the only `443` listener either way and no general internet is reachable.**
 
 The scheduler consequence, stated plainly:
 
@@ -1570,12 +1687,16 @@ network**. Not a blocker; worth writing down.
   observation is the one §6.6.2's promise rests on: that the Android path really can top up with the
   app closed, and that the iOS path really does top up on next open. If the iOS observation
   contradicts the promise, the **promise** changes — not the observation.
-- **Resolve the item that is currently `UNVERIFIED` and load-bearing in two places: does the iOS
-  Home Screen install actually protect the wallet's IndexedDB bucket from the 7-day cap?** The
-  published carve-out is about *"website data"* generically and does not name IndexedDB (§5.6.5(b)),
-  so it is recorded as an **open question §11(10)** rather than settled. Field check: install the
-  web app, leave it unopened for >7 days of Safari use, and read the IndexedDB bucket back. Until
-  that is done, no claim in either direction may appear in user-facing text.
+- **The item that *was* `UNVERIFIED` and load-bearing in two places — does the iOS Home Screen install
+  actually protect the wallet's IndexedDB bucket from the 7-day cap? — is now settled at the policy
+  layer and open only at the device layer.** WebKit's Tracking Prevention policy states normatively
+  that the home-screen web application's first-party domain *"is exempt from ITP's 7-day cap on all
+  script-writeable storage"*, and IndexedDB is enumerated in that class (§5.6.5(a)–(b)), so the
+  **documented** answer is YES and that half is `VERIFIED` (§5.6.5(e)). What is still open is the
+  **in-practice** half, labelled `must-verify-on-device`: install the web app, leave it unopened for
+  >7 days of Safari use, and read the IndexedDB bucket back — on a current iOS build, and with the
+  policy's own WebKit-only scope kept in mind. Until that is done, the in-practice claim may not
+  appear in user-facing text as fact; the documented-policy claim may, with its scope stated.
 - **Confirm on-device what Apple's documentation states about `NEHotspotHelper` for the current
   release train**, since it is `deprecated at 26.0` per Apple's own docs JSON (verified 2026-10-14,
   §6.6.4.1 row 3). It governs whether any iOS native path is even technically available to a future
@@ -1699,7 +1820,7 @@ is *"a UX convenience, explicitly not custody"*). The panel shows:
 | The **decision on the background limits recorded**: accepted and documented, not worked around; **L0 + L1 ship**, L2/native deferred to a future ralph loop; asymmetry (**correct everywhere, autonomous only on Android**) stated to the user | §6.6.4.2, §6.6.2 |
 | Mint reachability resolved from **OPEN to VERIFIED NO**, with the live-router ruleset quoted and the pre-empt-only scheduler consequence stated | §6.6.8, §11(6) |
 | Every prohibition carries the citation that **falsifies** it, not just an assertion that it is false | §6.6.7 items 1–11 |
-| iOS install-durability claim scope-corrected: install = **capability** requirement, durability = the `T` cap + the export; carve-out scope labelled **UNVERIFIED** | §5.6.4, §5.6.5, §6.6.6 |
+| iOS install-durability claim scope-corrected **in the strengthening direction**: the install is a **capability** requirement *and*, per WebKit's Tracking Prevention policy, the home-screen first-party domain is **exempt from ITP's 7-day cap on all script-writeable storage** — the class IndexedDB is in — so install = capability + **documented** ITP-exemption (WebKit-only; in-practice behaviour still a device field check), while durability remains the `T` cap + the export | §5.6.4, §5.6.5, §6.6.6 |
 | Operator's scope framing recorded (ADR consolidated to the default branch as part of this PR) | §6.7, §6.6.8 |
 | Every claim cited `file:line` or doc URL | inline throughout; unmeasured items labelled `UNMEASURED` |
 | The **dead end withdrawn**: §3.4's former option (a) (portal TLS with a client-accepted cert) marked **not available**, with the measured self-signed split (secure context YES / service worker NO) and the no-public-CA-for-a-LAN-IP blocker | §3.4, §3.6.1, §3.6.3 |
@@ -1815,13 +1936,15 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
   global honesty rule in **§6.6**'s preamble; extra field-verification obligations in **§6.6.9**; the
   `if`/`elif` scope note in **§6.7**; the §8 acceptance rows above; and open question **§11(10)**.
   **The correction:** §5.6.4 was **restated** (install = capability requirement, not a data-durability
-  guarantee), the new §5.6.5 (the eviction-scope audit) was **added** to pin the published wording, label the carve-out's scope
-  `UNVERIFIED`, and prescribe the permitted sentence, and the strong version of the claim was
+  guarantee), the new §5.6.5 (the eviction-scope audit) was **added** to pin the published wording, and the strong version of the claim was
   softened to match the evidence in **five more places** — §5.3's bullet, §5.6.3's table row,
-  the pre-existing prohibition subsection (renumbered §5.6.6 from §5.6.5), §6.6.5 item 6, and §6.6.6. **No claim was deleted and none was
-  strengthened**; the two directions that could not be verified from a primary source (the install
-  guarantees IndexedDB survival / iOS deletes IndexedDB in 7 days) are both labelled `UNVERIFIED`
-  rather than asserted or silently dropped.
+  the pre-existing prohibition subsection (renumbered §5.6.6 from §5.6.5), §6.6.5 item 6, and §6.6.6.
+  **That pass over-corrected in one respect, corrected in the fourth pass below:** it labelled the
+  home-screen carve-out's reach into IndexedDB `UNVERIFIED`, which is wrong — WebKit publishes the
+  exemption normatively. It did correctly label the flat converse ("iOS deletes IndexedDB in 7 days")
+  `UNVERIFIED`, which stands. **No claim was deleted**; the one direction that could not be verified
+  from a primary source (that iOS deletes IndexedDB in 7 days) remains `UNVERIFIED` rather than
+  asserted or silently dropped.
 - **Amendment discipline (third pass, 2026-10-14) — the background decision and the mint answer:**
   the branch was **rebased onto the live `pr/pwa-wallet-adr-delta` tip `09ecc7d`** (PR #75) and two
   required edits were made. **(a)** A new **§6.6.4.2** records the operator's decision on the
@@ -1861,6 +1984,35 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
   was added and listed in `docs/analysis/README.md`, so every `[D:origin §N]` citation above
   resolves for a reader of the PR. **§3.3's table was not touched (still correct), no claim was
   deleted, and the appendix remains the last section of the document.**
+- **Amendment discipline (fifth pass, 2026-10-14) — two material findings from a cross-family review
+  of PR #75, both re-verified by the operator before being applied.** **(a) §5.6.5 corrected in the
+  *strengthening* direction, and this is the document's own best example of the honesty rule working
+  in both directions.** The reviewer found a WebKit policy section this delta had never cited:
+  `https://webkit.org/tracking-prevention/`, *"Home Screen Web Application Domain Exempt From ITP"*,
+  which states normatively that the home-screen web application's first-party domain *"is exempt from
+  ITP's 7-day cap on all script-writeable storage"* — the class whose adjacent 7-day section
+  enumerates **IndexedDB**. The second pass had cited only the 2020 blog post's weaker sentence of
+  *expectation* about *"website data"*, and on that basis labelled the exemption's reach into
+  IndexedDB `UNVERIFIED`. **That label was wrong and is removed:** the policy claim is now
+  `VERIFIED` as WebKit's documented policy, and the only residual open item is the *in-practice*
+  half, relabelled `must-verify-on-device` (§11(10)). The honest scoping is kept explicitly — it is
+  documented policy, not a field measurement, and it is **WebKit-only** — and nothing else was
+  weakened: export is still the recoverability story, the loss is still capped at `T`, and "not
+  custody" still applies. Propagated to §5.3's bullet, §5.6.3's table row, §5.6.4, §5.6.6's
+  prohibition rows, §6.6.5 item 6, §6.6.6, §6.6.9, the §8 summary row, §10's honesty-rule note, and
+  §11(10). **(b) A phantom citation resolved by *shipping* the file.** `EVIDENCE-vendor-origin-and-selfsigned.md`
+  was cited in three places as the raw evidence behind every `[measured]` claim and the appendix said
+  it was "in `docs/analysis/`" — but it was not in the PR, while `docs/analysis/README.md` admitted it
+  was not reproduced. The two contradicted. Rather than reword the citations down, the file was
+  **added to `docs/analysis/`** (14 KB, secrets-scanned: no key, token, seed, mnemonic or password;
+  it carries the same bench/LAN/global-IPv6 addresses the dossier already publishes) and the README
+  was updated to list it, so **every `[measured]` citation now resolves for a reviewer**. **(c)** Two
+  reviewer-flagged leads were checked rather than assumed: `src/main.go:424` as the module's `:2121`
+  listener was **confirmed** against the pinned SHA `cf7cad3` (`apiListenAddr = ":2121"`), and §6.6.8's
+  nodogsplash port list was **corrected to the verbatim live ruleset** (it is the `users-to-router`
+  ruleset's 11 entries, tcp `22|23|53|80|2121|2050|2051|443` + udp `53|67|123`, which the compact
+  quoted form had compressed into a `preauthenticated-users` block). **No claim was deleted, the
+  appendix remains the last section of the document, and the trailing newline is preserved.**
 
 ---
 
@@ -1878,7 +2030,8 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
    page deep-linking to it. See **§3.6** for the full measured record, including the
    self-signed split, the per-platform trust stores, and the **Local Network Access** crux.
    Evidence: `DOSSIER-vendor-origin-and-selfsigned.md` (§0.1, §1.2, §1.3, §3.4) +
-   `EVIDENCE-vendor-origin-and-selfsigned.md`.
+   `EVIDENCE-vendor-origin-and-selfsigned.md` — **both shipped in `docs/analysis/` in this PR**,
+   so every `[measured]` line below is checkable against the raw transcript.
 2. The operator's concrete value for `T` **below the cap the reverse decision
    requires** — see the dedicated item §11(7); the earlier "this delta recommends
    `T = 0`" reading is superseded by §5.4.
@@ -1895,9 +2048,12 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
 6. ~~**BLOCKING, module-owner answer required BEFORE implementation (§6.6.8): can an
    UNAUTHENTICATED client reach the Cashu mint through the walled garden?**~~ **CLOSED —
    ANSWERED NO, VERIFIED 2026-10-14.** Operator answer: **no**. Verified on the live router
-   `tollgate-A04E` (rc4) from the running nodogsplash ruleset: the pre-auth
-   `preauthenticated-users` allow-list is a **closed port list** (tcp `22 | 23 | 53 | 80 |
-   2121 | 2050 | 2051 | 443`, udp `53 | 67 | 123`) and everything else is `REJECT`
+   `tollgate-A04E` (rc4) from the running nodogsplash ruleset: the gate's **`users-to-router`**
+   ruleset carries the pre-auth allow-list verbatim as **11 entries** (tcp
+   `22|23|53|80|2121|2050|2051|443`, udp `53|67|123`) — note the captured
+   `preauthenticated-users`
+   block is **empty**, so the `users-to-router` set is the one that governs — and everything else is
+   `REJECT`
    (icmp-port-unreachable); the only permitted `443` destination is the router's own uhttpd,
    so there is **no general internet and therefore no mint**. Consequence: a background top-up
    can only ever **PRE-EMPT** a lapse, never restore one, so every top-up must fire while
@@ -1920,14 +2076,22 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
    §6.6.4.1 row 3). Recorded as a **planning input** for any future iOS native path: the one
    genuinely native iOS Wi-Fi wake primitive is being withdrawn, and its named replacement
    (`NEHotspotManager`) has not been examined by this delta.
-10. **`UNVERIFIED` and load-bearing in two places — does the iOS Home Screen install actually
-    protect the wallet's IndexedDB bucket from the 7-day cap?** WebKit's published carve-out is
-    about *"website data"* generically and does not name IndexedDB, and the 7-day cap is published
-    as a **cookie** cap with script-writable storage aligned to it (§5.6.5(b)–(c)). This is the
-    document's own highest-priority field check: it is the difference between the install being a
-    *capability* requirement (what we claim) and a *data-durability* requirement (what we do not).
-    Until it is resolved, **both** the strong claim and its flat converse are `UNVERIFIED` and
-    neither may reach user-facing text.
+10. **Settled at the policy layer, open at the device layer — does the iOS Home Screen install
+    protect the wallet's IndexedDB bucket from the 7-day cap?** **The documented answer is YES and
+    that half is `VERIFIED`:** WebKit's Tracking Prevention policy page, section *"Home Screen Web
+    Application Domain Exempt From ITP"*, states that the home-screen web application's first-party
+    domain *"is exempt from ITP's 7-day cap on all script-writeable storage"*, and IndexedDB is one
+    of the script-writeable storage forms the adjacent 7-day section enumerates — so on WebKit's own
+    wording the exemption reaches the proof store (§5.6.5(a)–(b), §5.6.5(e)). Earlier revisions of
+    this delta labelled this `UNVERIFIED`; **that label was wrong and has been removed.** What
+    remains open is the **in-practice** half, labelled `must-verify-on-device`: whether a *specific*
+    install on a *current* iOS build behaves accordingly — install the web app, leave it unopened
+    for >7 days of Safari use, and read the IndexedDB bucket back. Two scoping limits are part of
+    the closing statement, not caveats to it: the policy is **WebKit-only** (it says nothing about
+    any other engine, so the Android/other-engine position is unchanged), and it says nothing about
+    `Clear-Site-Data`, a profile reset or device loss. The flat converse — "iOS deletes the wallet's
+    IndexedDB in 7 days" — remains **`UNVERIFIED`** (there is no IndexedDB-specific seven-day clause
+    in the policy) and may not reach user-facing text either.
 
 ---
 
@@ -2107,12 +2271,27 @@ implications. See §6.6.
 **Operator, verbatim:** *"no, please see my earlier response for clarification."*
 
 **Verified on the live router `tollgate-A04E` (rc4) from the running nodogsplash ruleset.**
-The pre-auth allow-list is a **closed port list**:
+The pre-auth allow-list is a **closed port list** — carried by the gate's `users-to-router`
+ruleset, **11 entries verbatim** (tcp `22 | 23 | 53 | 80 | 2121 | 2050 | 2051 | 443`, udp
+`53 | 67 | 123`). The captured ruleset's `preauthenticated-users` block is **empty**; the list that
+governs a pre-auth client is `users-to-router`. Full quote and the module writer's `:443` removal
+note: **§6.6.8**.
 
 ```
 FirewallRuleSet preauthenticated-users {
-  allow tcp port 22 | 23 | 53 | 80 | 2121 | 2050 | 2051 | 443
-  allow udp port 53 | 67 | 123
+}
+FirewallRuleSet users-to-router {
+  FirewallRule allow tcp port 22
+  FirewallRule allow tcp port 23
+  FirewallRule allow tcp port 53
+  FirewallRule allow udp port 53
+  FirewallRule allow udp port 67
+  FirewallRule allow tcp port 80
+  FirewallRule allow tcp port 2121
+  FirewallRule allow tcp port 2050
+  FirewallRule allow tcp port 2051
+  FirewallRule allow udp port 123
+  FirewallRule allow tcp port 443
 }
 ```
 
@@ -2194,7 +2373,9 @@ enterprise pre-grant policy is announced but not shipped) are in **§3.6**.
 this log) — and note the apex is **broken today** (`tlsv1 alert internal error` on `:443`).
 
 **Evidence:** `DOSSIER-vendor-origin-and-selfsigned.md` and
-`EVIDENCE-vendor-origin-and-selfsigned.md`, both now in `docs/analysis/`.
+`EVIDENCE-vendor-origin-and-selfsigned.md`, both in `docs/analysis/` in this PR (the raw
+transcript was added in this pass so the `[measured]` claims are checkable; `docs/analysis/README.md`
+lists it in the same table).
 
 ---
 
