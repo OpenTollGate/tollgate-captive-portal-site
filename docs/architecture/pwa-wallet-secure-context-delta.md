@@ -61,9 +61,108 @@ change; **the CSP was never the SW blocker.**
 
 ---
 
+### 2.1 CORRECTION — a self-signed cert gives a secure context but still NO PWA
+
+The parent delta §3.4(a) treats "serve the portal over TLS" as the path to a real SW, and
+the spike's §3(a) measured `isSecureContext:true` after a certificate exception — but the
+spike ran with `--ignore-certificate-errors`, which suppresses the error **at the network
+layer** and therefore **silently skips the service-worker gate**. That stand-in was wrong
+for the question it was being used to answer.
+
+Re-measured with a **real** click-through (headed Chrome under Xvfb, real pointer via
+`xdotool`, interstitial clicked by hand): see
+`~/reports/pwa-cashu/DOSSIER-vendor-origin-and-selfsigned.md` §1.2.
+
+```
+isSecureContext:true  hasSW:true  hasCryptoSubtle:true  hasCaches:true  hasIndexedDB:true
+swRegister: {"ok": false,
+  "error": "SecurityError: Failed to register a ServiceWorker for scope
+            ('https://192.168.2.20:8444/') with script ('.../sw.js'):
+            An SSL certificate error occurred when fetching the script."}
+```
+
+**"Is it a secure context" and "can I install a PWA" are different questions.** A
+user-clicked exception satisfies the first and never the second. There are **four**
+independent gates, and self-signed fails gate 3 permanently:
+
+| # | Gate | Self-signed verdict |
+|---|---|---|
+| 1 | origin is Potentially Trustworthy (scheme/name only) | **passes** with `https://` |
+| 2 | navigation not blocked by the interstitial | **passes** only with a user click-through |
+| 3 | **service-worker registration** (needs a *validated* chain) | **FAILS**, permanently |
+| 4 | install criteria (`beforeinstallprompt`) | moot while 3 fails |
+
+Consequences, which replace §3.4(a) and (b) as written:
+
+- **BYOD is UNSUPPORTED** on every platform checked. Android since Nougat does **not** trust
+  user-added CAs (system store only), so we cannot make a stranger's phone trust a private
+  CA; iOS needs a second manual `Certificate Trust Settings` step or MDM.
+- **An operator-owned fleet is usable** if an MDM deploys the private root CA into the
+  **system** store.
+- **"Just get a real cert for the router" is a dead end.** No public CA will issue for an
+  RFC1918 literal or an internal name (CA/Browser Forum baseline requirements; no ACME path
+  for `192.168.1.1`), and split-horizon DNS fails for any guest whose resolver disagrees.
+
+### 2.2 CORRECTION — the cross-origin router call is NOT a mixed-content problem
+
+Recorded in the parent delta as open question 1 and in the spike as an untested item. It is
+now measured, and **the framing in both was inverted.**
+
+On the spec/MDN record, `https://page → fetch('http://192.168.1.1:2121/…')` *is* blockable
+mixed content. **Chrome 156 exempts it**, by an explicit published exemption: the
+permission-gated local-network request is exempted from mixed-content checks when the target
+is a private IP literal or a `.local` domain (measured: `200 cors`, with only a console
+*notice*).
+
+What actually blocks it is a third gate neither document named:
+
+> **Chrome Local Network Access** (Chrome 142+) — a user-grantable permission for any request
+> from **public** address space to **private/loopback** space.
+
+Measured, public origin (global IPv6) → private router:
+
+```
+Access to fetch at 'http://192.168.2.20:8018/api.json' from origin 'https://[2a01:...]'
+has been blocked by CORS policy: Permission was denied for this request to access the
+`local` address space.
+→ TypeError: Failed to fetch
+```
+
+**It is reported as a CORS failure.** That is the trap, and it is now documented in the
+portal's own code (`src/helpers/local-network-access.js`): an implementer will chase
+`Access-Control-Allow-Origin` forever while the real cause is a missing permission. CORS and
+LNA are orthogonal and **both** are required — measured independently:
+
+| permission | ACAO | result |
+|---|---|---|
+| granted | present | `200 cors` (after an `OPTIONS` preflight) |
+| granted | absent | **fails** — `No 'Access-Control-Allow-Origin' header` |
+| not granted | present | **fails** — the address-space message above |
+
+Naming traps, both measured: the web `PermissionName` is **kebab-case**
+(`local-network-access`); camelCase is rejected as an invalid enum value. The CDP
+`Browser.PermissionType` names are **not** the web names.
+
+Measured after the user grants it once: the grant is **sticky per origin across a browser
+restart**, and SW registration then succeeds. That stickiness is exactly why a **stable
+vendor origin** matters — the user grants `portal.orangesync.tech` local-network access once
+and it holds for **every** TollGate router they ever visit.
+
+**Two constraints that shape the wallet design:**
+
+1. **Workers cannot raise the LNA prompt.** Per the Chrome announcement, local-network
+   requests from a Service Worker require the origin to have been granted **already**. So a
+   fresh install's background SW poll loop against the router **silently fails**. The
+   foreground must make one LNA-requiring call before any SW-driven polling is relied upon.
+   This interacts directly with the parent delta's §6.6 background-autonomy design.
+2. **`ws://` to the router is not an escape hatch.** WebSockets are not yet LNA-gated, but
+   `ws://` from an `https://` page is still mixed-content-blocked. Do not design a `ws://`
+   keepalive to the router.
+
+---
+
 ## 3. §6.3's manifest defects — all confirmed, plus two the delta did not name
 
-Confirmed exactly as recorded:
 
 - `start_url: "."` resolves to `/`, which the **served** webroot 404s. Measured against a
   real `npm run build:portal` output: the built tree contains `splash.html` and **no
@@ -191,30 +290,42 @@ that bypasses everything and therefore never works offline.
 
 ---
 
-## 7. The blocker this delta surfaces: the existing CORS policy excludes the vendor origin
+## 7. The router-side requirement, answered: an exact-origin allow-list, not a wildcard
 
 The operator's mechanism requires the router portal to emit `Access-Control-Allow-Origin`
-for the PWA's calls (measured in the spike: without it `TypeError: Failed to fetch`; with
-it, `200 OK`).
+for the PWA's calls. That policy **already exists** in `tollgate-module-basic-go`
+(`main.go:996`) and **cannot serve this design as written**: it echoes the Origin only when
+`isLocalOrigin(origin) || isSameHost(origin, r.Host)`, and `cors_policy_test.go` pins the
+negative (`TestCorsMiddleware_NoWildcardForCrossHost`: `https://evil.example` → no ACAO).
+A public vendor origin is neither RFC1918 nor same-host, so it is **exactly** the case the
+current policy refuses.
 
-**That policy already exists, and it cannot serve this design as written.** In
-`tollgate-module-basic-go`, `main.go:996` echoes the Origin **only** when `isLocalOrigin(origin)
-|| isSameHost(origin, r.Host)` — and `cors_policy_test.go:62` pins the negative:
+The refusal is deliberate and well-argued — the file's comment cites OWASP, because this API
+is protected by the LAN firewall and not by credentials, so a wildcard would let any website
+read responses from a browser on a TollGate network. **So this is not "add a header"; it is a
+narrow, explicit decision**, and it belongs in the module repo and the ADR, not in this
+portal change. The shape the dossier measured as sufficient:
 
 ```
-TestCorsMiddleware_NoWildcardForCrossHost
-  origin "https://evil.example", host "192.168.8.1:2121"  ->  ACAO must be ""
+# :2121 Go listener — net/http middleware, BEFORE routing.
+# NOT uhttpd config, NOT nodogsplash: putting it in the wrong layer is a no-op.
+Access-Control-Allow-Origin: https://portal.orangesync.tech   # exact origin, not "*"
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: Content-Type
+Access-Control-Max-Age: 600
+Vary: Origin                                                  # already correct today
+# OPTIONS <path> -> 204, no body
 ```
 
-A public vendor origin (`https://<vendor>`) is neither RFC1918 nor same-host, so **it is
-exactly the case the current policy refuses**. The refusal is deliberate and well-argued —
-the file's own comment cites OWASP, because this API is protected by the LAN firewall and
-not by credentials, so a wildcard would let any website read responses from a browser on a
-TollGate network.
+Two notes that are easy to get wrong:
 
-So the vendor-origin architecture is **not implementable by adding a header**. It needs an
-explicit, narrow decision — an allow-list of named origins supplied by router config, with
-`Vary: Origin` already correct — **and that decision belongs in the module repo and in the
-ADR, not in this portal change.** This delta records it as a blocker rather than
-implementing a policy change in the wrong repository. Mixed-content / Private Network
-Access (parent delta, open question 1) is the companion unknown and is still unclosed.
+- **`Access-Control-Allow-Private-Network` is dead code.** Measured:
+  `Access-Control-Request-Private-Network` is **absent** in Chrome 156 — the legacy PNA
+  preflight was replaced by LNA. Implementing it is a 2022-era recipe.
+- **Prefer the exact origin over `*` now**, even though nothing is credentialled yet, so
+  credentials can be added later without a breaking change. (`*` is incompatible with
+  credentials.)
+
+This delta records the requirement and the measured-enough shape. **The module-side change is
+not made here.** §2.2 is the companion constraint, and it is what makes the LNA grant (not
+the header) the first thing a fresh install must obtain.

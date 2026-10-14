@@ -19,6 +19,23 @@
 // for a request it does not have a real cached copy of, and NEVER intercepts the
 // money path. `shouldIntercept` is imported from the same module the app uses,
 // so the rule cannot drift between the worker and the UI.
+//
+// ⚠️ WHY THIS WORKER MUST NOT POLL THE ROUTER — a measured constraint, not a style
+// preference. Chrome's Local Network Access permission gates requests from public
+// address space to private/loopback space, and per the Chrome LNA announcement:
+//
+//   "Local network requests from Service Workers and Shared Workers require that
+//    the worker's origin has previously been granted the Local Network Access
+//    permission. If your application makes local network requests from a service
+//    worker, you will need to separately trigger a local network request from
+//    your application in order to trigger the permission prompt."
+//
+// So a background SW poll loop against `http://<gw>:2121` SILENTLY FAILS on a
+// fresh install — and it fails reported as a CORS error ("Permission was denied
+// for this request to access the `local` address space"), which sends an
+// implementer chasing Access-Control-Allow-Origin headers forever. The
+// FOREGROUND must make one LNA-requiring call before any SW-driven polling is
+// relied upon. See src/helpers/local-network-access.js.
 
 import { PRECACHE_ALLOWLIST, shouldIntercept } from './money-path.js';
 
