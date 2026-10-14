@@ -41,15 +41,23 @@ is authoritative.
 | `DOSSIER-portal.md` | The portal SPA: PWA, persistence, payment state, build+test harness. |
 | `DOSSIER-wallet-libs.md` | Cashu wallet libraries for an embedded, auto-paying PWA wallet. |
 | `DOSSIER-test-rails.md` | Available test rails (host, emulator, serial-attached router) and exactly which are reachable. |
-| `DOSSIER-vendor-origin-and-selfsigned.md` | The **vendor-origin** dossier: whether a self-signed credential can produce a PWA (it cannot — secure context YES, service worker NO, measured after a real interstitial click-through), the per-platform trust stores, the public-CA-for-a-LAN-IP dead end, and the **Local Network Access** finding that is the real crux of an `https` PWA calling the router's `http://<gw>:2121`. Cited from the delta as `[D:origin §N]` (see delta `§3.6`, `§3.4 (d)`, `§11(1)`). Its raw tool output is `EVIDENCE-vendor-origin-and-selfsigned.md`, which lives beside the dossier in the working set and is **not** reproduced here (the delta quotes the load-bearing lines verbatim). |
+| `DOSSIER-vendor-origin-and-selfsigned.md` | The **vendor-origin** dossier: whether a self-signed credential can produce a PWA (it cannot — secure context YES, service worker NO, measured after a real interstitial click-through), the per-platform trust stores, the public-CA-for-a-LAN-IP dead end, and the **Local Network Access** finding that is the real crux of an `https` PWA calling the router's `http://<gw>:2121`. Cited from the delta as `[D:origin §N]` (see delta `§3.6`, `§3.4 (d)`, `§11(1)`). Its raw tool output is reproduced beside it as **`EVIDENCE-vendor-origin-and-selfsigned.md`** — the verbatim rig transcript (§E1–§E7) behind every `[measured]` claim in the dossier and in the delta's `§3.6`, shipped here so a **reviewer can check those claims directly** rather than take them on trust. |
 
-**Note on this dossier's rig description.** `DOSSIER-vendor-origin-and-selfsigned.md` §0.2 exists so
+**Note on the rig description in this dossier and in its evidence file.**
+`DOSSIER-vendor-origin-and-selfsigned.md` §0.2 exists so
 that every `[measured]` number in it is reproducible, and it therefore names the test rig's addresses
 — a private LAN `192.168.2.20`, the loopback control, and a **global IPv6 address on the authoring
 host** used deliberately to create a genuine public→private address-space transition on one box. It
-also uses `~/…` and `~/.cache/…` paths. **These are bench addresses and local paths, not
-credentials** — no key, token, seed, mnemonic or password appears in the file (the estate's Caddy
-`CF_API_TOKEN` appears only as an **env-var reference**, `${env.CF_API_TOKEN}`). Treated as a
-publication-safe working document, consistent with the other dossiers in this directory, which
-likewise publish LAN addresses and absolute host paths. The IPs are **not** locations of any private
+also uses `~/…` and `~/.cache/…` paths. **The same addresses appear in
+`EVIDENCE-vendor-origin-and-selfsigned.md`, which is the verbatim transcript of that rig and is
+published here for exactly the same reason** — it is the raw output a reviewer needs to check the
+delta's `[measured]` claims, and it is not independently redacted. **These are bench addresses and
+local paths, not credentials** — no key, token, seed, mnemonic or password appears in either file
+(the estate's Caddy `CF_API_TOKEN` appears only as an **env-var reference**, `${env.CF_API_TOKEN}`),
+and the scan covers both files. Treated as
+publication-safe working documents, consistent with the other dossiers in this directory, which
+likewise publish LAN addresses and absolute host paths. The `23.182.128.*` / `66.92.204.38`
+addresses in the evidence file are **public service endpoints of the sites that were measured**
+(e.g. the live `orangesync.tech` probes in §E5), not of this estate's private infrastructure. The
+IPs are **not** locations of any private
 key; do not treat a copied rig table as an inventory of running services.
