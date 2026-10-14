@@ -311,7 +311,41 @@ The refusal is deliberate and well-argued — the file's comment cites OWASP, be
 is protected by the LAN firewall and not by credentials, so a wildcard would let any website
 read responses from a browser on a TollGate network. **So this is not "add a header"; it is a
 narrow, explicit decision**, and it belongs in the module repo and the ADR, not in this
-portal change. The shape the dossier measured as sufficient:
+portal change.
+
+**Confirmed for the actual vendor host, 2026-10-14.** The one branch that looked dangerous
+when resolved is the DNS half of the policy: `isLocalOrigin` echoes an Origin for any
+hostname that *resolves* to a private address, which under a public→private call would mean
+the browser's `Origin` (`https://portal.orangesync.tech`) is the name being resolved.
+Resolved from this host:
+
+```
+portal.orangesync.tech  -> 64:ff9b::17b6:8033
+orangesync.tech         -> 64:ff9b::17b6:80e2, 64:ff9b::17b6:8033, 64:ff9b::425c:cc26
+```
+
+Those are **NAT64-embedded public IPv4** (`64:ff9b::/96`, RFC 6052 — `17b6:8033` is
+`23.182.128.51`), not RFC1918 and not loopback, so `isLocalOrigin` returns **false** and the
+vendor origin is **refused** — which is exactly the gap this section describes. The design is
+*not* silently unsafe by default; it is simply declined, and the allow-list above is what
+closes it.
+
+Two findings survive, and the first is a real blind spot:
+
+1. `isLocalOrigin` will echo **any hostname that resolves to a private address**, including a
+   public site on a split-horizon or DNS-hijacked network. `cors_policy_test.go` pins a
+   literal private IP (`TestCorsMiddleware_PrivateCrossHostNotEchoed`) and a non-resolving
+   public name (`TestCorsMiddleware_NoWildcardForCrossHost`) — so the resolving-to-private
+   **name** path, the entire reason the `LookupHost` branch exists, **has no test**. The
+   guard-barrier is a literal IP, not `privateCIDRs` membership of a resolved name.
+2. That `LookupHost` sits **on the request path** with no visible caching, so every
+   cross-origin request *and every `OPTIONS` preflight* triggers a DNS lookup — on a router
+   that may have no upstream DNS. It fails closed (`return false` on a lookup error), which is
+   correct, but a preflight should not depend on the LAN resolver being up.
+
+Both are module-side and are **not** fixed here.
+
+The shape the dossier measured as sufficient:
 
 ```
 # :2121 Go listener — net/http middleware, BEFORE routing.
