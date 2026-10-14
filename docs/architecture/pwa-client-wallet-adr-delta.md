@@ -1090,6 +1090,17 @@ the same portal to authenticate against; a TWA needs an installable web app to w
 [SB §0][SB 26][SB 27][SB 28]. **Transport is step zero for all six rows — including the one we are
 shipping.**
 
+#### 6.6.4.2 The decision on this section, recorded (2026-10-14)
+
+**Decided:** the limits above are **accepted and documented, not worked around**, in this
+phase. **Ship L0 + L1 only** — L0 (resumable journal + `last-spend` + top-up-on-next-open) is
+the mandatory correctness floor and is platform-neutral; L1 (opportunistic one-shot Background
+Sync on Android + Screen Wake Lock foreground loop) is additive and best-effort. **L2
+(self-hosted Web Push) and any native app are NOT built now** — §6.6.4.1 is a decision-ready
+inventory for a **future ralph loop**, not a backlog. The product is therefore **correct
+everywhere and autonomous only on Android**, and that asymmetry is **stated to the user, not
+hidden** (§6.6.2). Workarounds are deferred, not rejected.
+
 #### 6.6.5 The persistence contract that makes a background melt safe
 
 A `mint quote → swap → melt → verify` sequence cannot be made atomic inside a
@@ -1196,34 +1207,42 @@ re-derive the claim from the same sources and believe it was never checked. Spik
     freedom to schedule it [SB §2.4][SB 29] — and Periodic Background Sync is
     `CONTENT_SETTING_BLOCK` without an installed PWA and never prompts [SB §2.3][SB 16].
 
-#### 6.6.8 OPEN BLOCKING QUESTION — a MODULE policy question, before implementation
+#### 6.6.8 ANSWERED AND VERIFIED — can an unauthenticated client reach the Cashu mint through the walled garden?
 
-**Can an UNAUTHENTICATED client reach the Cashu mint through the walled garden?**
+**No. The answer is NO, and it is verified, not assumed.**
 
 The payment leg (client → mint) is an internet service; the venue leg
 (client → router → WAN) is what the granule buys and what is *gone* when
-entitlement lapses. The deadlock is that the payment leg normally **rides through**
-the venue leg — if the client has no entitlement it typically has no path to the
+entitlement lapses. The deadlock is that the payment leg normally **rides through** the
+venue leg — if the client has no entitlement it typically has no path to the
 mint, so it cannot pay.
 
-**TollGate already half-answers this:** the module advertises `kind:21023
-no-reachable-mints` when there is no uplink, i.e. **mint reachability is already
-treated as a payment precondition.** What is **`UNMEASURED`** is whether the portal's
-nodogsplash pre-auth allow-list currently permits mint traffic through the walled
-garden.
+**Verified on the live router `tollgate-A04E` (rc4) from the running nodogsplash ruleset.**
+The pre-auth allow-list is a **closed port list**:
 
-The consequence is a fork in the entire scheduler design:
+```
+FirewallRuleSet preauthenticated-users {
+  allow tcp port 22 | 23 | 53 | 80 | 2121 | 2050 | 2051 | 443
+  allow udp port 53 | 67 | 123
+}
+```
 
-- **If mint traffic IS pre-auth reachable** → a background top-up is **RESTORATIVE**:
-  it can recover after the entitlement has already lapsed.
-- **If it is NOT** → every background top-up must fire **while entitlement is STILL
-  LIVE**, i.e. it can only ever **PRE-EMPT** a lapse, which changes the scheduler's job
-  entirely (the scheduler must know the runway and act before exhaustion, not after
-  failure).
+Everything else is `REJECT` (icmp-port-unreachable). The only permitted `443` destination is the
+router's own uhttpd — **no general internet, therefore no mint.** (TollGate already advertised
+`kind:21023 no-reachable-mints` when there is no uplink, i.e. mint reachability was already
+treated as a payment precondition; the ruleset is what makes that concrete for the walled garden.)
 
-**This needs a module-owner answer BEFORE any implementation card**, and whichever way
-it resolves, the ADR must state it as an explicit assumption, because the design's
-honesty depends on it. It is tracked as open question §11(6).
+The scheduler consequence, stated plainly:
+
+- **A background top-up can only ever PRE-EMPT a lapse, never restore one.** Every top-up
+  must fire while entitlement is **still live** — which is exactly what the L1 one-shot
+  Background Sync design already does (register while the app is open and the balance is
+  healthy). The scheduler's job is therefore **runway-based**: know the runway and act before
+  exhaustion, not after failure.
+
+**Corollary worth recording:** the no-install fallback works *because* of this. The router can
+reach a mint on its **own authenticated uplink**, so a **router-verified token paste is the only
+mint path inside the walled garden**.
 
 **Also recorded, as a privacy consequence of D1:** the Background Sync spec itself
 notes that fetch requests within the sync event while backgrounded *"may reveal
@@ -1271,9 +1290,12 @@ Decisions this section records:
 - **Out of scope, per the card and §1:** no production code, no service worker, no
   wallet implementation, no merge to any `OpenTollGate/*` `main`. The three
   workstreams and their gates are §6.1 and are unchanged by this PR.
-- **Not deferred:** §6.6.8's module policy question is an **open blocking question**,
-  not a nice-to-have — it is answered before implementation, and it is recorded as
-  such in §11(6).
+- **Mint reachability — resolved, not deferred:** §6.6.8's module policy question was the one
+  **blocking** item, and it is now **ANSWERED NO and VERIFIED** against the live router
+  `tollgate-A04E` ruleset (§6.6.8, §11(6) closed). Implementation is no longer gated on it.
+  It changed the scheduler's shape rather than the ship scope: because there is no pre-auth
+  mint path, a background top-up can only **pre-empt** a lapse, so it must fire while
+  entitlement is still live.
 - **Sequencing unchanged:** the red baseline is fixed first (§6.2), the transport
   question resolves before any background-autonomy work (§3.4 / §6.6.1), and L0
   ships and is proven crash-safe before L1 or L2 are attempted (§6.6.4).
@@ -1360,8 +1382,10 @@ is *"a UX convenience, explicitly not custody"*). The panel shows:
 | D4 reflects the operator's REVERSED decision: resting balance REQUIRED, `T` is the cap, with a justified default | §5.4 (esp. items 1–3), §1 D4 row |
 | Panel 3 reachability corrected — reachable and designed-for, still never before a balance and never mid-payment | §5.5, §7.3 |
 | Secret-storage decision documented (device-local + persisted + cap; one-tap encrypted export; opportunistic PRF; FSA for the fleet) with traps and prohibitions | §5.6 |
-| Background-autonomy requirement documented with the honest per-platform limits, the three-layer ship decision (L0 mandatory / L1 mandatory best-effort / L2 optional-removable), the promises, the prohibitions, and the open blocking module question | §6.6 |
+| Background-autonomy requirement documented with the honest per-platform limits, the three-layer ship decision (L0 mandatory / L1 mandatory best-effort / L2 optional-removable), the promises, the prohibitions, and the **formerly-open module question now answered and verified** | §6.6 |
 | Background-execution **limits + documented workarounds** recorded as a decision-ready inventory (L2 included) with cost and sovereignty per option, explicitly marked NOT-to-build-now so a future loop need not re-derive it | §6.6.4.1 |
+| The **decision on the background limits recorded**: accepted and documented, not worked around; **L0 + L1 ship**, L2/native deferred to a future ralph loop; asymmetry (**correct everywhere, autonomous only on Android**) stated to the user | §6.6.4.2, §6.6.2 |
+| Mint reachability resolved from **OPEN to VERIFIED NO**, with the live-router ruleset quoted and the pre-empt-only scheduler consequence stated | §6.6.8, §11(6) |
 | Every prohibition carries the citation that **falsifies** it, not just an assertion that it is false | §6.6.7 items 1–11 |
 | iOS install-durability claim scope-corrected: install = **capability** requirement, durability = the `T` cap + the export; carve-out scope labelled **UNVERIFIED** | §5.6.4, §5.6.5, §6.6.6 |
 | Operator's scope framing recorded (ADR consolidated to the default branch as part of this PR) | §6.7, §6.6.8 |
@@ -1481,6 +1505,19 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
   strengthened**; the two directions that could not be verified from a primary source (the install
   guarantees IndexedDB survival / iOS deletes IndexedDB in 7 days) are both labelled `UNVERIFIED`
   rather than asserted or silently dropped.
+- **Amendment discipline (third pass, 2026-10-14) — the background decision and the mint answer:**
+  the branch was **rebased onto the live `pr/pwa-wallet-adr-delta` tip `09ecc7d`** (PR #75) and two
+  required edits were made. **(a)** A new **§6.6.4.2** records the operator's decision on the
+  background-execution limits: they are **accepted and documented, not worked around**; **L0 + L1
+  ship**, **L2 and any native app are not built now**, and the resulting asymmetry (**correct
+  everywhere, autonomous only on Android**) is stated to the user rather than hidden. **(b)**
+  **§6.6.8 was converted from an OPEN BLOCKING QUESTION to a VERIFIED ANSWER — NO** — with the live
+  router `tollgate-A04E` (rc4) nodogsplash pre-auth `preauthenticated-users` allow-list quoted in
+  full, the `REJECT` default stated, and the consequence recorded: a background top-up can only ever
+  **pre-empt** a lapse, never restore one; a router-verified token paste is the only mint path inside
+  the walled garden. **§11(6)** is struck through and marked **CLOSED — ANSWERED NO, VERIFIED**; the
+  §8 acceptance mapping gained a row for each. **No claim was deleted.** The appendix (operator
+  decision log) is unchanged by this pass and remains the last section of the document.
 
 ---
 
@@ -1498,14 +1535,18 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
    browser and material to the wallet.
 5. Where service-worker updates get versioned relative to the feed's portal pin
    — moot until §11(1) resolves.
-6. **BLOCKING, module-owner answer required BEFORE implementation (§6.6.8): can an
-   UNAUTHENTICATED client reach the Cashu mint through the walled garden?** If yes, a
-   background top-up is **restorative** (can recover after a lapse); if no, every
-   background top-up must fire while entitlement is **still live**, i.e. it can only
-   ever **pre-empt** a lapse — which changes the scheduler's job entirely. Note the
-   partial evidence: the module already advertises `kind:21023 no-reachable-mints`
-   when there is no uplink, so mint reachability is already a payment precondition.
-   What is `UNMEASURED` is the portal's nodogsplash **pre-auth allow-list** content.
+6. ~~**BLOCKING, module-owner answer required BEFORE implementation (§6.6.8): can an
+   UNAUTHENTICATED client reach the Cashu mint through the walled garden?**~~ **CLOSED —
+   ANSWERED NO, VERIFIED 2026-10-14.** Operator answer: **no**. Verified on the live router
+   `tollgate-A04E` (rc4) from the running nodogsplash ruleset: the pre-auth
+   `preauthenticated-users` allow-list is a **closed port list** (tcp `22 | 23 | 53 | 80 |
+   2121 | 2050 | 2051 | 443`, udp `53 | 67 | 123`) and everything else is `REJECT`
+   (icmp-port-unreachable); the only permitted `443` destination is the router's own uhttpd,
+   so there is **no general internet and therefore no mint**. Consequence: a background top-up
+   can only ever **PRE-EMPT** a lapse, never restore one, so every top-up must fire while
+   entitlement is **still live** — which the L1 one-shot Background Sync design already does.
+   Corollary: a **router-verified token paste is the only mint path inside the walled garden**.
+   See §6.6.8.
 7. **The operator's concrete value for `T`** under the reversed §5.4 decision. This
    delta proposes `T = 8 × granule` (~1 day of typical usage, i.e. tens of sats) and
    states that `T` is operator-tunable; the constraint is not the number but that the
