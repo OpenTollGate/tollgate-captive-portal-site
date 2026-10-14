@@ -41,15 +41,20 @@ document.
 ## 1. Scope and the four decisions
 
 This delta answers the four decisions the prior plan left open (§8 of
-`docs/pwa-client-wallet-plan.md`), plus the seed-threshold question, and it
-records one dependency decision that the prior plan did not anticipate:
+`docs/pwa-client-wallet-plan.md`), plus the seed-threshold question — whose
+answer was **reversed by operator decision on 2026-10-14** (§5.4) — and it
+records one dependency decision that the prior plan did not anticipate. It also
+carries the two sections the operator mandated afterwards and which this delta
+consolidates to the default branch as part of this PR: **background autonomy**
+(§6.6, the requirement that the PWA buy internet for the user instead of making
+the user buy internet) and the **secret-storage decision** (§5.6).
 
 | # | Decision | Status |
 |---|---|---|
 | **D1** | How "roam/rotate without losing significant money" is implemented under R1–R6 | **Answered here (§2).** Rule: no cross-address carry-over; bound the loss with a small granule plus client-held unspent ecash. |
 | **D2** | Scope now vs. after the release | **Answered here (§6).** WS-1 and WS-2 in one consolidated portal PR after the release; WS-3 is a separate module PR; WS-4 tracked only. |
 | **D3** | The secure-context question | **Answered here (§3).** It is not a spike to run — it is a measured structural constraint with a decided consequence. |
-| **D4** | The seed threshold `T` | **Answered here (§5).** `T` is a policy constant; the recommended default and the reasoning are recorded, and `T = 0` is the recommended *starting* configuration. |
+| **D4** | The seed threshold `T` | **Answered here (§5).** **A resting balance is REQUIRED by operator decision (reversed 2026-10-14)** so the user never has to interact with the PWA or the portal when the balance runs out; `T` is the **CAP on that resting balance**, not a threshold at which to prefer zero. `T` remains a policy constant and is operator-tunable. |
 | **D5** | The `cashu-ts` version: portal pins `2.9.0`, the wallet needs `4.11.0` | **Answered here (§4).** Buy the migration package alone; put the wallet behind a lazily-imported dynamic chunk; never make the existing portal import path load the new major. |
 
 Out of scope, as set by the card and by the ADR: no production code, no service
@@ -427,36 +432,68 @@ Second-order losses that are easy to miss, and which a captive portal makes
   wiped. This is arguably a **bigger practical risk than device theft** `[D:wallet §4.3]`.
 - A second device is a separate wallet with zero balance. There is no "sign in".
 
-### 5.4 The decision on `T`
+### 5.4 The decision on `T` — a resting balance is REQUIRED; `T` is its cap
 
-**Recommendation: start at `T = 0` — i.e. exactly-on-demand melt with zero
-resting balance — and raise it only if the top-up cadence demands it.**
+**Operator decision (2026-10-14, verbatim):** *"Lets keep some resting balance for
+UX. The user shouldnt have to manually interact with the PWA or a captive portal
+every time they have used up their balance. The PWA should automate the process
+of making small, frequent granular purchases in the background so that the user
+can focus on consuming internet rather than buying internet."*
 
-1. **Prefer exactly-on-demand.** The lowest-risk shape is to mint a quote for
-   the invoice amount `+ fee_reserve + input fees`, pay immediately, and keep
-   **zero residual balance**. If there is no resting balance there is nothing to
-   lose and no seed to surface *at all*; the "wallet" is a transient. cashu.me's
-   own melt path is already this shape — `meltGeneric` sizes the swap to
+**A resting balance is therefore REQUIRED by operator decision, not optional, and
+`T` is the CAP on that resting balance — not a threshold at which to prefer
+zero.** The requirement it serves is concrete and user-facing: the user must never
+have to open the PWA, and never have to interact with a captive portal, *because
+their balance ran out*. The earlier `T = 0` recommendation (exactly-on-demand
+melt, zero resting balance) is **reversed** by this decision; it survives below
+only as the named fallback in item 3, and as the configuration that would make
+the background-autonomy requirement (§6.6) meaningless.
+
+1. **Keep a resting balance, capped at `T`.** The wallet mints a quote for the
+   invoice amount `+ fee_reserve + input fees` **plus a resting buffer**, pays,
+   and *retains* the unspent buffer as bearer ecash so the next granule can be
+   bought without the user doing anything. The resting balance is what makes the
+   "small, frequent, granular purchases" the operator asks for possible at all:
+   with **zero** resting balance every granule needs a fresh mint quote against a
+   fresh deposit, i.e. a user-visible funding act each time, which is exactly the
+   interaction the requirement removes. cashu.me's own melt path is the
+   *exactly-on-demand* shape — `meltGeneric` sizes the swap to
    `quote.amount + quote.fee_reserve` (`src/stores/walletMelt.ts:161`)
-   `[D:wallet §4.4]`. **Choosing `T = 0` makes the seed-phrase question mostly
-   moot, which is the honest way to satisfy "no nagging": remove the thing being
-   nagged about.**
-2. **When a resting balance is required, cap it at `T`.** `T` is a **policy
-   constant, operator-tunable**. The prior plan's suggestion is *"~1 day of
-   typical usage, i.e. tens of sats"*
-   (`docs/pwa-client-wallet-plan.md:178`). This delta adopts that reasoning with
-   one addition: because the granule is the loss unit under D1 (§2), `T` should
-   also be expressed as **a small multiple of the granule**, so the two knobs
-   move together. `T = 0` needs no number; `T > 0` should be a granule multiple
-   and should be chosen by the operator as *"a number we are happy to absorb per
-   lost device"*.
+   `[D:wallet §4.4]` — so this is a deliberate divergence from that reference,
+   not a port of it.
+2. **`T` is the cap, and it must be a small multiple of the granule.** `T` is a
+   **policy constant, operator-tunable**. The prior plan's sizing guidance is
+   *"~1 day of typical usage, i.e. tens of sats"*
+   (`docs/pwa-client-wallet-plan.md:178`), and that reasoning is adopted. Because
+   the granule is the loss unit under D1 (§2), `T` must *also* be expressed as
+   **a small multiple of the granule**, so the two knobs move together — per D1
+   §2 granularity *is* the loss-bounding mechanism, and `T` is that same
+   mechanism applied to the resting balance rather than the in-flight granule.
+   This is now the **primary** path, not a fallback: the two knobs are load-bearing
+   together.
+   **Proposed default: `T = 8 × granule`, which is ~1 day of typical usage, i.e.
+   tens of sats.** Justification, three parts: **(i)** it is the granule multiple
+   that survives the design's own worst case — a rotation mid-flight forfeits at
+   most the in-flight granule (D1 §2.2), so 8 granules still leaves the user
+   roughly a day of access after one abandoned attempt; **(ii)** it matches the
+   prior plan's own "~1 day of typical usage, i.e. tens of sats" figure, so it
+   introduces no new number the operator has to re-reason about; **(iii)** it is
+   small enough that the cap, not the storage mechanism, is what makes the
+   disclosure truthful (§5.4(3)). **`T` is operator-tunable, and the specific
+   number is a policy choice rather than a technical constant — but the
+   load-bearing user-facing promise does not depend on its value: "the most you
+   can lose is T".** Whatever the operator sets, that sentence must stay true.
 3. **The cap is what makes the seed-phrase-less design safe — not the
    encryption.** Before the first reveal, funds are **unrecoverable by
    construction** (the seed never left the device and was never shown). That is
    acceptable *only* because the balance is capped below `T`. If the business
-   cannot accept writing off `T` sats per lost device, the design must be
-   exactly-on-demand (`T = 0`) or it must prompt earlier. There is no third
-   option; the protocol has no account layer to recover against `[D:wallet §4.4]`.
+   cannot accept writing off `T` sats per lost device, the design must fall back
+   to exactly-on-demand (`T = 0`) or prompt earlier. There is no third option; the
+   protocol has no account layer to recover against `[D:wallet §4.4]`. With a
+   resting balance now **required**, this constraint binds the *value of `T`*, not
+   the existence of the balance: the operator must choose a `T` they are genuinely
+   prepared to absorb per lost device, and the disclosure must state the cap
+   plainly, in the user's own words.
 4. **Crossing `T` escalates once, non-blockingly, and never mid-payment.** Offer
    (a) reveal + write down the mnemonic (the cashu.me pattern: hidden-by-default
    plus an explicit confirmation checkbox, `data-testid="onboarding-seed-confirmed"`),
@@ -484,9 +521,155 @@ resting balance — and raise it only if the top-up cadence demands it.**
 
 ### 5.5 Onset story and the panel
 
-Panel 3 (§7.4) is the threshold-seed moment. It must never appear *before* a
-balance exists and never interrupt a payment — those are the two failure modes
-that turn a threshold into the nag the requirement forbids.
+Panel 3 (§7.3) is the threshold-seed moment. Under the **required** resting
+balance (§5.4) Panel 3 is **reachable, and it is a designed-for moment** — it is
+the moment the user is offered a durable copy of a real balance, and it is the
+mechanism that makes the "§5.4(3) cap" disclosure honest rather than a
+concealment. The earlier draft called it "unreachable by construction, that is the
+intended design"; that depended on `T = 0` and it is **no longer true**.
+
+Two invariants still govern it, and they are the two failure modes that turn a
+threshold into the nag the requirement forbids:
+
+1. It must **never appear before a balance exists** (nothing to recover yet →
+   pure friction), and
+2. it must **never interrupt a payment**.
+
+In addition, because the balance is now a standing object rather than a transient,
+it must never *recur*: completing it once (write-down, export, or "keep it small")
+records completion and the panel does not re-open on every subsequent top-up.
+
+### 5.6 The secret-storage decision (mandated section)
+
+The operator asked directly: *"How about we offer to store the secret on the
+user's device / file system so that the user doesn't need to write anything down
+and to reduce the interactivity for the user? Would this help?"* The spike is
+`~/reports/pwa-cashu/SPIKE-secret-storage.md`; its verdict is recorded here.
+
+**The verdict in one line: device-local storage DOES remove the write-down for the
+common case but does NOT make the secret durable — eviction destroys ALL origin
+storage including any device-local key, so durability requires the secret, or a
+wrapping key, to live OUTSIDE origin storage.**
+
+Two separable goals, with opposite difficulty, and they must not be conflated:
+
+| Goal | Achievable without a write-down? | Why |
+|---|---|---|
+| **Reduce interactivity** (no phrase ceremony; wallet works immediately) | **YES, today, on every browser** | Generate entropy on-device and persist it. Pure client-side choice. cashu.me already does exactly this and *chooses* to show the reveal step. |
+| **A secret that survives eviction with nothing written down** | **NO — not on all browsers, and not with a single mechanism** | `Clear-Site-Data: "storage"`, "clear browsing data", a profile reset and OS storage pressure all destroy every origin-scoped bucket *at once*, including any key stored alongside the seed. This is the single most important fact in the spike. |
+
+**Therefore the design is: device-local by default, cheap export on demand, passkey
+as an opportunistic wrapper — and the loss bounded by a policy cap (`T`, §5.4),
+not by the storage mechanism.**
+
+#### 5.6.1 The recommended composition (BYOD population), in rank order
+
+1. **Device-local seed in IndexedDB + `navigator.storage.persist()` + value capped
+   below `T`.** Works on **100%** of the target browsers. No phrase, no user action,
+   wallet live immediately. Accepts eviction by construction: the pre-reveal wallet
+   is a **petty-cash purse**. `persist()` is necessary and cheap — it is granted by
+   heuristics in Chrome and silently in Safari, prompts in Firefox — and it defends
+   *only* against storage-pressure eviction, never against clear-site-data, a
+   profile reset or private browsing. **Call it; never rely on it alone.**
+2. **One-tap encrypted export via the Web Share API, offered (never forced) once
+   balance ≥ `T`.** Available on Chrome Android ≥ 76 and iOS Safari ≥ 14;
+   **Firefox cannot share files at all**, so an `<a download>` fallback is required.
+   This is the highest-value friction reduction in the spike: it reaches the
+   *outcome* of "write it down" (a non-evictable, user-visible, off-device copy) with
+   one tap to Files/Drive/e-mail, and it is the natural payload of the §5.5/§7.3
+   Panel 3 moment.
+3. **Passkey PRF as an opportunistic, RUNTIME-DETECTED wrapper.** Where it works it
+   upgrades the design to *"nothing written down **and** recoverable on a new
+   device"* — the only combination in the spike that satisfies both operator goals.
+   **Chrome desktop + Chrome Android 116+: works at both `create()` and `get()`.**
+   **Safari 18+ is `create()`-ONLY**, i.e. the PRF output is available only at the
+   single instant the passkey is created and cannot be re-derived on a later unlock,
+   *and* it carries open WebKit correctness bugs (311099 wrong bytes on CTAP2
+   security keys; 314934 `null` on YubiKey C Bio; 284166 absent in the cross-device
+   QR/hybrid flow — the exact flow a walk-up BYOD user hits). **Firefox Android:
+   `get()` UNSUPPORTED.** So: feature-detect via
+   `getClientExtensionResults().prf`, and **never block on it** — on iOS silently
+   fall through to ranks 1+2.
+4. **File System Access API secret file, for the operator-controlled-fleet
+   population.** Chrome desktop 86+, **Chrome Android 132+**; **iOS and Firefox
+   UNSUPPORTED**. This is *the only mechanism in the spike that produces a
+   non-evictable, user-visible secret*, because a `FileSystemFileHandle` from
+   `showSaveFilePicker()` points at a file in the **user-visible file system**, which
+   is **not origin storage** — clear-site-data and ITP destroy the handle record,
+   they do not delete the user's file. Two costs to record: it **re-prompts once per
+   session** (the grant survives in IndexedDB, the permission does not, and
+   `queryPermission()` on a re-opened handle resolves `prompt`), and it is absent on
+   the population's likeliest platform. For the fleet — a *known* platform — the
+   support limits stop being a blocker and become a configuration requirement, which
+   is why it ranks 1st there and 4th for BYOD.
+
+#### 5.6.2 Traps that must be recorded, because each is a plausible design error
+
+- **PRF-wrapping is bound to the PASKEY, not to the user.** A new passkey is a new
+  PRF value, so **the old ciphertext becomes unreadable**. Passkeys do not sync
+  across ecosystems (iCloud ↔ Google Password Manager), so a browser or platform
+  change silently orphans a PRF-wrapped backup. The export (rank 2) is the only rail
+  that is genuinely browser-independent.
+- **"Encrypted at rest, so it is protected" is FALSE when the wrapping key is also in
+  device storage.** If both the ciphertext and the key are origin storage they die
+  together on eviction *and* the page can read both under XSS. Encryption here buys
+  **portability and opacity** — the blob is safe to publish, share or hand to a
+  storage provider — and it buys nothing against eviction or XSS. Say *that*, not
+  "protected".
+- **`PasswordCredential` is not a rail.** Chrome-only (51+), and it is for *offering*
+  an autofilled credential, not for reading a secret back; the Android autofill
+  password store is **not script-readable**. Do not design around it.
+- **NUT-20 locked quotes are NOT seed-recoverable and must be EXCLUDED from the
+  auto-top-up loop.** This is the same constraint §4.3 already records; it is
+  repeated here because the auto-top-up loop (§6.6) is where it would be violated.
+- **No web API reaches the platform keychain / secure enclave.** WebAuthn is the only
+  bridge to a platform-held key, and only as sign/assert-plus-PRF.
+- **Storage diversity is NOT a mitigation.** localStorage + IndexedDB + OPFS +
+  cookie all die together on clear-site-data. Redundancy must be **across the origin
+  boundary** (an exported file, an FSA file, a synced passkey) — never within it. Any
+  review that proposes "belt and braces, store it in three places" has misread the
+  spike.
+- **OPFS is not more durable than IndexedDB.** Same eviction class, and MDN states
+  that clearing site data deletes the OPFS. Faster, not safer — and invisible to the
+  user, so it cannot serve as an export.
+
+#### 5.6.3 Failure semantics of the recommended composition — precise
+
+| Event | Seed in IndexedDB | Encrypted export (off-device) | PRF-wrapped key | FSA secret file | Net outcome |
+|---|---|---|---|---|---|
+| **`Clear-Site-Data: "storage"` / "clear site data"** | **DESTROYED** (total, by definition) | survives | **passkey survives** — platform keychain, re-derivable | handle record destroyed, **the file on disk SURVIVES** | Recoverable if *any* of export / FSA file / working PRF passkey exists. Otherwise **the balance ≤ `T` is lost — by design, and disclosed.** |
+| **iOS ITP 7-day eviction** | **DESTROYED if not installed; SURVIVES if added to the Home Screen** | survives | n/a on iOS today (PRF `create()`-only) | n/a on iOS | Recoverable if installed, or if the user took the export. |
+| **OS storage-pressure eviction** | survives if `persist()` granted; else evictable *without interrupting the user* | survives | survives | survives | Lowest-risk mode. Request `persist()` early, at a moment of user intent. |
+| **Device loss / theft** | gone | **survives — this is the export's purpose** | **survives** — passkey syncs; key re-derives | gone unless the user copied the file off | Recoverable via export or synced passkey. **Not recoverable from device-local storage alone — and this ADR must not pretend otherwise.** |
+| **Browser change / reset** | gone | survives | platform-dependent; a new passkey = **new PRF = old ciphertext unreadable** | survives if re-granted | The export is the only browser-independent rail. |
+| **Private browsing / one-shot captive-portal context** | lost at session end | survives only if the export was completed in that session | n/a | survives (written to the user's FS) | **Assume this happens.** Never create funds-bearing state the user has not exported without disclosing it. |
+
+#### 5.6.4 Install-to-home-screen is a DATA-DURABILITY requirement, not a UX nicety
+
+On iOS the Home Screen install is the difference between "Apple has stated it will
+not evict this app's data" (a written, citable commitment in WebKit's ITP post: *"We
+do not expect the first-party in such a web application to have its website data
+deleted"*) and "script-writable storage — explicitly including IndexedDB,
+localStorage **and Service Worker registrations and cache** — is deleted after seven
+days of non-use". **For a bearer-value wallet that is a first-order design
+constraint**: the wallet's storage IS the money. The install prompt must be justified
+to the user in exactly those terms, and WS-1 (§6.1) must state it that way.
+
+#### 5.6.5 What this ADR must NOT claim about secret storage
+
+Each is FALSE, and each is the kind of sentence that gets written by accident:
+
+| Forbidden claim | Why it is false |
+|---|---|
+| "Your money is safe here." | A bearer wallet in a browser on a captive HTTP network is an XSS/shared-device/eviction target. Carried over from `docs/pwa-client-wallet-plan.md:66-69`. |
+| "We store your seed in the device's secure enclave / OS keychain." | **No web API reaches the platform keychain.** WebAuthn is the only bridge, and only as sign/PRF (§5.6.1 rank 3). |
+| "The secret is encrypted at rest, so it is protected." | If the wrapping key is also in device storage, encryption buys nothing against eviction (both die together) or XSS (the page reads both). It buys portability and opacity. |
+| "The File System Access API works on mobile." | It works on **Chrome Android 132+**. **iOS and Firefox: UNSUPPORTED.** |
+| "A passkey protects the wallet." | Passkeys authenticate; PRF *derives*. On Safari PRF is `create()`-only with three open correctness bugs. |
+| "OPFS is more durable than IndexedDB." | Same eviction class; clear-site-data deletes it. |
+| "We can read the seed back out of the password manager." | `PasswordCredential` is Chrome-only and not read-back. |
+| "Restore from the seed alone." | **NUT-09 needs three things: seed + per-keyset counter + mint URL(s)** — and only `secretsPolicy: 'deterministic'` outputs are recoverable at all. Any backup blob must carry all three with the counter at a defined height. |
+| "Top up via a locked quote and restore later." | **NUT-20 locked quotes are NOT seed-recoverable.** Exclude them from the auto-top-up loop. |
 
 ---
 
@@ -593,6 +776,292 @@ reaches `activated` on that non-secure origin" (as `[D:rails §6]` proposes)
 assert the inverse property, that `navigator.serviceWorker` is **undefined** on
 the plain-HTTP origin and the app degrades predictably, until (a) in §3.4 lands.
 
+### 6.6 Background autonomy — the requirement, the honest limits, and the three-layer ship decision (mandated section)
+
+This is the ADR the operator explicitly asked for. The spike behind it is
+`~/reports/pwa-cashu/SPIKE-background-execution.md`.
+
+#### 6.6.1 The requirement, in the operator's own words
+
+> *"Lets keep some resting balance for UX. The user shouldnt have to manually
+> interact with the PWA or a captive portal every time they have used up their
+> balance. The PWA should automate the process of making small, frequent granular
+> purchases in the background so that the user can focus on consuming internet
+> rather than buying internet. … This also means that the PWA needs to be able to
+> stay active in the background without getting paused / silenced by the operating
+> system. How can we achieve this?"*
+
+Stated as an engineering requirement: **the PWA automates small, frequent granular
+purchases in the background so that the user focuses on consuming internet, not
+buying it.** The resting balance of §5.4 is the *substrate* for this; this section
+is the *schedule*, and it is where the honesty burden is highest.
+
+**Step zero is a transport decision, not a scheduling decision.** Today the portal
+is served over plain HTTP on `http://<router-lan-ip>:2051`, and service workers,
+the Cache API, durable IndexedDB, Periodic Background Sync, one-shot Background
+Sync and Web Push are **all secure-context-gated**, with Chrome's *installability*
+criteria requiring HTTPS or loopback. On a LAN IP over `http`, **there is no service
+worker to wake**, so the question of keeping one alive is moot. Nothing in §6.6 is
+reachable before §3.4's transport finding is resolved.
+
+#### 6.6.2 The honest verdict, platform by platform
+
+| Platform | Background autonomy achievable | Mechanism |
+|---|---|---|
+| **Android Chrome** (installed PWA, engaged, secure origin) | **Best effort only, with hard caps.** An opportunistic attempt within minutes of connectivity returning, inside a 3-attempt / 5-min-then-15-min backoff budget and a 3-minute per-event execution ceiling. Periodic wakes: at most ≈ 2/day, and **frequently never**. | one-shot Background Sync (registered while the app was OPEN) + Periodic Background Sync as a best-effort backstop + Web Push only if a server exists |
+| **iOS Safari** (Home Screen web app) | **Exactly ZERO without a push server. UNSUPPORTED.** | push event only — Periodic Background Sync and one-shot Background Sync are both absent from Safari |
+| **Either platform, origin left on plain HTTP** | **Zero. UNSUPPORTED.** | nothing loads |
+
+The Android numbers are not folklore; they are Chromium's own constants, read from
+`main`: `kMaxSyncAttempts = 3`; `kInitialRetryDelay = 5 min` with a ×3 retry factor,
+i.e. **5 min then 15 min and out**; `kMaxSyncEventDuration = 3 min`, enforced with
+`CONTINUE_ON_TIMEOUT` (the browser stops waiting and lets the worker be torn down —
+it does not kill the promise); `kMinPeriodicSyncEventsInterval = 12 h`. Both are
+field-trial-overridable, so they are **Chrome's numbers, not a contract with this
+app**.
+
+Three gates matter specifically for a *venue portal*:
+
+- **Periodic Background Sync requires an installed, separately-launched web app** —
+  Chromium's permission context returns `CONTENT_SETTING_BLOCK` when the origin has
+  no installed PWA, and it never prompts.
+- **The engagement multiplier can make it "never".** The first-attempt delay is
+  `site_engagement_factor × 12 h`; a zero engagement penalty returns
+  `base::TimeDelta::Max()`, i.e. the event **does not fire late, it does not fire.**
+  The multiplier has four tiers, so a well-used app gets ≈ 2/day, an occasional one
+  every 24 h, a drifted-away one every 36 h, and a stopped-using-it one **none,
+  ever**. The score is not purchasable; it decays with inactivity and one of its
+  documented purposes is allocating background-sync resources.
+- **Previously-connected networks only.** Periodic Background Sync activity occurs
+  only on a network the device has **previously connected to** — which is precisely
+  not the first visit to a venue, i.e. the roaming case the granularity design
+  exists to handle is the case where the backstop is least likely to fire. Data
+  Saver also suppresses it.
+
+**And Doze is the outer envelope no API fixes:** in Doze Android blocks network
+access and defers syncs, jobs and alarms to maintenance windows that
+**get further apart over time**. A "frequent" background top-up on a sleeping phone
+is a power-policy decision the OS owns, not a scheduling problem that can be
+engineered around.
+
+**iOS, stated as negatives with sources:** Periodic Background Sync is
+`version_added: false` in BCD; `SyncManager` (one-shot) is likewise `false` with a
+WebKit bug open since 2018; and WebKit's own standards-position issue (#14) remains
+open carrying *power* and *privacy* objections — *"we generally have power and
+security concerns about invisible background script execution by a site that the user
+isn't currently visiting"* and *"this would allow a website to monitor you switching
+IP addresses."* So iOS Background Sync is **unimplemented and unwanted, not merely
+unfinished.** The only iOS wake source is a **push event**, which requires the Home
+Screen install, a user gesture to subscribe, and — by Apple's policy — a
+**user-visible notification on every single wake**, with **the push subscription
+permanently revoked if the app ever fails to display one**. Declarative Web Push
+(2025-03-27) makes notifications more robust; it is **not** a gain in background
+autonomy, because its whole purpose is to *avoid* running your code.
+
+> **Therefore, on iOS today, a background Cashu top-up driven by push is technically
+> constructible and architecturally unacceptable**, because it converts "buy internet
+> silently" into "buzz the user's phone every time you buy internet".
+
+**Notification Triggers is UNSUPPORTED.** Chrome Status lists `showTrigger` as
+*"In developer trial (Behind a flag)"* with **no milestone**, and Firefox/Safari are
+`None`. **There is therefore no web API to schedule a local notification for a future
+time** — the web platform has no "remind me in 20 minutes" primitive.
+
+#### 6.6.3 The router CANNOT be the waker
+
+Three structural facts, all of which the portal's own design produces:
+
+1. A service worker registration is **per-origin**, and the origin is
+   `http://<router-lan-ip>:2051` taken from `window.location.hostname`. Roaming to a
+   different router is a different registration, a different Cache, a different
+   IndexedDB, a different home-screen identity. "Buy again at the new address" (D1) is
+   therefore **what the platform forces**, not merely a policy choice.
+2. A LAN IP cannot be a stable push endpoint, because the push subscription is bound
+   to the origin.
+3. **Waking a PWA requires the client device's browser to be scheduled.** The router
+   cannot reach into the browser's scheduler. **The router can originate a
+   "balance low" event but cannot deliver a wake.** It can serve the invoice and the
+   balance; that is all.
+
+So push means an **always-online third party in the money path** (FCM/APNs via a
+server). For a sovereign product that is a **downgradeable optional dependency, never
+a hard one**: full value must be delivered with **zero** push infrastructure,
+degrading only in *latency*, never in *correctness*.
+
+#### 6.6.4 The three-layer ship decision
+
+**L0 — MANDATORY, platform-neutral: resumable journal + `last-spend` + top-up on
+next open.** This is the correctness floor. It guarantees that any top-up that was
+started is either completed or abandoned with a bounded, honest loss, and that
+opening the app once always repairs the balance. **The product must be fully useful
+with ONLY this layer.** No permission, no install, no push, no scheduler.
+
+**L1 — MANDATORY, best-effort: opportunistic one-shot Background Sync on Android +
+Screen Wake Lock foreground loop.** Register the one-shot sync **while the app is
+open and before the balance runs low** (registration requires an open client — you
+get durability of the attempt, not freedom to schedule it), and treat Periodic
+Background Sync purely as a backstop. Design the handler for a 3-minute budget,
+`prefer_async: true`, and a 3-attempt / 5-15-minute envelope. Keep the foreground
+loop alive with a Screen Wake Lock while the UI is open. **Expose `lastChance`**:
+when the platform says the attempt budget is gone, the app must be able to say so
+visibly ("top-up incomplete; tap to retry") rather than fail silently.
+
+**L2 — OPTIONAL and REMOVABLE: self-hosted Web Push.** Additive only, switchable off
+without changing L0 or L1, and **never the sole rail**. On iOS the product must be
+explicitly honest that enabling it means a notification per top-up.
+
+**Explicitly NOT shipped:** anything relying on Notification Triggers, on iOS
+background sync, on a router-side waker, or on a native app (a native app is the only
+path to real *Android* autonomy, but it abandons the single-codebase PWA premise and
+**does not solve iOS either** — `BGTaskScheduler` still decides when, if ever).
+
+#### 6.6.5 The persistence contract that makes a background melt safe
+
+A `mint quote → swap → melt → verify` sequence cannot be made atomic inside a
+3-minute, arbitrarily-terminable, sometimes-never-restarted context. The only correct
+shape is **a durable intent journal plus a per-step idempotent resume check**, using
+Cashu's own state primitives:
+
+1. **Write intent before acting.** Journal `{granule_id, router_origin, invoice,
+   mint_url, melt_quote_id}` to durable storage **before** the melt POST. Without the
+   quote id an interrupted melt is unrecoverable client-side.
+2. **One granule, one journal entry, one address**, and the entry stores the origin so
+   a later wake can **abandon** rather than **mis-apply** it.
+3. **Phase order: quote → persist → async melt → poll → persist outcome.** Never a
+   single blocking call. NUT-05 warns in bold that a synchronous external-payment melt
+   **blocks until success or failure** and can take a long time; with
+   `prefer_async: true` the mint answers `200 OK` with state `PENDING` and the wallet
+   polls. **This is the single most important architectural fit in the whole
+   assessment: async melt converts a blocking, un-resumable operation into a
+   two-phase one that survives an arbitrary kill between the phases.**
+4. **Resume is poll-only.** NUT-07: a `PENDING` proof cannot be used in another
+   transaction until it is live again, so a blind retry after a crash can lose the
+   proofs *and* the quote. On any wake, first `GET` the melt quote and reconcile.
+5. **Every write is idempotent and keyed on the quote id.** Multiple wakes,
+   overlapping sync/PBS/push events and a foreground tab can all race; a Web Lock
+   serialises them and a duplicate attempt must be a no-op rather than a second spend.
+6. **Storage must be durable and origin-scoped** — IndexedDB, not memory (Chrome's own
+   warning: *"Any global variables you set will be lost if the service worker shuts
+   down. Instead of using global variables, save values to storage."*), and on iOS the
+   ITP carve-out for installed web apps is what keeps it alive (§5.6.4).
+7. **Bounded abandonment.** If the address/entitlement changed, mark the intent
+   `abandoned_rotated` and **stop**. Retrying a melt whose invoice belonged to a dead
+   address burns value for entitlement that no longer exists. The loss is capped at
+   one granule — D1's promise, preserved only if the code refuses to retry across a
+   rotation.
+
+**What this buys:** the background top-up is interruptible at any step without loss
+beyond one granule, and resumable at the next wake. **What it does not buy:** it does
+not create wakes. Recovery and autonomy are separate problems, and only the platform
+creates wakes.
+
+#### 6.6.6 What this ADR MUST promise
+
+- **Crash-safety and resumability**: a top-up interrupted at any step — including by
+  service-worker termination — is recoverable, and the client **never double-spends
+  and never re-uses a `PENDING` proof**.
+- **Bounded loss**: if the client rotates address or origin mid-flight, the in-flight
+  granule is **ABANDONED, not retried**; per-rotation loss is at most one granule.
+- **Async two-phase melt**: melt requests use `prefer_async: true` and are reconciled
+  by polling the melt quote; **no blocking synchronous melt is issued from a
+  background context**.
+- **Degradation, not failure**: *"with background execution and push both
+  unavailable, all value is still delivered on the next foreground open."*
+- **On iOS the Home Screen install is a DATA-DURABILITY requirement, not a UX
+  nicety**, because that is the only configuration in which ITP does not delete
+  script-writable storage — including service-worker registrations — after seven days
+  of non-use (§5.6.4).
+- **The pre-auth reachability assumption is declared** (§6.6.7), because the design's
+  honesty depends on which way the module answers.
+
+#### 6.6.7 What this ADR must NOT claim
+
+1. ❌ **"The PWA tops up in the background while the phone is asleep."** Doze blocks
+   network and defers syncs; iOS has no non-push wake.
+2. ❌ **"iOS supports this."** With no push server, iOS background autonomy is zero.
+3. ❌ **"Top-ups happen every N minutes/hours."** The developer's `minInterval` is a
+   *request*, rounded up; the shipped floor is 12 h and the engagement multiplier can
+   make it never.
+4. ❌ **"We schedule a local reminder notification."** Notification Triggers is behind
+   a flag with no milestone; **UNSUPPORTED**.
+5. ❌ **"The app stays alive in the background."** *"A user agent may terminate service
+   workers at any time it: Has no event to handle."* Only `waitUntil()` and a bounded
+   budget exist.
+6. ❌ **"Background sync guarantees delivery."** Retries are UA-heuristic and capped at
+   3 attempts; the spec's own example falls back to telling the user.
+7. ❌ **"The purchase survives a roam."** Entitlement is address-scoped under R1; the
+   promise is a **bound on the loss**, not continuity.
+8. ❌ **"It works today."** It does not, until the portal is a secure context and
+   installable.
+
+#### 6.6.8 OPEN BLOCKING QUESTION — a MODULE policy question, before implementation
+
+**Can an UNAUTHENTICATED client reach the Cashu mint through the walled garden?**
+
+The payment leg (client → mint) is an internet service; the venue leg
+(client → router → WAN) is what the granule buys and what is *gone* when
+entitlement lapses. The deadlock is that the payment leg normally **rides through**
+the venue leg — if the client has no entitlement it typically has no path to the
+mint, so it cannot pay.
+
+**TollGate already half-answers this:** the module advertises `kind:21023
+no-reachable-mints` when there is no uplink, i.e. **mint reachability is already
+treated as a payment precondition.** What is **`UNMEASURED`** is whether the portal's
+nodogsplash pre-auth allow-list currently permits mint traffic through the walled
+garden.
+
+The consequence is a fork in the entire scheduler design:
+
+- **If mint traffic IS pre-auth reachable** → a background top-up is **RESTORATIVE**:
+  it can recover after the entitlement has already lapsed.
+- **If it is NOT** → every background top-up must fire **while entitlement is STILL
+  LIVE**, i.e. it can only ever **PRE-EMPT** a lapse, which changes the scheduler's job
+  entirely (the scheduler must know the runway and act before exhaustion, not after
+  failure).
+
+**This needs a module-owner answer BEFORE any implementation card**, and whichever way
+it resolves, the ADR must state it as an explicit assumption, because the design's
+honesty depends on it. It is tracked as open question §11(6).
+
+**Also recorded, as a privacy consequence of D1:** the Background Sync spec itself
+notes that fetch requests within the sync event while backgrounded *"may reveal
+something about the client's navigation history to passive eavesdroppers"* — for a
+top-up that fires after the user leaves, the **mint's hostname is visible to the new
+network**. Not a blocker; worth writing down.
+
+#### 6.6.9 Field-verification obligations (before any claim reaches user-facing docs)
+
+- Instrument the field reality with `chrome://site-engagement/` and DevTools'
+  Background Services panel before writing any wake-frequency claim anywhere.
+- Verify the iOS `notificationclick` absence on-device (BCD gives `safari_ios: false`;
+  if taps *do* reach the worker, the push option is stronger than ranked here).
+- Verify whether Periodic Background Sync ever fires for a venue-portal origin at all,
+  given the previously-connected-network gate and the first-visit case.
+
+### 6.7 Scope — what the operator has decided is in and out, and when
+
+**Framing (operator, 2026-10-14):** *"Please document this requirement as an ADR that
+gets consolidated to the default branch as part of the PR. … Please think it
+through with the consultants and please do a spike around this as well. Please
+document your findings."*
+
+Decisions this section records:
+
+- **In scope, in this PR:** the documentation itself — this delta (§5.4 reversal,
+  §5.6 secret storage, §6.6 background autonomy), plus the panels. Consolidation to
+  the default branch happens **as part of this PR**, which is the operator's own
+  framing and the reason the delta rides the existing `docs/pwa-wallet-adr-delta`
+  branch rather than a second one.
+- **Out of scope, per the card and §1:** no production code, no service worker, no
+  wallet implementation, no merge to any `OpenTollGate/*` `main`. The three
+  workstreams and their gates are §6.1 and are unchanged by this PR.
+- **Not deferred:** §6.6.8's module policy question is an **open blocking question**,
+  not a nice-to-have — it is answered before implementation, and it is recorded as
+  such in §11(6).
+- **Sequencing unchanged:** the red baseline is fixed first (§6.2), the transport
+  question resolves before any background-autonomy work (§3.4 / §6.6.1), and L0
+  ships and is proven crash-safe before L1 or L2 are attempted (§6.6.4).
+
 ---
 
 ## 7. Panels 1–3 — mockups
@@ -646,9 +1115,14 @@ is *"a UX convenience, explicitly not custody"*). The panel shows:
 - Carries the one-line disclosure that before this moment the funds are
   **unrecoverable by construction** — stated plainly in one line, not as a modal
   wall, and stating the cap as the reason it is acceptable.
-- Under `T = 0` (the §5.4 recommendation) **this panel is unreachable by
-  construction**, because there is never a resting balance. That is the intended
-  outcome, and the panel exists for the `T > 0` configuration.
+- Under the **operator's decision (§5.4) a resting balance is required, so this
+  panel IS reachable and IS a designed-for moment** — it is the point at which the
+  user is offered a durable copy of value they actually hold. It must still
+  **never appear before a balance exists** and **never interrupt a payment**
+  (§5.5), and it must not recur once completed. Under a `T = 0` configuration it
+  would be unreachable by construction, because there would never be a resting
+  balance — but that configuration is no longer the recommendation, and the panel
+  is no longer justified as dead code.
 
 ---
 
@@ -661,6 +1135,11 @@ is *"a UX convenience, explicitly not custody"*). The panel shows:
 | Both false premises corrected with evidence | §9 |
 | Panels 1–3 mockups delivered | §7 + `docs/mockups/pwa-wallet-*.svg` |
 | NUT/dependency decision documented | §4 |
+| D4 reflects the operator's REVERSED decision: resting balance REQUIRED, `T` is the cap, with a justified default | §5.4 (esp. items 1–3), §1 D4 row |
+| Panel 3 reachability corrected — reachable and designed-for, still never before a balance and never mid-payment | §5.5, §7.3 |
+| Secret-storage decision documented (device-local + persisted + cap; one-tap encrypted export; opportunistic PRF; FSA for the fleet) with traps and prohibitions | §5.6 |
+| Background-autonomy requirement documented with the honest per-platform limits, the three-layer ship decision (L0 mandatory / L1 mandatory best-effort / L2 optional-removable), the promises, the prohibitions, and the open blocking module question | §6.6 |
+| Operator's scope framing recorded (ADR consolidated to the default branch as part of this PR) | §6.7, §6.6.8 |
 | Every claim cited `file:line` or doc URL | inline throughout; unmeasured items labelled `UNMEASURED` |
 | Docs lint/render passes | §10 |
 | No secrets committed; no live drift | §10 |
@@ -747,6 +1226,20 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
   values. It changes no production file, no manifest, no package,
   no CI config. `git status --porcelain` over the branch shows only added files
   under `docs/`.
+- **Amendment discipline (2026-10-14):** the three mandated amendments — the D4
+  reversal (§5.4, §1, §5.5, §7.3), the background-autonomy section
+  (§6.6), and the secret-storage subsection (§5.6) — were pushed as additional
+  commits onto the **existing** `docs/pwa-wallet-adr-delta` branch so that a single
+  open PR carries the whole delta. No new branch, no second PR. This paragraph is
+  the record that the amendment was an *amendment*, not a rewrite of the earlier
+  reasoning: the honesty content of the original §5.4 (the cap-not-encryption
+  argument, "unrecoverable by construction before first reveal", the recovery
+  triple, `secretsPolicy: 'deterministic'` as a build-time invariant,
+  counters-before-network-call, and the "not custody" constraint) was preserved
+  verbatim and re-scoped, not deleted.
+- **Cross-reference hygiene:** section numbering was re-checked after the two
+  mandated sections were inserted. `§7.3` (not `§7.4`) is Panel 3; `§6.6` is
+  background autonomy; `§6.7` is scope; the new open question is `§11(6)`.
 
 ---
 
@@ -755,11 +1248,31 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
 1. Whether the portal can be served over an **accepted** TLS certificate
    pre-authorisation — the only route to a real SW/install prompt (§3.4 (a)).
    Needs its own ADR.
-2. The operator's actual value for `T` if `T > 0` is chosen (this delta
-   recommends `T = 0`, §5.4).
+2. The operator's concrete value for `T` **below the cap the reverse decision
+   requires** — see the dedicated item §11(7); the earlier "this delta recommends
+   `T = 0`" reading is superseded by §5.4.
 3. ADR question **E/D** on the module side (per-step invoice vs. metered claim),
    which WS-3 is blocked on.
 4. The CSP `connect-src` `http:` vs `https:` lead in §3.5 — unverified in a real
    browser and material to the wallet.
 5. Where service-worker updates get versioned relative to the feed's portal pin
    — moot until §11(1) resolves.
+6. **BLOCKING, module-owner answer required BEFORE implementation (§6.6.8): can an
+   UNAUTHENTICATED client reach the Cashu mint through the walled garden?** If yes, a
+   background top-up is **restorative** (can recover after a lapse); if no, every
+   background top-up must fire while entitlement is **still live**, i.e. it can only
+   ever **pre-empt** a lapse — which changes the scheduler's job entirely. Note the
+   partial evidence: the module already advertises `kind:21023 no-reachable-mints`
+   when there is no uplink, so mint reachability is already a payment precondition.
+   What is `UNMEASURED` is the portal's nodogsplash **pre-auth allow-list** content.
+7. **The operator's concrete value for `T`** under the reversed §5.4 decision. This
+   delta proposes `T = 8 × granule` (~1 day of typical usage, i.e. tens of sats) and
+   states that `T` is operator-tunable; the constraint is not the number but that the
+   operator is genuinely prepared to write off `T` sats per lost device and that the
+   promise "the most you can lose is `T`" stays truthful.
+8. **Field verification of the background-autonomy claims (§6.6.9):** whether
+   Periodic Background Sync ever fires for a venue-portal origin at all; the real
+   web-service-worker idle timer on Chrome Android; the per-origin engagement
+   penalty observed on a real device; and the iOS `notificationclick` BCD absence,
+   which is load-bearing for the push option and is flagged `must-verify-on-device`
+   rather than treated as settled.
