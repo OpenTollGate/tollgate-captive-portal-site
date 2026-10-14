@@ -11,6 +11,10 @@ fixed baseline.
 measures as wrong: a service worker and a Chrome/Android install prompt are not
 achievable on the portal's plain-HTTP origin, so "add `vite-plugin-pwa` + manifest
 icons" is not a low-effort first step. Read the delta before acting on §4/§5 here.
+It is the **authoritative ADR delta** for this workstream, and its closing
+**APPENDIX — Operator decision log** is the append-only record of the operator's
+decisions (D1–D5, the secure-context finding, the secret-storage and background-autonomy
+mandates, and the open questions) — where the appendix and the body disagree, the appendix wins.
 
 **Related:** `OpenTollGate/tollgate-module-basic-go`
 `docs/architecture/session-ticket-decision.md` (the session-ticket ADR and its

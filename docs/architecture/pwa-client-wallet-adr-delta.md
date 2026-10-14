@@ -1530,3 +1530,336 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
     *capability* requirement (what we claim) and a *data-durability* requirement (what we do not).
     Until it is resolved, **both** the strong claim and its flat converse are `UNVERIFIED` and
     neither may reach user-facing text.
+
+---
+
+# APPENDIX — Operator decision log (the discoverability artifact)
+
+This appendix is the **append-only decision log** for the PWA client-wallet workstream.
+It exists so the reasoning survives context loss and can be found from the repository
+rather than only from a local state file.
+
+Each entry records the operator's decision **verbatim where possible**, what it settles,
+and what remains open. The ADR sections cited are in this document.
+
+---
+
+## How to use this
+
+- New decisions are **appended**. Existing entries are never rewritten — if a decision is
+  reversed, a new entry records the reversal and says which entry it supersedes.
+- This appendix is the durable record. A working copy also lives at
+  `~/.hermes/profiles/manager/state/pwa-wallet-decisions.md` (local-only, not in any repo),
+  so the repository copy here is the one that can be found.
+
+---
+
+## D1 — Reconciliation: granularity, not carry-over · CONFIRMED
+
+**Operator, verbatim:** *"yes indeed we want to make it easy for users to rotate at any point
+in time. Ideally they would rotate between every payment, but that has UX downsides because
+it interrupts their session and creates a new session. They would need to leave the network
+and reconnect etc. which takes time and interrupts their internet connection. However,
+bounding the loss with granularity doesn't hurt UX and it makes it easy for users to rotate
+their MAC address without sunk cost when they anyway leave the network and come back."*
+
+Later confirmed: **"Yes exactly."**
+
+**Settles:** no session carry-over across addresses. The client keeps unspent ecash
+client-side as a bearer instrument and buys again at the new address. **Granule size is the
+loss knob** — sized so the sunk cost at the natural leave/rejoin rotation point is
+negligible.
+
+**Why this is the only option:** the module's `RebindSession` reads only *that router's*
+session map (`src/merchant/session_ticket.go:425`), and a ticket is signature-invalid after a
+restart. Nothing federates a customer grant to a peer router. Independently, a service-worker
+registration is **per-origin**, and the portal origin is the router's LAN IP — so roaming
+changes the origin, and therefore the registration, Cache, IndexedDB and home-screen identity.
+**The platform forces this design as much as the ADR does.** See §2.
+
+---
+
+## D2 — Scope: ralph loop for the portal, separate PRs for the rest · DECIDED
+
+**Operator, verbatim:** *"PWA shell + wallet in one ralph loop. How many PRs you make is up to
+you. Module side incremental billing and spillmann channels get their own PRs. Lets track
+spillmann channels as a future task, but lets not build that now."*
+
+**Settles:** PWA shell + client wallet are developed as **one ralph loop**; PR granularity is
+the implementer's call. Module-side incremental billing is its **own PR**. Spillman channels
+are **tracked only — do not build.**
+
+See §6 and §6.7.
+
+---
+
+## D3 — Secure-context spike: do it FIRST · CONFIRMED, AND IT DISPROVED THE PREMISE
+
+**Operator, verbatim:** *"Yes please do that first."*
+
+Later, on the finding: *"Yes please put this on the todo list and investigate it. Figure out
+how we can work around this constraint and document all your findings in the PR."*
+
+**Settles:** the spike runs before any service-worker work.
+
+**Outcome — this is the most consequential finding in the workstream.** The premise
+*"install the PWA from the captive-portal page"* is **unsupported by spec**. Measured on a
+live rig (Chrome for Testing 156) against `http://<lan-ip>:8099`:
+
+```
+isSecureContext: false, hasNavigatorServiceWorker: false,
+hasCryptoSubtle: false, hasPaymentRequest: false, hasCaches: false
+```
+
+There is **no install prompt, no service worker, no Cache API, no `crypto.subtle`** on that
+origin. W3C Secure Contexts §3.1 step 9, and the spec note: *"Neither origin's domain nor
+port has any effect on whether or not it is considered to be a secure context."*
+
+**Trap recorded:** `navigator.serviceWorker` is **`undefined`**, not a catchable
+`SecurityError`. A `try/catch`-based feature detect **crashes** with `TypeError` instead of
+degrading.
+
+**Measured negatives** (each kills a plausible workaround): mDNS / `.local` / LAN hostname
+all `isSecureContext:false`; CAPPORT (RFC 8908) is irrelevant to PWAs and unimplemented in
+Chromium; a service worker registered on one origin cannot serve another.
+
+See §3 and §9.
+
+---
+
+## D4 — Seed threshold `T`: REVERSED to a required resting balance · DECIDED
+
+**Operator, verbatim:** *"Lets keep some resting balance for UX. The user shouldnt have to
+manually interact with the PWA or a captive portal every time they have used up their
+balance. The PWA should automate the process of making small, frequent granular purchases in
+the background so that the user can focus on consuming internet rather than buying internet.
+Please document this requirement as an ADR that gets consolidated to the default branch as
+part of the PR. This also means that the PWA needs to be able to stay active in the
+background without getting paused / silenced by the operating system. How can we achieve
+this? Please think it through with the consultants and please do a spike around this as well.
+Please document your findings."*
+
+On the value: **"Yes please do that."** (the implementer selects `T` and documents it).
+
+**⚠️ This SUPERSEDES an earlier recommendation in this document's own history.** An earlier
+draft recommended `T = 0` (exactly-on-demand melt, zero resting balance). That is **wrong**
+and has been corrected: a resting balance is **REQUIRED**, and `T` is the **cap on it**, not a
+threshold at which to prefer zero. The document history should be read with this in mind.
+
+**Settles:** resting balance required; `T` is operator-tunable and chosen by the implementer;
+the load-bearing user-facing promise is *"the most you can lose is `T`"*. **The cap — not any
+storage or encryption mechanism — is what makes the design safe.**
+
+**Consequence:** because there is now a resting balance, there IS something to lose, so the
+secret must be recoverable — which is why the secret-storage question became load-bearing
+rather than nearly moot. See §5.
+
+---
+
+## D5 — Client identity fork (module-side, papered for W3) · OPEN
+
+The module keys everything on the **socket-resolved MAC** (`src/main.go:850`) and
+**explicitly ignores client-supplied identifiers** (`src/main.go:866-897`). A metered PWA
+therefore needs either (a) a signed mint-independent **client key** accepted as a session key
+— a `clientIdentity` security-surface change — or (b) a **session ticket per top-up**, which
+revives the *held* rebind design and contradicts R3.
+
+**Recommendation carried forward:** (b) is disqualified by R3. If the module-side incremental
+rail is worth building at all it is (a), and it needs its own security review before code.
+**Alternative:** skip module-side incremental billing entirely and bound loss via granule size
+plus client-held ecash, which is fully R1-compatible and needs no module change. This is
+**not** blocking the portal work. See §4 and §6.7.
+
+---
+
+## SEC — Device / file-system secret storage · ANSWERED
+
+**Operator, verbatim:** *"How about we offer to store the secret on the users device / file
+system so that the user doesn't need to write anything down and to reduce the interactivity
+for the user? Would this help?"*
+
+**Settles:** yes, it helps — but the two goals separate and have opposite difficulty.
+
+- **Reduce interactivity: yes, today, on every browser.** Generating entropy on-device and
+  persisting it is a pure client-side choice.
+- **Survive eviction without a write-down: no, not with one mechanism.** `clear site data`
+  destroys *all* origin storage at once, including any device-local key. Durability requires
+  the secret to live **outside** origin storage.
+
+Recommended composition and the full trap list are in §5.6.
+
+---
+
+## BG — Background autonomy · LIMITS ACCEPTED AND DOCUMENTED, NOT WORKED AROUND
+
+**Operator, verbatim:** *"thats fine for now. Just document the limitations and the potential
+workarounds for the time being. We will address these problems in a dedicated ralph loop in
+future."*
+
+**Settles:** ship **L0 + L1 only.** L2 (self-hosted Web Push) and any native app are **not
+built now**; they are documented as a decision-ready inventory for a future ralph loop.
+
+The limitation is stated plainly and the workarounds are ranked with cost and sovereignty
+implications. See §6.6.
+
+---
+
+## MINT — Can an unauthenticated client reach the mint? · **NO** (operator), VERIFIED
+
+**Operator, verbatim:** *"no, please see my earlier response for clarification."*
+
+**Verified on the live router `tollgate-A04E` (rc4) from the running nodogsplash ruleset.**
+The pre-auth allow-list is a **closed port list**:
+
+```
+FirewallRuleSet preauthenticated-users {
+  allow tcp port 22 | 23 | 53 | 80 | 2121 | 2050 | 2051 | 443
+  allow udp port 53 | 67 | 123
+}
+```
+
+Everything else: `REJECT` (icmp-port-unreachable). The only permitted `443` destination is the
+router's own uhttpd — **no general internet, therefore no mint.**
+
+**Consequence for the scheduler:** a background top-up can only ever **pre-empt** a lapse,
+never restore one. Every top-up must fire while entitlement is **still live** — which is
+exactly what the L1 one-shot Background Sync design already does (register while the app is
+open and the balance is healthy).
+
+**Corollary:** the no-install fallback works *because* of this. The router can reach a mint on
+its own authenticated uplink, so a router-verified token paste is the only mint path inside
+the walled garden.
+
+---
+
+## ORIGIN — Vendor HTTPS origin · DECIDED, with a question outstanding
+
+**Operator, verbatim:** *"thats unfortunate. Lets host one on orangesync.tech for the time
+being, but lets also look for workarounds. Can a self seigned credentials be useful here?"*
+
+**Settles:** host the PWA on `orangesync.tech`. Investigate self-signed credentials as a
+workaround.
+
+**Working answer on self-signed:** useful for an **operator-controlled fleet** where the
+operator controls the trust store; **not** viable for BYOD walk-up users, because Chrome on
+Android does not trust user-installed CAs. Full analysis and the ordered decision list are in
+`DOSSIER-vendor-origin-and-selfsigned.md`.
+
+**Outstanding:** the crux question is whether an **https PWA calling `http://<router-ip>:2121`
+is blocked as mixed content or by a Private Network Access preflight** — if so, the router
+itself needs TLS or the call must be proxied. This is under investigation and is not yet
+resolved.
+
+---
+
+## HW — Hardware validation rail · RESOLVED (and an earlier report was WRONG)
+
+**Operator, verbatim:** *"Please use the routers that are connected to the hermes fleet via
+serial. Those are for you to test against."*
+
+**Settles:** the serial-attached routers are the hardware test rail.
+
+**CORRECTION recorded:** an earlier recon concluded *"physical router unreachable — no route
+to 192.168.1.0/24, needs an operator-provided segment."* **That was wrong.** The rail existed
+the whole time; the probe only checked the network and never the serial devices. **Rule for
+the future: when a hardware rail is declared unreachable, probe the serial ports before
+believing it.**
+
+**The device, measured read-only:**
+
+- Host `tollgate-A04E` (uci `tollgate.device.nym='c08r4d0r'`), on
+  `/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG02QAPG-if00-port0`, 115200 8N1
+- OpenWrt **24.10.2**, mediatek/filogic, aarch64, kernel 6.6.93
+- **`tollgate-wrt 0.6.0_rc4-r1`** — the release candidate this workstream gates on
+- `:2121` tollgate-wrt · `:2050` nodogsplash · **`:2051` the portal** (the PWA target) ·
+  `:80` router-home · `:443` · `:8080`
+- `br-lan 192.168.1.1/24` (guest LAN) · `lan1 192.168.2.16/24` (uplink) ·
+  `br-private 10.63.101.1/24`
+- Network path is blocked by **firewall policy, not routing**: the router has
+  `default via 192.168.2.1 dev lan1`, but fw4 classifies `lan1` as WAN with input policy
+  `drop`.
+
+**Note:** the bench router is **single-owner**. Any harness must take a lock and re-verify
+router identity before handover.
+
+---
+
+## RELEASE — Integration gate · CONFIRMED
+
+**Operator, verbatim:** *"Yes this is the upcoming release. You can work on the plan now, but
+it wont get merged till after v0.6.0"* — and *"yes we still need to wait for this before we
+integrate any new features. You can open your PRs as draft PRs in the meantime though"*.
+
+**Settles:** work on branches freely; **merge only after `v0.6.0`** (non-prerelease) ships.
+Open **draft PRs** in the meantime.
+
+---
+
+## CASHU-TS — version bump · IN SCOPE
+
+**Operator, verbatim:** *"Lets bump the version as part of the PR."*
+
+**Settles:** `@cashu/cashu-ts` 2.9.0 → **4.11.0** is part of the portal PR, not a separate
+change. Recorded constraints: v4 is ESM-only; `Proof.amount` is `bigint`/`Amount`;
+**`wallet.restoreAll()` does not exist** in the shipped types — use **`batchRestore`**; do not
+jump to `5.0.0-rc.11`; and **NUT-20 locked quotes must be excluded from the auto-top-up loop**
+because quote-lock keys are not seed-recoverable. See §4.
+
+---
+
+## VALIDATION — software AND hardware · REQUIREMENT
+
+**Operator, verbatim:** *"Please make sure all your work is tested & validated in software,
+and hardware."*
+
+**Settles:** software (unit + host-mode + the serial-driven router harness) **and** hardware
+(the live `tollgate-A04E`).
+
+---
+
+## WALLE — validation becomes a ralph objective · DECIDED
+
+**Operator, verbatim:** *"lets make it part of the ralph loops objectives to validate that this
+is possible."*
+
+**Settles:** `walle.cashu.me` validation becomes a **standing, re-runnable ralph objective**
+rather than a one-shot check — because the URL may come up or change, and the design must not
+rest on an unvalidated premise. Current status: **unreachable** (self-signed cert, `HTTP/2
+404`, no SPA at `/`).
+
+---
+
+## STACK — Vue/Quasar port and coco · ANSWERED
+
+**Operator, verbatim:** *"Would it make sense to port the captive portal to vue/quasar
+instead? Would it help if we use coco instead of wallet.cashu.me?
+https://github.com/cashubtc/coco/ Whats your recommendation and why?"*
+
+**Settles:** **stay React + `@cashu/cashu-ts`; hand-roll the wallet layer.** Do not port; do not
+adopt coco at this phase.
+
+- **Do not port to Vue/Quasar:** ≈7,000 LOC of first-party rewrite (`src/` 2,860 + `admin/`
+  2,506 — and `admin/` is **Preact, not React**, so a port is a *second* rewrite — plus
+  `tests/` 1,706) to buy ≈300 framework-neutral lines. ≈**1:23 against.** And cashu.me's own
+  counter persistence is hand-rolled **localStorage**, i.e. a port hands us a *worse* counter,
+  not a solved one.
+- **Do not adopt coco now:** it would remove ≈250–350 of our ≈400–700 lines, but forces
+  `cashu-ts` to **5.0.0-rc.4**, dragging an RC across the `getDecodedToken` path our `CU1xx`
+  decode precedence sits on. **Revisit at the channel phase.**
+- **Framing correction:** `walle.cashu.me` is **not a library and cannot be embedded** —
+  cashu.me is a standalone app (~30,448 LOC, 113 files). Copy patterns (MIT), do not embed.
+
+See `DOSSIER-portal-stack-decision.md`.
+
+---
+
+## Open questions this log does not close
+
+1. **Mixed content / Private Network Access** for an https PWA calling the router's http
+   `:2121` — the crux of the vendor-origin design. Under investigation.
+2. **D5** — the module-side client-identity fork (only matters if the module rail is built).
+3. **Deployment path to `orangesync.tech`** — VPS1 (`66.92.204.38`) was unreachable at the
+   time of writing and VPS2's SSH was closed, so the deploy needs an operator-provided path.
+4. Whether the **R1–R6 amendment** is ratified upstream or remains one operator's proposal.
+   Any incremental design must cite an accepted amendment or rest on the ADR's own sanctioned
+   answer ("small, granular purchases bound the loss from a rotation mid-purchase").
