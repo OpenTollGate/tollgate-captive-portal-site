@@ -227,30 +227,67 @@ app to know it was installed: `grep -rn 'beforeinstallprompt\|appinstalled\|addT
 | **`getUserMedia` (QR scanning)** | ❌ **NO** | Already degrades — the camera button is hidden (`src/helpers/qr-code.js:11-22`). |
 | **Clipboard API (paste button)** | ⚠️ **DEGRADED** | Already handled — the paste button is gated (`src/helpers/clipboard.js`). |
 
-### 3.4 The three options, and the one this delta recommends
+### 3.4 The options, and the dead end this delta must NOT recommend
 
-- **(a) Serve the portal over TLS with a certificate the client will accept.**
-  This is the only path to a real SW and a real install prompt. It is *not* just
-  "copy what the admin board did": the admin's certificate is at
-  `/etc/tollgate/ssl/server.{crt,key}` and, for a captive portal, the certificate
-  must be accepted by a client that has **not yet been authorised** — i.e. it
-  must survive captive-portal detection and the browser's interstitial, which is
-  a materially harder problem than the admin board's post-auth TLS. Designing
-  that is **out of scope for this delta** and needs its own ADR.
-- **(b) Accept an iOS-only / manual-add-to-home-screen PWA.** Costs nothing to
-  build; delivers no offline story, no service worker and no Android install
-  prompt.
-- **(c) A non-HTTP install rail** (e.g. an app-store or side-loaded shell). Out
-  of scope; recorded so it is not rediscovered.
+An earlier pass of this delta named **option (a) "serve the portal over TLS with a
+certificate the client will accept"** as the only path to a real service worker and a real
+install prompt. **That option is measured to be a DEAD END and is withdrawn as a
+recommendation.** It failed for two independent reasons, and the second one does not go
+away on any hardware we control `[D:origin §1.2, §1.3]`:
 
-**Recommendation: proceed explicitly on (b) for the first release, and record
-(a) as its own ADR to be written before any service-worker work.** The
-practical consequence for WS-1 is that it must be **scoped as "app-like
-presentation + manual add-to-home-screen guidance", not "installable PWA with
-offline shell."** The prior plan's Option A (*"Low — add `vite-plugin-pwa` +
-manifest icons"*, `docs/pwa-client-wallet-plan.md:52`) is unachievable as
-described: without a secure context you get no SW and no install prompt no
-matter how many icons you add.
+- **A self-signed certificate produces a secure context and NOT a service worker.**
+  Measured after a *real* user click-through (headed Chrome for Testing 156.0.8078.4 under
+  Xvfb+openbox; `xdotool` moved the real pointer to `Advanced` at (389, 682) and then to
+  `Proceed to 192.168.2.20 (unsafe)` at (443, 798)) on `https://192.168.2.20:8444/`:
+
+  ```
+  isSecureContext: true
+  hasCryptoSubtle: true   hasCaches: true   hasPaymentRequest: true   hasIndexedDB: true
+  swRegister: {"ok": false, "error": "SecurityError: Failed to register a ServiceWorker
+    for scope ('https://192.168.2.20:8444/') with script ('https://192.168.2.20:8444/sw.js'):
+    An SSL certificate error occurred when fetching the script."}
+  ```
+
+  **"Is it a secure context" and "can I install a PWA" are different questions.** A
+  user-clicked exception satisfies the first and **never** the second. This is also why
+  the earlier secure-context spike could not see it: that spike ran with
+  `--ignore-certificate-errors`, which suppresses the error at the **network layer** and
+  therefore silently skips the service-worker gate. Full chain, per gate, in **§3.6.1**.
+- **No public CA will issue a certificate for a LAN IP or an internal name.** CA/Browser
+  Forum baseline requirements require control of a *domain* and forbid internal names and
+  IP literals for publicly-trusted certificates, and there is no ACME challenge path for
+  `192.168.1.1` (Let's Encrypt, *"Certificates for localhost"*). "Just get a real cert for
+  the router" is therefore **not available either**. The split-horizon alternative (point a
+  real name's A record at a private address) costs more than it buys: it breaks for any
+  guest whose resolver or DoH disagrees with ours, and it puts the ACME private key plus a
+  **standing renewal liability on an offline/WAN-less box** — which is exactly the TollGate
+  deployment shape. See **§3.6.3**.
+
+- **(b) An iOS-only / manual-add-to-home-screen PWA.** Costs nothing to build; delivers no
+  offline story, no service worker and no Android install prompt. **Description unchanged**;
+  it remains the *fallback*, not the recommendation.
+- **(c) A non-HTTP install rail** (e.g. an app-store or side-loaded shell). Out of scope;
+  recorded so it is not rediscovered. **Description unchanged.**
+- **(d) NEW — the recommendation: the PUBLIC HTTPS VENDOR ORIGIN,
+  `https://portal.orangesync.tech`.** The operator has agreed to host the PWA there with a
+  publicly-trusted ACME certificate, and the portal splash page on `:2051` **deep-links** to
+  it with the gateway identity in the URL (`?gw=<ip>&port=<p>&mac=<mac>&nonce=<n>`). This is
+  the only option that is **measured end-to-end today with no new infrastructure**: the
+  install prompt, the service worker and the wallet's IndexedDB all become available at
+  once, because the origin is trustworthy by scheme *and* the certificate is publicly
+  verifiable. Its price is that the router call becomes **cross-origin** — a real,
+  non-obvious gate that has its own name and its own permission, documented in full in
+  **§3.6**, which is where the crux of this design actually lives.
+
+**Recommendation: build on (d), keep (b) as the degraded fallback, and strike (a) as a path
+that must not be re-proposed.** The prior plan's Option A (*"Low — add `vite-plugin-pwa` +
+manifest icons"*, `docs/pwa-client-wallet-plan.md:52`) is unachievable **on `:2051`** for
+the same reason as before — no secure context, so no SW and no install prompt no matter how
+many icons are added — and achievable **only** on the vendor origin. The practical
+consequence for WS-1 changes in substance while keeping its shape: WS-1 is still
+**"app-like presentation + manual add-to-home-screen guidance"** for the `:2051` splash,
+because that page can never itself be a PWA — but it now has a **destination**, so its job
+becomes a deep-link hand-off rather than the whole product.
 
 ### 3.5 One unverified lead that must be checked before the wallet ships
 
@@ -272,6 +309,274 @@ added to `connect-src`) before the wallet adds more cross-origin mint traffic.
 Note also that `worker-src` is unset and therefore falls back to
 `default-src 'self'`, so a same-origin `/sw.js` would be **allowed with no CSP
 change** — the CSP is not the SW blocker; the secure context is.
+
+### 3.6 THE VENDOR ORIGIN, MEASURED — the self-signed split, Local Network Access, and the costed options
+
+This subsection closes §3.4's option (a) and the appendix's `ORIGIN` entry. Everything
+marked **[measured]** is first-hand output from the rig in
+`DOSSIER-vendor-origin-and-selfsigned.md` §0.2 — headed Chrome for Testing **156.0.8078.4**,
+real pointer clicks under Xvfb+openbox, and a genuine **public → private** address-space
+transition (the initiator is a *global IPv6* address on the same host). Raw tool output is
+in `EVIDENCE-vendor-origin-and-selfsigned.md`. Citation form: **[D:origin §N]**.
+
+#### 3.6.1 The self-signed split, with the measured evidence
+
+A PWA needs **four independent gates** to pass. A self-signed credential passes the first
+two and fails the third permanently `[D:origin §1, §1.2]`:
+
+| # | Gate | What it actually requires | Self-signed verdict |
+|---|---|---|---|
+| 1 | **Origin is Potentially Trustworthy** | scheme only — a *scheme/name* test with **no certificate clause** | ✅ **PASSES** with `https://` |
+| 2 | **Navigation is not blocked by an interstitial** | a chain the browser accepts, **or a user exception** | ✅ **PASSES**, but only after the user clicks Advanced → Proceed |
+| 3 | **Service-worker registration** | a *successfully validated* certificate chain for the SW script fetch | ❌ **FAILS — even after gate 2 passes** **[measured]** |
+| 4 | **Install criteria** (`beforeinstallprompt`) | secure transport **+** qualifying manifest | moot while gate 3 fails |
+
+**The measurement that settles it** — after a real, pointer-driven click-through of the
+interstitial on `https://192.168.2.20:8444/`, the page reports **gate 1 + 2 passing** and
+**gate 3 failing** in the same probe `[D:origin §1.2]`:
+
+```
+location: https://192.168.2.20:8444/index.html
+isSecureContext: true
+hasCryptoSubtle: true        hasPaymentRequest: true
+hasCaches: true              hasIndexedDB: true
+swRegister: {
+  "ok": false,
+  "error": "SecurityError: Failed to register a ServiceWorker for scope
+            ('https://192.168.2.20:8444/') with script ('https://192.168.2.20:8444/sw.js'):
+            An SSL certificate error occurred when fetching the script."
+}
+```
+
+Read the two lines together: `isSecureContext: true` says the user's exception **does**
+produce a secure context (`crypto.subtle`, `caches`, `PaymentRequest`, `indexedDB` are all
+genuinely present), and `swRegister.ok: false` says gate 3 **failed** — so there is no
+service worker, no offline shell and no `beforeinstallprompt`.
+
+> **A user-clicked certificate exception creates a secure context but never a service
+> worker. "Is it a secure context" and "can I install a PWA" are different questions with
+> different answers on a self-signed origin.**
+
+Corroborating echo from the same run: the interstitial page itself
+(`chrome-error://chromewebdata/`, origin `null`) has `isSecureContext:false` **and** its own
+probe fetch is refused with *"The request client is not a secure context and the resource is
+in more-private address space `local`"* — sitting on the certificate warning, you have
+neither a secure context nor local-network permission.
+
+**Not verified here, and not to be asserted:** the internal Chromium code path that
+produces this asymmetry. What **is** citable is the direction of the two specs — Secure
+Contexts §3.1 is a pure scheme/name test with no certificate clause and an explicit
+*"may allow users to configure specific sets of origins as trustworthy"* development escape
+hatch (§7.2), whereas Service Workers §6.1 is unconditional (*"Service workers **must**
+execute in secure contexts"*) and `ServiceWorkerContainer.register()` documents
+`SecurityError` for a `scriptURL` that is not a potentially trustworthy origin. The two are
+specified at different layers; a user-clicked exception satisfies the first without
+satisfying the second.
+
+#### 3.6.2 Trust stores, per platform: USABLE for a managed operator fleet, UNSUPPORTED for BYOD
+
+The private-CA route only becomes a *working* HTTPS origin when the client's trust store
+contains our root. That is a per-device administrative action, and on the BYOD walk-up path
+it is not available at all `[D:origin §1.3]`:
+
+| Platform | The fact | Consequence |
+|---|---|---|
+| **Android** (Chrome desktop and Android) | **Since Nougat (API 24), apps do not trust user-added CAs by default** — only the standardised AOSP/Android **system** store. `Settings → Security → Install certificate → CA certificate` writes to the **user** store, which current Chrome for Android **ignores**. The `Network Security Config` escape hatch (`trust-anchors src="user"`) is an **app-manifest, build-time** control — not something a captive-portal operator can set on a stranger's phone. | **BYOD: UNSUPPORTED** by documented platform policy, not browser quirk. **MDM/device-owner fleet: supported** — the CA goes into the *system* store and Chrome trusts it like any public root. |
+| **iOS / iPadOS** | A manually installed certificate profile is **not automatically trusted for SSL**; the user must **also** go to `Settings → General → About → Certificate Trust Settings` and enable full trust. Certificate payloads are auto-trusted **only** when installed via Apple Configurator or MDM. | **Two-stage, per device, on BYOD** (`[needs user X]`); **one-stage under MDM.** Also awkward for a bare LAN IP, because no publicly-trusted DV certificate can exist for one, so any iOS trust story for the router needs a *name* **and** a private root. |
+| **Chromium desktop / managed fleets generally** | Chrome uses the platform root store; a policy/MDM deployment can pre-place a root. | Fine for **operator-owned devices**; irrelevant to walk-up users. |
+
+**Conclusion, stated once: private-CA TLS is USABLE for an MDM-managed operator fleet and
+UNSUPPORTED for BYOD on every platform checked.** It is therefore not a path to the
+*walk-up* product; it remains a valid path for the router's **own admin UI** at `:8443`
+(`/etc/tollgate/ssl/server.{crt,key}`), which only the operator loads.
+
+#### 3.6.3 The dead end: why the router can never be the secure origin for a guest
+
+Two independent blockers, either of which is fatal `[D:origin §1.2, §1.3]`:
+
+1. **No public CA will issue for a LAN IP or an internal name.** CA/Browser Forum baseline
+   requirements require control of a **domain** and explicitly forbid internal names and IP
+   literals for publicly-trusted certificates; Let's Encrypt documents the same reasoning
+   for `localhost` and the logic applies identically to RFC 1918 literals — there is no
+   ACME challenge path for `192.168.1.1`.
+2. **A self-signed / private-root certificate is refused at the service-worker gate**
+   (§3.6.1), so even a client that trusts it (`[needs user X]`, per device, per profile,
+   indefinitely) gets a secure context **and no PWA**.
+
+The remaining variant — **split-horizon DNS**, pointing a real domain's A record at a
+private address so ACME can issue — is **a net loss**: it fails for any guest whose resolver
+or DoH answers with the public address instead of ours, and it requires the router to hold
+the **ACME private key** and perform **renewals from an offline/WAN-less box**, a standing
+operational liability for exactly the deployment shape TollGate ships. It buys a trusted
+origin that still does not change the address-space gate in §3.6.4.
+
+**Corollary that must be stated:** "give the router TLS" is also **not an installability
+fix** for the money path — see option **B** in §3.6.6. Local Network Access is an
+**address-space** gate, not a scheme gate, so `https://<gw>:2121` is gated exactly like
+`http://<gw>:2121` while adding an interstitial back.
+
+#### 3.6.4 THE CRUX — Chrome Local Network Access (the real cost of §3.4 (d))
+
+**The crux is not mixed content. It is Chrome's Local Network Access (LNA) permission.**
+Chrome 142+ requires a **user-granted permission** for any request from **public** address
+space to **private / RFC 1918 / loopback** space, and — the load-bearing half — **the
+permission is grantable only from a secure context.** That pairing is the whole finding: it
+explains both why the vendor origin works and why the `:2051` portal origin can never grant
+it `[D:origin §3.4]`.
+
+**Measured — a public origin calling the private router is DENIED, and no request leaves the
+browser.** Initiator: `https://[2a01:…:33ed]:8444/` (a genuine global IPv6 address)
+`[D:origin §3.4]`:
+
+```
+Access to fetch at 'http://192.168.2.20:8018/api.json' from origin 'https://[2a01:…:33ed]:8444'
+has been blocked by CORS policy: Permission was denied for this request to access the `local`
+address space.
+```
+```
+result: { "http_private_192_8018_CORS": { "ok": false, "error": "TypeError: Failed to fetch" },
+          "http_loopback_8018":       { "ok": false, "error": "TypeError: Failed to fetch" } }
+```
+
+Three things to extract, and all three are traps:
+
+- **The denial is reported as a CORS failure.** `TypeError: Failed to fetch` plus a
+  *"blocked by CORS policy"* console line. An implementer will chase
+  `Access-Control-Allow-Origin` headers indefinitely while the real cause is a **missing
+  permission**. **Record this in the portal's own code comments**, not just here.
+- **The denial names the address space** — `` `local` `` for the RFC 1918 target,
+  `` `loopback` `` for `127.0.0.1`. These are address spaces, not permission names.
+- **Control, in the same run:** the same public origin calling a **public** address is
+  blocked by **mixed content** (*"the content must be served over HTTPS"*) — i.e. **the two
+  gates are distinct and both are observable**, which is what settles the appendix's
+  mixed-content-vs-PNA question in §3.6.4.1.
+
+**The permission is real, nameable and grantable — and the name has a trap.**
+`navigator.permissions.query` on the public origin `[D:origin §3.4]`:
+
+```json
+{"local-network-access":{"state":"prompt","name":"local-network-access"},
+ "local-network":{"state":"prompt","name":"local-network"},
+ "loopback-network":{"state":"prompt","name":"loopback-network"},
+ "localNetworkAccess":{"error":"TypeError: … 'localNetworkAccess' is not a valid enum value of type PermissionName."}}
+```
+
+So the **web-visible PermissionName is KEBAB-CASE `local-network-access`** — the camelCase
+`localNetworkAccess` is **rejected as an invalid enum value**. Chrome 156's DevTools
+protocol lists `localNetwork`/`localNetworkAccess`/`loopbackNetwork` in
+`Browser.PermissionType`, but `Browser.setPermission` with those camelCase names is rejected
+(`Invalid PermissionDescriptor name`): **the CDP emulation names are NOT the web
+PermissionName.** All three are in state **`prompt`** — a genuine user-grantable permission,
+not an unconfigurable block.
+
+**The real prompt, in real headed Chrome** (raised automatically the moment the page fetched
+the private target — no user gesture is needed to *raise* it, only to *drive* it):
+
+```
+[2a01:…:33ed]:8444 wants to Access other devices on your local network     [ Block ]  [ Allow ]
+```
+
+**Measured — after ONE user click on `Allow`, everything works, including the preflighted
+POST and the service worker** `[D:origin §3.4]`:
+
+| Probe (public origin, after `Allow`) | Result |
+|---|---|
+| `GET http://192.168.2.20:8018/api.json` (CORS server) | **200 `cors`** ✅ |
+| `GET http://192.168.2.20:8019/api.json` (no CORS) | `TypeError: Failed to fetch` — a **genuine** CORS failure (`No 'Access-Control-Allow-Origin' header`) ✅ expected |
+| `POST http://192.168.2.20:8018/ln-invoice?mac=<mac>` (`application/json`) | **200 `cors`**, after an `OPTIONS` preflight ✅ |
+| `navigator.serviceWorker.register('/sw.js')` | **ok**, `scope: https://[2a01:…:33ed]:8444/` ✅ |
+| grant persistence across a **browser restart** | **GRANTED** — a second run got 200 with **no click** ✅ |
+
+**The grant is STICKY PER ORIGIN, and that is the product sentence.** The user grants
+local-network access to **`portal.orangesync.tech` once**, and it then holds for **every
+TollGate router they ever visit** — a materially better story than per-router trust, which
+is what a LAN-IP origin would force (a different origin per router ⇒ a fresh prompt, a fresh
+install, a fresh storage partition at every stop). It also means the wallet's **IndexedDB and
+seed live on a stable origin that does not change when the router does**, which **strengthens
+D1**: only the **ENTITLEMENT is address-scoped**; the client's ecash and identity persist.
+That is the crisp form of the roaming rule in §2 — and it is now a measured property of the
+platform, not a hope.
+
+##### 3.6.4.1 The mixed-content vs Private-Network-Access question — SETTLED
+
+The dossier measured **both** gates and showed they are **distinct**: a public → **public**
+insecure fetch was blocked by **mixed content**, while public → **private** was blocked by
+the **LNA permission** (`Permission was denied … 'local' address space`). Two further facts
+close the older framing entirely `[D:origin §3.2, §3.3]`:
+
+- **On the spec/MDN record**, `https://page → fetch('http://192.168.1.1:2121/…')` is
+  *"blockable mixed content"* and must be blocked. **It does not fire in Chrome 156, because
+  Chrome exempts it**: permission-gated local-network requests are exempt from the
+  mixed-content check when Chrome can tell the destination is local — a **private IP
+  literal**, a **`.local` domain**, or a `fetch()` annotated `targetAddressSpace:"local"`.
+  **The exemption is policy that tightens; we do not rely on it.**
+- **The legacy PNA preflight is gone in this path.** Chrome 156 sends **no**
+  `Access-Control-Request-Private-Network` (measured `None`), so the router does **not** need
+  `Access-Control-Allow-Private-Network: true`; implementing it is dead code from a
+  superseded 2022 recipe.
+- **Cross-browser, stated without overclaiming:** Safari/WebKit and Firefox/Gecko have **no
+  LNA implementation and no such mixed-content exemption** documented, so **option A is
+  UNSUPPORTED there pending measurement** — and **not measured here**. Chrome 138–141 sit
+  behind `chrome://flags#local-network-access-check`. On top of that, **iOS Safari never
+  fires `beforeinstallprompt`** at all (install is manual *Share → Add to Home Screen*), so
+  the install UX must be written defensively for both paths.
+
+#### 3.6.5 Three constraints that change the design
+
+1. **Workers CANNOT raise the LNA prompt.** Per the LNA announcement: *"Local network
+   requests from Service Workers and Shared Workers require that the worker's origin has
+   previously been granted the Local Network Access permission."* ⇒ **a background
+   service-worker poll loop against the router SILENTLY FAILS on a fresh install.** The
+   **foreground must make one LNA-requiring call before any SW-driven polling is relied
+   upon.** This interacts directly with the L0/L1 background design in **§6.6.4** and with
+   §6.6.1's "transport is step zero".
+2. **`ws://` to the router is NOT an escape hatch.** WebSockets/WebTransport/WebRTC are not
+   yet LNA-gated, but **`ws://` from an `https://` page is still mixed-content-blocked**, so
+   an MQTT-over-WS keepalive to `192.168.1.1` is **not** an escape hatch. Do not design one.
+3. **The LNA enterprise pre-grant policy is announced but NOT shipped.** A Chrome enterprise
+   policy to pre-grant or pre-deny local-network access per site has been announced; **no
+   policy name/definition was found** in the Chrome Enterprise policy list as fetched. It is
+   the fleet-management path (operator-owned devices, no prompt). **Track it; do not depend
+   on it, and do not cite a policy name.**
+
+#### 3.6.6 The options, costed — and the recommendation
+
+`[D:origin §3.5]`
+
+| Option | Install/PWA | The router call | Cleartext on the wire? | Verdict |
+|---|---|---|---|---|
+| **A. Vendor origin + LNA + CORS on `:2121`** | ✅ full PWA | `fetch('http://<gw>:2121/…')` — passes only after the LNA grant; needs `ACAO` + `OPTIONS` in the Go handler | **YES → the money path must be SIGNED** | **SHIP** — measured end-to-end, no new infra |
+| **B. Give the router TLS** | ❌ still LNA-gated (an **address-space** gate, not a scheme gate) and the cert still cannot be publicly trusted for a LAN IP | `https://<gw>:2121` | no | **NOT for BYOD** — adds the interstitial back for zero install gain |
+| **C. Vendor relay** (router holds an outbound channel; the PWA talks only to the vendor) | ✅ full PWA | **NO LAN call at all** | no | **The architectural target** where the router has WAN. Removes the LNA prompt, the mixed-content notice **and** the cleartext-money problem. Substrate **already exists** (Nostr relays, `kind:10021` gateway advertisement) |
+| **D. `--unsafely-treat-insecure-origin-as-secure` on a managed fleet** | ✅ device-owned browsers only | direct `http://<gw>:2121` | yes | Fleet only, **never BYOD**. **IP wildcards are REJECTED** — only HOSTNAME patterns wildcard, so the fleet must standardise on a hostname (e.g. `*.tollgate.box`), not per-router IPs |
+| **E. Native WebView + `WebViewAssetLoader`** | ✅ as an app | app-controlled | n/a | The app-store path, not the walk-up path |
+
+**RECOMMENDATION: ship A now, with C as the architectural target.** Both are the operator's
+call and have been surfaced to them; A is **measured end-to-end today** and keeps W1/W2
+unblocked, while C is where this design must land once routers have WAN.
+
+#### 3.6.7 The binding constraints this adds, and where each one lands
+
+- **The router's `:2121` Go handler MUST emit `Access-Control-Allow-Origin` and answer
+  `OPTIONS` with 204.** Expose the exact origin (`https://portal.orangesync.tech`) rather
+  than `*` now, so credentials can be added later without a break. **This is a MODULE-side
+  change and therefore lands in W3's PR — not in the portal PR.** Note also that `:2121` is
+  the Go module's **own** `net/http` listener (`src/main.go:424`), so CORS belongs in a Go
+  middleware: putting it in uhttpd or nodogsplash is a guaranteed no-op. CORS is
+  **non-negotiable and orthogonal to the permission** — both were measured failing
+  independently (permission granted with no `ACAO` ⇒ still fails; `ACAO` present with no
+  permission ⇒ still fails).
+- **Because option A leaves the money path in CLEARTEXT on the LAN, the payment intent MUST
+  be SIGNED with the wallet key**, the grant bound to **MAC + a single-use nonce**, and the
+  `POST` made **idempotent** so a retry cannot double-charge. **Treat the LAN leg as
+  hostile** — a user-clicked certificate exception is not a security boundary, and with a
+  stable vendor origin *any* gateway can answer as "TollGate", so the signature is also what
+  makes *"which gateway am I paying?"* answerable.
+- **Do not add TLS to `:2121` as an installability measure** — it changes nothing about the
+  LNA gate (§3.6.3) and no publicly-trusted certificate can exist for a LAN IP.
+- **Do not cache the money path in the service worker.** A cached `2xx` on the payment
+  `POST` would *fake a purchase*; a cached `/usage` or `/balance` would make the portal lie
+  about the one thing that is address-scoped.
 
 ---
 
@@ -800,7 +1105,7 @@ Each is FALSE, and each is the kind of sentence that gets written by accident:
 
 | WS | Content | Repo | Gate |
 |---|---|---|---|
-| **WS-1** | App-like shell: manifest reconciliation (`start_url`/`scope`/`id`/maskable icon, §6.3), manual add-to-home-screen guidance, i18n keys. **No service worker** (D3 §3.4: not achievable on HTTP-on-IP). | portal | after release |
+| **WS-1** | App-like shell: manifest reconciliation (`start_url`/`scope`/`id`/maskable icon, §6.3), manual add-to-home-screen guidance, i18n keys. **No service worker on this origin** (D3 §3.4: not achievable on HTTP-on-IP — the service worker lives on the vendor origin instead, §3.4 (d) / §3.6.4). | portal | after release |
 | **WS-2** | Client wallet: `CashuWallet`/`CashuMint`, IndexedDB proof store, NUT-09 restore, threshold-gated seed reveal, automatic BOLT11 melt, policy engine. **Framed as convenience, never custody.** | portal | after release; depends on the 4.11.0 PR (§4.2 item 1) |
 | **WS-3** | Module-side incremental rail: metered claim endpoint + paid-through watermark + restart-durable ledger, replacing all-or-nothing `PurchaseSession`. | module (**upstream — reviewers merge; this project never merges upstream `main`**) | needs operator sign-off + ADR question E/D |
 | **WS-4** | Spillman channel rail (`cdk-spilman`). | module | **the ADR's own migration gate: the wallet must run on CDK AND a channel-capable client wallet must exist.** Track only. Do **not** bolt a bespoke drip protocol on in the meantime (ADR, verbatim). |
@@ -895,7 +1200,8 @@ attached to the cards.
 reaches `activated` on that non-secure origin" (as `[D:rails §6]` proposes)
 **cannot pass on a non-secure origin** — this is the §3 finding. The test must
 assert the inverse property, that `navigator.serviceWorker` is **undefined** on
-the plain-HTTP origin and the app degrades predictably, until (a) in §3.4 lands.
+the plain-HTTP origin and the app degrades predictably, until the vendor-origin path of
+§3.4 (d) / §3.6 lands.
 
 ### 6.6 Background autonomy — the requirement, the honest limits, and the three-layer ship decision (mandated section)
 
@@ -936,7 +1242,9 @@ the Cache API, durable IndexedDB, Periodic Background Sync, one-shot Background
 Sync and Web Push are **all secure-context-gated**, with Chrome's *installability*
 criteria requiring HTTPS or loopback. On a LAN IP over `http`, **there is no service
 worker to wake**, so the question of keeping one alive is moot. Nothing in §6.6 is
-reachable before §3.4's transport finding is resolved.
+reachable before the vendor-origin transport path (§3.4 (d), §3.6) lands — and note
+§3.6.5 item 1, a new constraint: a service worker **cannot raise the LNA prompt**, so the
+foreground must make one LNA-requiring call before any SW-driven polling can be relied on.
 
 #### 6.6.2 The honest verdict, platform by platform
 
@@ -1084,8 +1392,8 @@ should start without an operator decision that supersedes this one.** Ranking ax
 | **5** | **App Store webview wrapper** | Nothing; it cannot schedule and it must survive review | Review risk | Neutral | Runs into App Store Review Guideline **4.2 Minimum Functionality** — *"include features, content, and UI that elevate it beyond a repackaged website"* [SB §6][SB 40] |
 | **6** | **The L0/L1 architecture already shipping** | **Everything the product actually promises today** — correctness on next open, plus best-effort Android acceleration | None beyond L0/L1 itself | **Clean** — no third party at all | **This is the current answer** and the one this ADR ships |
 
-**A cross-cutting precondition for rows 1–5:** every one of them is **unreachable until §3.4's
-transport finding lands**. Push needs a **secure-context, installable origin**; a native app needs
+**A cross-cutting precondition for rows 1–5:** every one of them is **unreachable until the
+vendor-origin transport path (§3.4 (d), §3.6) lands**. Push needs a **secure-context, installable origin**; a native app needs
 the same portal to authenticate against; a TWA needs an installable web app to wrap
 [SB §0][SB 26][SB 27][SB 28]. **Transport is step zero for all six rows — including the one we are
 shipping.**
@@ -1297,13 +1605,17 @@ Decisions this section records:
   mint path, a background top-up can only **pre-empt** a lapse, so it must fire while
   entitlement is still live.
 - **Sequencing unchanged:** the red baseline is fixed first (§6.2), the transport
-  question resolves before any background-autonomy work (§3.4 / §6.6.1), and L0
-  ships and is proven crash-safe before L1 or L2 are attempted (§6.6.4).
+  question settles before any background-autonomy work (§3.4 / §6.6.1 — and it has now
+  **settled**: §3.6 measures the vendor-origin path end to end, including a service worker
+  registering), and L0 ships and is proven crash-safe before L1 or L2 are attempted (§6.6.4).
 - **`if`/`elif`, stated precisely so a future loop cannot over-build:** **`if`** the origin becomes
-  secure-context and installable (§3.4) **`then`** L0+L1 ship; **`elif`** the origin does not
-  **`then`** L0 alone is the entire product, and the "until §3.4 resolves" caveats come out of the
+  secure-context and installable (§3.4 (d) / §3.6 — the vendor origin, now measured to satisfy
+  this) **`then`** L0+L1 ship; **`elif`** the vendor origin does **not** ship **`then`** L0 alone is
+  the entire product, and the "until the transport settles" caveats come out of the
   user-facing copy (§6.6.7 item 8) but nothing else changes; **L2 stays out either way until the
-  operator says otherwise.** §6.6.4.1 is an inventory, **not a backlog** — it exists so the option
+  operator says otherwise.** Note the extra L1 obligation §3.6.5 item 1: a service worker cannot
+  raise the LNA prompt, so the foreground must make one LNA-requiring call before any SW-driven
+  polling is relied on. §6.6.4.1 is an inventory, **not a backlog** — it exists so the option
   does not have to be re-derived, not so it can be started.
 
 ---
@@ -1390,6 +1702,11 @@ is *"a UX convenience, explicitly not custody"*). The panel shows:
 | iOS install-durability claim scope-corrected: install = **capability** requirement, durability = the `T` cap + the export; carve-out scope labelled **UNVERIFIED** | §5.6.4, §5.6.5, §6.6.6 |
 | Operator's scope framing recorded (ADR consolidated to the default branch as part of this PR) | §6.7, §6.6.8 |
 | Every claim cited `file:line` or doc URL | inline throughout; unmeasured items labelled `UNMEASURED` |
+| The **dead end withdrawn**: §3.4's former option (a) (portal TLS with a client-accepted cert) marked **not available**, with the measured self-signed split (secure context YES / service worker NO) and the no-public-CA-for-a-LAN-IP blocker | §3.4, §3.6.1, §3.6.3 |
+| The **vendor-origin architecture and the Local Network Access finding** recorded with the measured denial text, the kebab-case `PermissionName` trap, the post-`Allow` results and the grant's stickiness across a browser restart | §3.6, §3.6.4 |
+| The **costed options A–E** recorded with the recommendation (**ship A now, C as the architectural target**) and the two binding constraints (`:2121` CORS in the Go handler → W3's PR; signed money path, MAC-bound grant, single-use nonce, idempotent POST) | §3.6.6, §3.6.7 |
+| The **mixed-content-vs-PNA question RESOLVED** (the gate is Local Network Access, measured distinctly from mixed content), with the deployment item left OPEN | §3.6.4.1, §11(1) closed, appendix `ORIGIN` / open-questions |
+| The **vendor-origin dossier published** so its citations resolve for a reader of the PR | `docs/analysis/DOSSIER-vendor-origin-and-selfsigned.md`, `docs/analysis/README.md` |
 | Docs lint/render passes | §10 |
 | No secrets committed; no live drift | §10 |
 
@@ -1518,23 +1835,63 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
   the walled garden. **§11(6)** is struck through and marked **CLOSED — ANSWERED NO, VERIFIED**; the
   §8 acceptance mapping gained a row for each. **No claim was deleted.** The appendix (operator
   decision log) is unchanged by this pass and remains the last section of the document.
+- **Amendment discipline (fourth pass, 2026-10-14) — §3.4's dead end, the vendor origin, and the
+  Local Network Access crux:** a second measurement pass on the *same* rig family (headed Chrome
+  for Testing 156.0.8078.4 under Xvfb+openbox, real pointer clicks, and — unlike the first spike,
+  which used `--ignore-certificate-errors` and therefore silently skipped the gate — a **real**
+  certificate interstitial and a genuine **public → private** address-space transition) **withdrew
+  §3.4's former recommendation** and replaced it with a measured one. What changed: **(a)** §3.4's
+  option (a) is marked **not available** (a self-signed cert gives a secure context and **no**
+  service worker; no public CA issues for a LAN IP or an internal name) and a new option (d), the
+  **public HTTPS vendor origin `https://portal.orangesync.tech`**, is the recommendation, with the
+  `:2051` splash page deep-linking to it; options (b) and (c) are kept verbatim. **(b)** A new
+  **§3.6** records the whole measured architecture: the four-gate self-signed split with the exact
+  probe output, the per-platform trust stores (**usable for an MDM fleet, unsupported for BYOD**),
+  the dead end and the cost of split-horizon, the **Local Network Access** crux with its measured
+  denial text, its **kebab-case `PermissionName`** trap, its post-`Allow` results and its
+  **stickiness per origin across a browser restart** (which is what strengthens D1 — only the
+  *entitlement* is address-scoped), the three design constraints (workers cannot raise the prompt;
+  `ws://` is not an escape hatch; the enterprise pre-grant policy is announced but not shipped),
+  the **costed options A–E**, and the binding constraints (`:2121` CORS + `OPTIONS` 204 in the Go
+  handler → **W3's PR, not this one**; signed money path, MAC-bound grant, single-use nonce,
+  idempotent POST). **(c)** §11's unverified-lead item and the appendix's crux item are
+  **RESOLVED with the measured answer** — the gate is **Local Network Access, not mixed content**,
+  the two having been measured distinctly in one run — while the **deployment path to
+  `orangesync.tech` stays OPEN**. **(d)** `docs/analysis/DOSSIER-vendor-origin-and-selfsigned.md`
+  was added and listed in `docs/analysis/README.md`, so every `[D:origin §N]` citation above
+  resolves for a reader of the PR. **§3.3's table was not touched (still correct), no claim was
+  deleted, and the appendix remains the last section of the document.**
 
 ---
 
 ## 11. Open questions this delta does not close
 
-1. Whether the portal can be served over an **accepted** TLS certificate
-   pre-authorisation — the only route to a real SW/install prompt (§3.4 (a)).
-   Needs its own ADR.
+1. ~~Whether the portal can be served over an **accepted** TLS certificate
+   pre-authorisation — the only route to a real SW/install prompt (§3.4 (a)).~~
+   **CLOSED — ANSWERED, MEASURED 2026-10-14.** §3.4's option (a) is a **dead end** and is
+   withdrawn: a self-signed certificate yields a secure context (`isSecureContext:true`,
+   `crypto.subtle`/`caches`/`PaymentRequest`/`indexedDB` all present) but **not** a service
+   worker — measured `SecurityError: … An SSL certificate error occurred when fetching the
+   script` **after a real user click-through** — and no public CA will issue for a LAN IP or
+   an internal name. The route to a real SW/install prompt is instead the **public HTTPS
+   vendor origin** (§3.4 (d)): **`https://portal.orangesync.tech`**, with the `:2051` splash
+   page deep-linking to it. See **§3.6** for the full measured record, including the
+   self-signed split, the per-platform trust stores, and the **Local Network Access** crux.
+   Evidence: `DOSSIER-vendor-origin-and-selfsigned.md` (§0.1, §1.2, §1.3, §3.4) +
+   `EVIDENCE-vendor-origin-and-selfsigned.md`.
 2. The operator's concrete value for `T` **below the cap the reverse decision
    requires** — see the dedicated item §11(7); the earlier "this delta recommends
    `T = 0`" reading is superseded by §5.4.
 3. ADR question **E/D** on the module side (per-step invoice vs. metered claim),
    which WS-3 is blocked on.
 4. The CSP `connect-src` `http:` vs `https:` lead in §3.5 — unverified in a real
-   browser and material to the wallet.
-5. Where service-worker updates get versioned relative to the feed's portal pin
-   — moot until §11(1) resolves.
+   browser and material to the wallet. **Still open** — §3.5 is unaffected by §3.6, which is
+   about the *transport* to the portal, not the portal's own `connect-src` to a mint.
+5. Where service-worker updates get versioned relative to the feed's portal pin.
+   **This is no longer moot** — §11(1) is closed and the vendor origin **does** ship a service
+   worker (§3.6.4, measured `register()` **ok**), so a live SW update channel now exists and
+   must be versioned deliberately: the SW precache must **exclude the entire money path**
+   (§3.6.7), and the wallet must be able to tell a stale money-path bundle from a current one.
 6. ~~**BLOCKING, module-owner answer required BEFORE implementation (§6.6.8): can an
    UNAUTHENTICATED client reach the Cashu mint through the walled garden?**~~ **CLOSED —
    ANSWERED NO, VERIFIED 2026-10-14.** Operator answer: **no**. Verified on the live router
@@ -1774,6 +2131,7 @@ the walled garden.
 ---
 
 ## ORIGIN — Vendor HTTPS origin · DECIDED, with a question outstanding
+### ↳ the outstanding question is now CLOSED BY MEASUREMENT — see the appended **ORIGIN-2** entry
 
 **Operator, verbatim:** *"thats unfortunate. Lets host one on orangesync.tech for the time
 being, but lets also look for workarounds. Can a self seigned credentials be useful here?"*
@@ -1790,6 +2148,53 @@ Android does not trust user-installed CAs. Full analysis and the ordered decisio
 is blocked as mixed content or by a Private Network Access preflight** — if so, the router
 itself needs TLS or the call must be proxied. This is under investigation and is not yet
 resolved.
+
+---
+
+## ORIGIN-2 — Vendor origin + Local Network Access · RESOLVED BY MEASUREMENT (2026-10-14)
+
+**Does not reverse or rewrite `ORIGIN`; it closes the question that entry left outstanding.**
+
+**The crux question — "is an https PWA calling `http://<router-ip>:2121` blocked as mixed
+content or by a Private Network Access preflight?" — is ANSWERED: it is neither. It is blocked
+by Chrome's Local Network Access permission.** Measured, in one run, on a rig with a *genuine*
+public → private address-space transition (headed Chrome for Testing 156.0.8078.4 under
+Xvfb+openbox, real pointer clicks):
+
+- Public → **private** (`http://192.168.2.20:8018`): `blocked by CORS policy: Permission was
+  denied for this request to access the \`local\` address space` — **the LNA permission.**
+- Public → **public** (insecure): `This request has been blocked; the content must be served
+  over HTTPS` — **mixed content.** The two gates are distinct and both observable.
+- Chrome 156 sends **no** `Access-Control-Request-Private-Network` (measured `None`), so the
+  legacy PNA preflight is **superseded** — `Access-Control-Allow-Private-Network: true` is dead
+  code on this path.
+- After **one** user click on *"…wants to Access other devices on your local network [Block]
+  [Allow]"*: `GET` **200 cors**; preflighted `POST /ln-invoice?mac=…` **200 cors**;
+  `serviceWorker.register('/sw.js')` **ok**; and the **grant survived a browser restart**.
+  **The grant is sticky per origin** — one grant on `portal.orangesync.tech` holds for every
+  TollGate router the user visits, which is what lets the wallet's ecash and identity persist
+  on a stable origin (only the *entitlement* is address-scoped — this **strengthens D1**).
+
+**Self-signed credentials — answered NO as a path to a PWA.** With the user's real click-through,
+`isSecureContext:true` and `crypto.subtle`/`caches`/`PaymentRequest`/`indexedDB` all present, but
+`register()` fails with `SecurityError: … An SSL certificate error occurred when fetching the
+script`. **A secure context and a service worker are different gates.** And no public CA will
+issue for a LAN IP or an internal name. Private-CA TLS stays **usable for an MDM-managed
+operator fleet** and **unsupported for BYOD on every platform checked**.
+
+**Decision status: not reversed, executed.** The `ORIGIN` decision (host the PWA at
+`https://portal.orangesync.tech`, and investigate self-signed) **stands and is now the
+recommendation with the mechanism named**: §3.4 (d) + §3.6 of this delta. The costed options,
+the binding constraints (`:2121` CORS and `OPTIONS` 204 in the Go handler → **W3's PR**; signed
+money path, MAC-bound grant, single-use nonce, idempotent POST), and the three design
+constraints (workers cannot raise the LNA prompt; `ws://` is not an escape hatch; the
+enterprise pre-grant policy is announced but not shipped) are in **§3.6**.
+
+**Still open, deliberately:** the **deployment path** to `orangesync.tech` (see the last list in
+this log) — and note the apex is **broken today** (`tlsv1 alert internal error` on `:443`).
+
+**Evidence:** `DOSSIER-vendor-origin-and-selfsigned.md` and
+`EVIDENCE-vendor-origin-and-selfsigned.md`, both now in `docs/analysis/`.
 
 ---
 
@@ -1896,11 +2301,22 @@ See `DOSSIER-portal-stack-decision.md`.
 
 ## Open questions this log does not close
 
-1. **Mixed content / Private Network Access** for an https PWA calling the router's http
-   `:2121` — the crux of the vendor-origin design. Under investigation.
+1. ~~**Mixed content / Private Network Access** for an https PWA calling the router's http
+   `:2121` — the crux of the vendor-origin design. Under investigation.~~
+   **CLOSED — ANSWERED, MEASURED — see the `ORIGIN` entry above and §3.6.4 / §3.6.4.1.**
+   The gate is **Local Network Access**, not mixed content: the two were measured separately
+   in the same run (public → *public* insecure fetch blocked by **mixed content**;
+   public → *private* blocked by the **LNA permission**, `Permission was denied for this
+   request to access the \`local\` address space`). After **one** user `Allow`, the `GET`,
+   a preflighted `POST /ln-invoice?mac=…` and `serviceWorker.register()` all succeed, and
+   the grant **survives a browser restart** — sticky per origin.
 2. **D5** — the module-side client-identity fork (only matters if the module rail is built).
 3. **Deployment path to `orangesync.tech`** — VPS1 (`66.92.204.38`) was unreachable at the
    time of writing and VPS2's SSH was closed, so the deploy needs an operator-provided path.
+   **STILL OPEN** (deliberately not closed by this pass). Note also that the **apex is
+   broken today**: `http://orangesync.tech/` 308-redirects on `:80` into a `:443` listener
+   whose handshake fails (`tlsv1 alert internal error`, `no peer certificate available`), so
+   any operator-facing link to the apex is dead until the Caddy site block is repaired.
 4. Whether the **R1–R6 amendment** is ratified upstream or remains one operator's proposal.
    Any incremental design must cite an accepted amendment or rest on the ADR's own sanctioned
    answer ("small, granular purchases bound the loss from a rotation mid-purchase").
