@@ -23,14 +23,23 @@ export default defineConfig({
         'src/components/**/*.{js,jsx}',
         'admin/src/lib/**/*.{ts,tsx}',
       ],
+      // Only the two page BOOTSTRAP entry points are excluded: they mount a root
+      // component and nothing else (21 and 17 lines). This is a unit-suite
+      // metric and those files' only job is to build the page the Playwright
+      // suite drives, so counting them here measures the wrong thing.
+      //
+      // NOTE: an earlier revision of this change also excluded BalancePage.jsx,
+      // Background.jsx and ErrorBoundary.jsx as "thin mount points". A cold
+      // review flagged that as inaccurate, and re-measurement agreed: they are
+      // 173/130/67 lines and carry real logic (state, effects, error handling).
+      // Excluding genuinely-uncovered files to lift the headline number would be
+      // gate-gaming, so the exclusions are narrowed to the two real entry points
+      // and the number below is the correspondingly LOWER, truthful figure.
       exclude: [
         '**/*.test.{js,jsx}',
         '**/__tests__/**',
         'src/test/**',
-        'src/components/BalancePage.jsx',
-        'src/components/Background.jsx',
-        'src/components/ErrorBoundary.jsx',
-        // thin mount points: no logic of their own, exercised by Playwright
+        // bare page-mount entry points (no logic of their own)
         'src/index.jsx',
         'src/balance.jsx',
       ],
@@ -38,21 +47,27 @@ export default defineConfig({
       // once the suite can REPORT it" — the precondition, which this change
       // supplies (provider + scoped include + text/json-summary reporters).
       //
-      // The measured, correctly-scoped figure is 48.65% statements/lines. The
-      // shortfall is real untested surface, not measurement noise: balance.js,
-      // i18n.js and usage.js are at 0%, qr-code.js at 11%, Lightning.jsx at 7%,
-      // router.ts and paths.ts at 0% — roughly 1.5k uncovered statements.
-      // Reaching 80% means writing that coverage, which is its own workstream
-      // and emphatically NOT part of a "green the baseline" repair.
+      // The measured, correctly-scoped figure is 44.68% statements/lines,
+      // 71.26% branches, 51.72% functions. The shortfall is real untested
+      // surface, NOT measurement noise or over-broad scoping: balance.js,
+      // i18n.js and usage.js sit at 0%, qr-code.js at 11%, Lightning.jsx at 7%,
+      // router.ts and paths.ts at 0%. Reaching 80% means writing that coverage,
+      // which is its own workstream and emphatically NOT part of a
+      // "green the baseline" repair.
       //
       // A hard 80 here would re-red `npm test` and destroy the green baseline
-      // this card exists to create, so the floor is pinned to the measured
-      // value as a RATCHET: coverage can no longer go DOWN unnoticed, and the
-      // 80% target is tracked as a follow-up rather than silently claimed.
-      // Raise these as coverage is added.
+      // this change exists to create, so the floors are pinned to the measured
+      // values as a RATCHET: coverage can no longer silently regress, and the
+      // 80% target is left as a tracked follow-up rather than claimed as met.
+      //
+      // All FOUR metrics are enforced, not just statements/lines: enforcing a
+      // subset would let branch and function coverage rot behind a passing
+      // statements number. Raise these as coverage is added.
       thresholds: {
-        statements: 48,
-        lines: 48,
+        statements: 44,
+        lines: 44,
+        branches: 71,
+        functions: 51,
       },
     },
   },

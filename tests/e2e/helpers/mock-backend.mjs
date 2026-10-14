@@ -27,9 +27,14 @@ const MOCK_TOLLGATE_DETAILS = {
 //
 // Cashu.jsx imports five names:
 //   validateToken, submitToken, canSubmitAnyway, mintUrlFromToken, findMintOption
-// The first three were stubbed; the last three (canSubmitAnyway,
-// mintUrlFromToken, findMintOption) were added to Cashu.jsx by #55/#61 and the
-// stub was never updated to match.
+// The original stub exported only three names — validateToken, submitToken and
+// extractProofsFromToken. Of the five the component imports, that covered
+// validateToken and submitToken; `canSubmitAnyway` (#55) was NOT present even
+// though extractProofsFromToken was, and `mintUrlFromToken` + `findMintOption`
+// arrived with #61. The stub was never updated to match the component's import
+// list. (A cold review caught an earlier, inaccurate wording of this comment
+// that claimed "the first three were stubbed" — the stub never carried
+// canSubmitAnyway.)
 //
 // Semantics for the additions:
 //   * canSubmitAnyway: the affordance is for a client-side decode refusal
@@ -39,6 +44,16 @@ const MOCK_TOLLGATE_DETAILS = {
 //     option a pasted note came from. The test token is an undecodable
 //     placeholder, so returning null matches Cashu.jsx's documented
 //     "undecodable / partial input: stay quiet and change nothing" path.
+//
+// SCOPE NOTE (raised by a cold review): because this stub is SHARED by every
+// setupMockBackend test and now always returns null, no e2e test exercises the
+// non-null auto-select path introduced in #61. That path IS covered — by
+// tests/unit/cashu-auto-select-mint.test.jsx, which mocks nothing in
+// src/helpers/cashu.js, uses two REAL decodable notes, and asserts the
+// selection actually moves to the note's mint (including the unsupported-mint
+// warning and the manual-override case). E2E here deliberately keeps the
+// deterministic placeholder token, so the two suites together cover both
+// branches rather than this one silently covering neither.
 const CASHU_HELPER_STUB = `
 export const validateToken = (token, mint, i18n) => {
   if (!token || typeof token !== 'string' || !token.startsWith('cashu')) {

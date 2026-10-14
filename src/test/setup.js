@@ -27,6 +27,16 @@ import '@testing-library/jest-dom';
 // Install a minimal in-memory Storage ONLY when the environment failed to
 // provide a usable one. Guarded, so under CI's Node 22 (or any runtime that
 // supplies the real implementation) this is a no-op and NOTHING changes.
+//
+// Scope of the fake (raised by a cold review): it implements the Storage
+// surface the code actually uses — getItem/setItem/removeItem/clear plus
+// length/key — and NOT property accessors (`localStorage.foo`). That is
+// deliberate: admin/src/lib/ubus.ts only ever calls the methods, and a fuller
+// polyfill would be untested machinery. On state isolation: vitest gives each
+// test FILE its own environment, and both consumers
+// (tests/unit/admin-credential-guard.test.js,
+// tests/unit/admin-provisional-credential.test.js) call localStorage.clear()
+// in afterEach, so entries cannot leak between tests.
 const installLocalStorageIfMissing = () => {
   const existing = typeof globalThis.localStorage !== 'undefined' ? globalThis.localStorage : undefined;
   if (existing && typeof existing.getItem === 'function') return;
