@@ -5,6 +5,13 @@ after the current release** (`v0.6.0-rc1`), per operator instruction. This file
 records the gap analysis and the agreed direction so the work can start from a
 fixed baseline.
 
+**Related:** `docs/architecture/pwa-client-wallet-adr-delta.md` (Proposed 2026-10-14)
+— the ADR delta that answers this document's §8 open decisions (D1–D4) and
+**supersedes §4's effort sizing and §5's Option A framing**, both of which it
+measures as wrong: a service worker and a Chrome/Android install prompt are not
+achievable on the portal's plain-HTTP origin, so "add `vite-plugin-pwa` + manifest
+icons" is not a low-effort first step. Read the delta before acting on §4/§5 here.
+
 **Related:** `OpenTollGate/tollgate-module-basic-go`
 `docs/architecture/session-ticket-decision.md` (the session-ticket ADR and its
 R1–R6 amendment). That document already frames "small frequent granular

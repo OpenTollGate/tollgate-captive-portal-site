@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Panel 3 of 3 — the threshold seed moment.
+  Mockup only. The mnemonic shown is a PUBLISHED BIP-39 test vector, not a real
+  secret and not generated for this document.
+  See docs/architecture/pwa-client-wallet-adr-delta.md §7.3 and §5.4.
+  Design point: the phrase is hidden by default behind an explicit confirmation
+  checkbox (the cashu.me pattern); the moment fires ONLY on crossing T, never
+  before a balance exists, and never during a payment. Under the recommended
+  T = 0 this panel is unreachable by construction.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 760" width="420" height="760"
+     font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" role="img"
+     aria-label="Panel 3: threshold seed phrase moment">
+  <rect width="420" height="760" rx="26" fill="#0b0b0d"/>
+  <rect x="1" y="1" width="418" height="758" rx="25" fill="none" stroke="#2a2a30"/>
+
+  <text x="26" y="34" fill="#7d7d88" font-size="12">9:41</text>
+  <text x="394" y="34" fill="#7d7d88" font-size="12" text-anchor="end">&#9679;&#9679;&#9679;</text>
+
+  <!-- header -->
+  <text x="26" y="70" fill="#f2f2f5" font-size="17" font-weight="600">Back up your wallet</text>
+  <text x="26" y="92" fill="#9a9aa6" font-size="12">One time. Takes a minute.</text>
+
+  <!-- trigger, stated plainly -->
+  <rect x="24" y="112" width="372" height="76" rx="13" fill="#1a1710" stroke="#3d3218"/>
+  <rect x="24" y="112" width="4" height="76" rx="2" fill="#f7931a"/>
+  <text x="44" y="140" fill="#f0c274" font-size="12.5" font-weight="600">Your balance passed 5,000 sat</text>
+  <text x="44" y="162" fill="#b5ac96" font-size="12">Above this amount, a lost device would be a</text>
+  <text x="44" y="180" fill="#b5ac96" font-size="12">real loss. Write these 12 words down once.</text>
+
+  <!-- phrase: hidden by default -->
+  <rect x="24" y="204" width="372" height="150" rx="14" fill="#15151a" stroke="#26262e"/>
+  <rect x="44" y="222" width="108" height="46" rx="8" fill="#20202a"/>
+  <text x="98" y="251" fill="#3d3d47" font-size="16" text-anchor="middle">&#9679;&#9679;&#9679;&#9679;&#9679;</text>
+  <rect x="156" y="222" width="108" height="46" rx="8" fill="#20202a"/>
+  <text x="210" y="251" fill="#3d3d47" font-size="16" text-anchor="middle">&#9679;&#9679;&#9679;&#9679;&#9679;</text>
+  <rect x="268" y="222" width="108" height="46" rx="8" fill="#20202a"/>
+  <text x="322" y="251" fill="#3d3d47" font-size="16" text-anchor="middle">&#9679;&#9679;&#9679;&#9679;&#9679;</text>
+
+  <rect x="44" y="282" width="160" height="34" rx="9" fill="#20202a" stroke="#33333f"/>
+  <text x="124" y="304" fill="#e6e6ee" font-size="12.5" font-weight="600" text-anchor="middle">Reveal words</text>
+  <rect x="216" y="282" width="160" height="34" rx="9" fill="#20202a" stroke="#33333f"/>
+  <text x="296" y="304" fill="#e6e6ee" font-size="12.5" font-weight="600" text-anchor="middle">Copy</text>
+  <text x="44" y="338" fill="#7d7d88" font-size="10.5">12 words &#183; hidden until you tap Reveal</text>
+
+  <!-- the honest trade-off, in one line, not a modal wall -->
+  <rect x="24" y="374" width="372" height="88" rx="14" fill="#1a1212" stroke="#3d2222"/>
+  <text x="44" y="402" fill="#e8a0a0" font-size="12.5" font-weight="600">Until you write this down, it cannot be recovered</text>
+  <text x="44" y="424" fill="#b8a8a8" font-size="11.5">The key was made on this device and has never</text>
+  <text x="44" y="442" fill="#b8a8a8" font-size="11.5">been shown. If the device is lost first, the</text>
+  <text x="44" y="458" fill="#b8a8a8" font-size="11.5">balance is gone. That is why we cap it below this amount.</text>
+
+  <!-- three responses -->
+  <text x="24" y="494" fill="#9a9aa6" font-size="11.5">Choose one</text>
+
+  <rect x="24" y="506" width="372" height="54" rx="12" fill="#15151a" stroke="#2f4a33"/>
+  <circle cx="48" cy="533" r="9" fill="#5cc46a"/>
+  <path d="M44 533 l3 3 l6 -6" stroke="#0b0b0d" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <text x="70" y="530" fill="#f2f2f5" font-size="13" font-weight="600">I wrote the words down</text>
+  <text x="70" y="548" fill="#8a8a96" font-size="11">Unlocks the cap. You can hold more.</text>
+
+  <rect x="24" y="570" width="372" height="54" rx="12" fill="#15151a" stroke="#26262e"/>
+  <circle cx="48" cy="597" r="9" fill="none" stroke="#4a4a56" stroke-width="1.5"/>
+  <text x="70" y="594" fill="#f2f2f5" font-size="13" font-weight="600">Export an encrypted backup</text>
+  <text x="70" y="612" fill="#8a8a96" font-size="11">A file you keep. Password-protected.</text>
+
+  <rect x="24" y="634" width="372" height="54" rx="12" fill="#15151a" stroke="#26262e"/>
+  <circle cx="48" cy="661" r="9" fill="none" stroke="#4a4a56" stroke-width="1.5"/>
+  <text x="70" y="658" fill="#f2f2f5" font-size="13" font-weight="600">Keep it small instead</text>
+  <text x="70" y="676" fill="#8a8a96" font-size="11">Stay under the cap. No back-up needed.</text>
+
+  <!-- escape hatch: never block a payment -->
+  <text x="210" y="716" fill="#6d6d78" font-size="11" text-anchor="middle">Not now &#8212; your access keeps working either way.</text>
+  <text x="210" y="738" fill="#6d6d78" font-size="10.5" text-anchor="middle">You will not be asked again for this amount.</text>
+</svg>
