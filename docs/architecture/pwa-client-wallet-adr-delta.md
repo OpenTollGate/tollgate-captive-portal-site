@@ -427,9 +427,13 @@ Second-order losses that are easy to miss, and which a captive portal makes
 - Clearing site data / "clear browsing data" / a profile reset / a private window
   that closes **destroys** the wallet — and a captive-portal PWA is exactly the
   context where a user is most likely to be in a throwaway browsing mode.
-- iOS Safari evicts IndexedDB and localStorage for origins unused for ~7 days
-  (ITP). A captive-portal session wallet the user only revisits will be silently
-  wiped. This is arguably a **bigger practical risk than device theft** `[D:wallet §4.3]`.
+- iOS Safari deletes script-writable storage — WebKit's own list names **IndexedDB** first, then
+  LocalStorage, media keys, sessionStorage, and service-worker registrations and cache — for origins
+  unused for ~7 days of Safari use (ITP). The cap is published as a **cookie** cap with
+  script-writable storage *aligned* to it, and the home-screen carve-out does not name IndexedDB, so
+  the install's protective scope is `UNVERIFIED` (§5.6.5). A captive-portal session wallet the user
+  only revisits will be silently wiped. This is arguably a **bigger practical risk than device
+  theft** [D:wallet §4.3].
 - A second device is a separate wallet with zero balance. There is no "sign in".
 
 ### 5.4 The decision on `T` — a resting balance is REQUIRED; `T` is its cap
@@ -638,24 +642,139 @@ not by the storage mechanism.**
 | Event | Seed in IndexedDB | Encrypted export (off-device) | PRF-wrapped key | FSA secret file | Net outcome |
 |---|---|---|---|---|---|
 | **`Clear-Site-Data: "storage"` / "clear site data"** | **DESTROYED** (total, by definition) | survives | **passkey survives** — platform keychain, re-derivable | handle record destroyed, **the file on disk SURVIVES** | Recoverable if *any* of export / FSA file / working PRF passkey exists. Otherwise **the balance ≤ `T` is lost — by design, and disclosed.** |
-| **iOS ITP 7-day eviction** | **DESTROYED if not installed; SURVIVES if added to the Home Screen** | survives | n/a on iOS today (PRF `create()`-only) | n/a on iOS | Recoverable if installed, or if the user took the export. |
+| **iOS ITP 7-day cap** | **At risk in a Safari tab; whether the install protects the IndexedDB bucket is `UNVERIFIED` (§5.6.5).** | survives | n/a on iOS today (PRF `create()`-only) | n/a on iOS | The cap is published by WebKit as a **cookie** cap with script-writable storage *aligned* to it; the home-screen carve-out does not name IndexedDB. **Do not depend on the install for this row** — recoverability is the export, and the loss is capped at `T`. |
 | **OS storage-pressure eviction** | survives if `persist()` granted; else evictable *without interrupting the user* | survives | survives | survives | Lowest-risk mode. Request `persist()` early, at a moment of user intent. |
 | **Device loss / theft** | gone | **survives — this is the export's purpose** | **survives** — passkey syncs; key re-derives | gone unless the user copied the file off | Recoverable via export or synced passkey. **Not recoverable from device-local storage alone — and this ADR must not pretend otherwise.** |
 | **Browser change / reset** | gone | survives | platform-dependent; a new passkey = **new PRF = old ciphertext unreadable** | survives if re-granted | The export is the only browser-independent rail. |
 | **Private browsing / one-shot captive-portal context** | lost at session end | survives only if the export was completed in that session | n/a | survives (written to the user's FS) | **Assume this happens.** Never create funds-bearing state the user has not exported without disclosing it. |
 
-#### 5.6.4 Install-to-home-screen is a DATA-DURABILITY requirement, not a UX nicety
+#### 5.6.4 Install-to-home-screen is RECOMMENDED and materially better — but it is NOT the proof store's durability guarantee
 
-On iOS the Home Screen install is the difference between "Apple has stated it will
-not evict this app's data" (a written, citable commitment in WebKit's ITP post: *"We
-do not expect the first-party in such a web application to have its website data
-deleted"*) and "script-writable storage — explicitly including IndexedDB,
-localStorage **and Service Worker registrations and cache** — is deleted after seven
-days of non-use". **For a bearer-value wallet that is a first-order design
-constraint**: the wallet's storage IS the money. The install prompt must be justified
-to the user in exactly those terms, and WS-1 (§6.1) must state it that way.
+> **CORRECTED 2026-10-14 — this subsection previously overstated the claim.** It said the install
+> means *"Apple has stated it will not evict this app's data"* and that the evicted class is
+> *"script-writable storage — explicitly including IndexedDB."* Both of those are **stronger than the
+> published sources support.** The correction, the pinned evidence, and the exact wording that may
+> and may not be used are recorded in **§5.6.5**; §5.6.3's table row and the two cross-references at
+> §6.6.5/§6.6.6 have been re-scoped to match. **Read §5.6.5 before quoting this subsection.**
 
-#### 5.6.5 What this ADR must NOT claim about secret storage
+What the install provably buys the wallet, and it is worth having:
+
+- a **stable app identity** and standalone launch (§3.3; the manifest `id` defect is §6.3);
+- an **install-gated** capability set — Periodic Background Sync is `CONTENT_SETTING_BLOCK` without
+  it, and on iOS there is **no service worker at all** without it ([SB §3.2]);
+- a **longer-lived service-worker registration**, which is what makes L1 (§6.6.4) reachable at all
+  rather than moot.
+
+What it must **not** be claimed to buy: **protection of the wallet's IndexedDB proof store.** The
+seven-day cap is, in WebKit's own framing, a **cookie** cap — *"ITP deletes all cookies created in
+JavaScript and all other script-writeable storage after 7 days of no user interaction with the
+website"* (`https://webkit.org/tracking-prevention/`, fetched 2026-10-14) — and the home-screen
+carve-out is one sentence of **expectation** about *"the first-party in such a web application"*
+whose *"website data"* it says it does not expect to see deleted, **not** a named guarantee about
+IndexedDB (`https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/`, 2020-03-24).
+The precise scope of the carve-out is therefore **`UNVERIFIED`** (§5.6.5), and it is **not** what the
+wallet's durability rests on.
+
+**The durability story that does not depend on the install is the one in §5.6.1–§5.6.3:** keep the
+device-local balance below `T`, offer the one-tap encrypted export once balance ≥ `T`, and accept
+that before the reveal the wallet is a **petty-cash purse** whose loss is capped and disclosed. The
+install remains **recommended** and remains a first-order *capability* requirement — it is the
+*gate* for background work and for a real service worker — but the ecash's survival is a function of
+the **export** and the **cap**, not of the install.
+
+#### 5.6.5 The iOS 7-day eviction claim — precise scope, pinned evidence, and the wording that is permitted
+
+This subsection exists because the riskiest sentence in this document is the one about iOS storage
+eviction. It is the kind of claim that is *remembered* more strongly than it was ever *published*,
+so the evidence is quoted here verbatim and the permitted wording is pinned to it. **No other part
+of this ADR may state a stronger version than what follows.**
+
+**(a) What WebKit actually published, quoted.**
+`https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/` (2020-03-24), section
+*"7-Day Cap on All Script-Writeable Storage"*, says: *"we announced that ITP would cap the expiry of
+client-side cookies to seven days… Now ITP has aligned the remaining script-writable storage forms
+with the existing client-side cookie restriction, deleting all of a website's script-writable
+storage after seven days of Safari use without user interaction on the site."* The affected list it
+gives is **Indexed DB, LocalStorage, Media keys, SessionStorage, Service Worker registrations and
+cache**, and the same post's home-screen paragraph reads: *"Web applications added to the home
+screen are not part of Safari and thus have their own counter of days of use… We do not expect the
+first-party in such a web application to have its website data deleted."*
+
+**(b) Which of those two quotations is load-bearing for a bearer-value wallet.** The *home-screen*
+sentence, and it is weaker than it reads. It is (i) a sentence of **expectation** (*"we do not
+expect"*), (ii) about a **generic** unit — *"the first-party"*, *"its website data"* — and (iii) in a
+post whose **declared subject is cookies**. So it supports the statement *"Apple states it does not
+expect an installed home-screen web app's website data to be evicted on the Safari counter"* and
+**nothing stronger**; it does **not** name IndexedDB, and it does **not** say "IndexedDB survives on
+the install". **Whether the carve-out as implemented today covers the IndexedDB bucket is
+therefore `UNVERIFIED`** and is recorded as an open field-check (§11(10)).
+
+**(c) The correction to the widespread "script-writable storage cap ⇒ IndexedDB is capped" reading.**
+Two independent observations weaken it, and both are primary:
+
+- **WebKit's own *normative* documentation is narrower than the blog post's headline.** The
+  WebKit Tracking Prevention policy page — *"7-Day Cap on All Script-Writeable Storage"* under
+  **Cookies** — says *"ITP deletes all cookies created in JavaScript and all other script-writeable
+  storage after 7 days of no user interaction with the website"*
+  (`https://webkit.org/tracking-prevention/`, fetched 2026-10-14). The heading is on the **cookie**
+  family, and the enumerated *"latter storage forms"* are the ones the blog post already listed.
+  There is no independent statement anywhere in the policy that gives **IndexedDB** a seven-day
+  lifetime of its own.
+- **Other user agents classify IndexedDB as *non-cookie* storage.** Mozilla, in its own words, ships
+  a policy "designed as an alternative to the **older cookie policies**"
+  (`https://developer.mozilla.org/en-US/docs/Web/Privacy/Storage_access_policy`), whose blocked sets
+  are enumerated per-API — *"Cookies and storage"*, *"localStorage"*, *"IndexedDB"*, *"Cache"*,
+  *"Messaging and Workers"* — i.e. IndexedDB is a **storage** category, not a cookie. MDN's eviction
+  page says the same from the other direction: Safari's proactive eviction *"deletes all cookies set
+  by server… Cookies set by server are exempt from this eviction"*, while the eviction **unit** is
+  whole-origin data (*"all of its data, not parts of it, is deleted at the same time"*) — cookies and
+  IndexedDB evict on **different triggers**, which is exactly why "the cap is on cookies" is a
+  meaningful distinction rather than a technicality
+  (`https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria`).
+
+**So the correction is this: the 7-day cap is a COOKIE cap, with script-writable storage *aligned to*
+it (localStorage being the documented implementation side-effect — WebKit's own justification is
+that third-party scripts *"moved to other means of first-party storage such as LocalStorage"*).** It
+is **not** a published, IndexedDB-specific eviction guarantee, and any sentence that treats
+"In 7 days iOS deletes the wallet's IndexedDB" — **or** its converse, "the install guarantees the
+wallet's IndexedDB survives" — as *settled* is **unverified and must not be stated as fact**.
+**`UNVERIFIED` is the label for both directions.** This is not a licence to weaken the design: the
+mitigations in §5.6.1–§5.6.3 never depended on either direction, because they bound the loss at `T`
+and rely on the **export** for durability.
+
+**(d) The permitted wording.** Use exactly this:
+
+> On iOS, adding the portal to the Home Screen is **recommended** and is a **capability**
+> requirement — it is what makes a service-worker registration and any background wake possible at
+> all ([SB §3.2]). Apple's published statement is that it does *not expect* an installed
+> home-screen web app's *"website data"* to be deleted on Safari's seven-day non-use counter
+> (`https://webkit.org/blog/10218/`, 2020-03-24). That statement does **not** name IndexedDB, so
+> whether it protects the wallet's proof store is **`UNVERIFIED`** (§5.6.5(b)). The wallet's
+> durability therefore rests on the **balance cap `T`** and the **one-tap encrypted export**, not on
+> the install — and the seven-day cap remains a real risk to **cookie-backed** state either way.
+
+**(e) `VERIFIED` vs `UNVERIFIED`, so a reader can tell them apart.**
+
+| Statement | Status |
+|---|---|
+| WebKit deletes index-closed script-writable storage after 7 days of Safari use without interaction | **VERIFIED** — named in the post and the policy page, IndexedDB first in the list |
+| The cap is described by WebKit in cookie terms, with script-writable storage *aligned* to it | **VERIFIED** — policy page heading + quoted justification |
+| Firefox/MDN classify IndexedDB as *storage*, not *cookies* | **VERIFIED** — MDN Storage Access Policy, per-API block enumeration |
+| Home-screen web apps are on their own day-counter | **VERIFIED** — same post, quoted above |
+| **The carve-out protects the wallet's IndexedDB bucket in practice** | **`UNVERIFIED`** — not named; a field check (§11(10)); do not assert it in either direction |
+| **Install-to-home-screen is required because otherwise the ecash is deleted in 7 days** | **`UNVERIFIED` as stated** — the correct statement is that the install is a *capability* requirement (§5.6.4) and the export is the durability rail |
+
+The WebKit source *files* were also checked, so the reader knows the limit of the check: the
+`monitoredDataTypes()` set that ITP acts on — read from
+`https://raw.githubusercontent.com/WebKit/WebKit/main/Source/WebKit/NetworkProcess/Classifier/WebResourceLoadStatisticsStore.cpp`
+— is `Cookies, DOMCache, IndexedDBDatabases, LocalStorage, MediaKeys, SearchFieldRecentSearches,
+SessionStorage, ServiceWorkerRegistrations, FileSystem, ScreenTime, EnhancedSecurityRecord`, i.e. the
+post's list is confirmed in code; but the *algorithm that selects which of them to delete for a given
+origin* lives in the classifier's own task buckets, which is where the home-screen carve-out would be
+implemented and which this ADR did **not** audit. **Stated so the claim's boundary is visible: the
+list is verified, the carve-out's per-type behaviour is not.**
+
+#### 5.6.6 What this ADR must NOT claim about secret storage
 
 Each is FALSE, and each is the kind of sentence that gets written by accident:
 
@@ -670,6 +789,8 @@ Each is FALSE, and each is the kind of sentence that gets written by accident:
 | "We can read the seed back out of the password manager." | `PasswordCredential` is Chrome-only and not read-back. |
 | "Restore from the seed alone." | **NUT-09 needs three things: seed + per-keyset counter + mint URL(s)** — and only `secretsPolicy: 'deterministic'` outputs are recoverable at all. Any backup blob must carry all three with the counter at a defined height. |
 | "Top up via a locked quote and restore later." | **NUT-20 locked quotes are NOT seed-recoverable.** Exclude them from the auto-top-up loop. |
+| "Add to Home Screen on iOS and your money is safe — the install exempts the wallet from the 7-day deletion." | **The scope of the carve-out is `UNVERIFIED` (§5.6.5).** WebKit's carve-out is about *"website data"* generically and does not name IndexedDB; the 7-day cap is published as a **cookie** cap with script-writable storage aligned to it. The install is a *capability* requirement; durability is the `T` cap plus the export. |
+| "In 7 days iOS deletes the wallet's IndexedDB." | **Also `UNVERIFIED` as a flat statement** (§5.6.5(c)). It is the `UNVERIFIED` converse of the row above, and the same rule applies: label it, do not assert it. |
 
 ---
 
@@ -779,7 +900,20 @@ the plain-HTTP origin and the app degrades predictably, until (a) in §3.4 lands
 ### 6.6 Background autonomy — the requirement, the honest limits, and the three-layer ship decision (mandated section)
 
 This is the ADR the operator explicitly asked for. The spike behind it is
-`~/reports/pwa-cashu/SPIKE-background-execution.md`.
+`~/reports/pwa-cashu/SPIKE-background-execution.md` — 375 lines, 45 numbered primary
+sources, primary-source-only method (WHATWG/W3C/WICG specs, MDN browser-compat-data,
+`chromium/src` on `main` read from gitiles, WebKit Bugzilla and
+`WebKit/standards-positions`, `webkit.org`, Chrome Status, Apple developer docs, IETF
+RFCs, the Cashu NUTs). Citations to it in this section are [SB §N] for a section and
+[SB N] for one of its 45 sources; where a constant is quoted it is quoted **verbatim
+from the source, not re-derived** — the spike was read, not re-run.
+
+**The honesty rule for this whole section, stated once:** every capability below is
+described at the strength the platforms' own sources support, and anything that could
+not be pinned to one of those sources is labelled **`UNVERIFIED`** rather than softened
+into vague language. That applies in both directions — a claim is not made *stronger*
+to look better, and it is not made *weaker* to look cautious (§5.6.5 is the worked
+example).
 
 #### 6.6.1 The requirement, in the operator's own words
 
@@ -867,6 +1001,24 @@ autonomy, because its whole purpose is to *avoid* running your code.
 `None`. **There is therefore no web API to schedule a local notification for a future
 time** — the web platform has no "remind me in 20 minutes" primitive.
 
+**The honest user-facing promise — the sentence the product is allowed to make, per platform.**
+This is the operator's requirement stated honestly rather than as a hidden degradation, and it is
+what Panel 1 (§7.1) must convey in the user's own language:
+
+- **Android:** *the wallet may top up on its own* — best-effort, when the app was last open, only on
+  a network the device has connected to before, and only while the platform permits it. It can
+  happen without you. It is **not guaranteed to**.
+- **iOS:** *the wallet tops up when you next open the app.* That is the whole promise. There is no
+  background top-up on iOS without a push server, so the product says so up front instead of
+  implying one.
+
+**Why this is the right way to state it:** a promise of "it may top up by itself on Android, and on
+iOS it will do it the moment you open the app" is a promise we can keep on both platforms, and it
+degrades only in *latency*, never in *correctness* (§6.6.4's L0). The failure mode to avoid is the
+hidden one — the user believing the phone is buying internet while asleep and discovering otherwise
+only when the portal denies them. **Do not write, or let a panel imply, a uniform behaviour across
+platforms, because there isn't one.**
+
 #### 6.6.3 The router CANNOT be the waker
 
 Three structural facts, all of which the portal's own design produces:
@@ -915,6 +1067,29 @@ background sync, on a router-side waker, or on a native app (a native app is the
 path to real *Android* autonomy, but it abandons the single-codebase PWA premise and
 **does not solve iOS either** — `BGTaskScheduler` still decides when, if ever).
 
+##### 6.6.4.1 L2's decision-ready inventory — the six documented workarounds, ranked, NOT to be built now
+
+**Operator decision (2026-10-14): do not build a push service and do not build a native app now.**
+The purpose of this table is that a **future ralph loop can pick one up without re-deriving it** —
+each row carries its cost and its sovereignty implication. **None of these is being built, and none
+should start without an operator decision that supersedes this one.** Ranking axes are the spike's
+[SB §6]: reliability, autonomy, user friction, and sovereignty (does it add a third party).
+
+| # | Workaround | What it actually buys | Cost | Sovereignty | Verdict for a future loop |
+|---|---|---|---|---|---|
+| **1** | **Self-hosted Web Push** | The **only** wake source for a *closed* app on **both** platforms; on Android it wakes a closed app, and on iOS it is push-or-nothing [SB §5.3][SB 9][SB 44] | On iOS it **mandates a visible notification per wake**, with the subscription **permanently revoked** if the app ever fails to display one [SB §3.2][SB 10][SB 11]; plus an always-online server to run | **Breaks it** — introduces an always-online third party in the money path (§6.6.3) | **This is exactly L2** (§6.6.4) — optional, additive, removable, never the sole rail |
+| **2** | **Native Android app** | **Real Android autonomy**: WorkManager periodic + FCM, Doze-aware [SB §6][SB 38] | Two codebases, Play Store, signing, updates | Mixed | Only if **Android background autonomy becomes a stated product requirement**; it abandons the single-codebase premise |
+| **3** | **Native iOS app** | **It does not solve the problem.** `BGTaskScheduler` is discretionary — the system decides *when*, and the task may simply not run [SB §6][SB 38] | Two codebases, App Store, signing | Mixed | **Do NOT plan an iOS native path around `NEHotspotHelper`**: verified 2026-10-14 against Apple's own documentation JSON, its platforms are *"iOS: introduced 9.0, deprecated at 26.0"* (message: *"Use NEHotspotManager API"*), i.e. **removed in iOS 26** [SB §6][SB 39] |
+| **4** | **Android TWA (Play Store shell)** | Nothing for scheduling — a PWA in a Play Store shell **changes distribution, not scheduling**; the same browser scheduler runs underneath [SB §6][SB 41] | Play Store listing overhead | Neutral | **Distribution-only.** Never cite it as an autonomy fix |
+| **5** | **App Store webview wrapper** | Nothing; it cannot schedule and it must survive review | Review risk | Neutral | Runs into App Store Review Guideline **4.2 Minimum Functionality** — *"include features, content, and UI that elevate it beyond a repackaged website"* [SB §6][SB 40] |
+| **6** | **The L0/L1 architecture already shipping** | **Everything the product actually promises today** — correctness on next open, plus best-effort Android acceleration | None beyond L0/L1 itself | **Clean** — no third party at all | **This is the current answer** and the one this ADR ships |
+
+**A cross-cutting precondition for rows 1–5:** every one of them is **unreachable until §3.4's
+transport finding lands**. Push needs a **secure-context, installable origin**; a native app needs
+the same portal to authenticate against; a TWA needs an installable web app to wrap
+[SB §0][SB 26][SB 27][SB 28]. **Transport is step zero for all six rows — including the one we are
+shipping.**
+
 #### 6.6.5 The persistence contract that makes a background melt safe
 
 A `mint quote → swap → melt → verify` sequence cannot be made atomic inside a
@@ -942,8 +1117,10 @@ Cashu's own state primitives:
    serialises them and a duplicate attempt must be a no-op rather than a second spend.
 6. **Storage must be durable and origin-scoped** — IndexedDB, not memory (Chrome's own
    warning: *"Any global variables you set will be lost if the service worker shuts
-   down. Instead of using global variables, save values to storage."*), and on iOS the
-   ITP carve-out for installed web apps is what keeps it alive (§5.6.4).
+   down. Instead of using global variables, save values to storage."*). **Do not
+   justify this by the iOS ITP carve-out** — that carve-out does not name IndexedDB and
+   its scope is `UNVERIFIED` (§5.6.5). Durability here comes from the journal being
+   origin-scoped and from the balance being capped at `T` (§5.4, §5.6.4).
 7. **Bounded abandonment.** If the address/entitlement changed, mark the intent
    `abandoned_rotated` and **stop**. Retrying a melt whose invoice belonged to a dead
    address burns value for entitlement that no longer exists. The loss is capped at
@@ -967,32 +1144,57 @@ creates wakes.
   background context**.
 - **Degradation, not failure**: *"with background execution and push both
   unavailable, all value is still delivered on the next foreground open."*
-- **On iOS the Home Screen install is a DATA-DURABILITY requirement, not a UX
-  nicety**, because that is the only configuration in which ITP does not delete
-  script-writable storage — including service-worker registrations — after seven days
-  of non-use (§5.6.4).
+- **On iOS the Home Screen install is REQUIRED for CAPABILITY — a real service worker and any
+  background wake — and is RECOMMENDED for identity and registration lifetime, but it is NOT
+  promised as proof-store data durability.** Apple's published carve-out is about *"website data"*
+  generically and does not name IndexedDB; its scope is `UNVERIFIED` (§5.6.5). The wallet's
+  durability promise is the `T` cap plus the one-tap encrypted export (§5.6.4).
 - **The pre-auth reachability assumption is declared** (§6.6.7), because the design's
   honesty depends on which way the module answers.
 
 #### 6.6.7 What this ADR must NOT claim
 
-1. ❌ **"The PWA tops up in the background while the phone is asleep."** Doze blocks
-   network and defers syncs; iOS has no non-push wake.
-2. ❌ **"iOS supports this."** With no push server, iOS background autonomy is zero.
-3. ❌ **"Top-ups happen every N minutes/hours."** The developer's `minInterval` is a
-   *request*, rounded up; the shipped floor is 12 h and the engagement multiplier can
-   make it never.
-4. ❌ **"We schedule a local reminder notification."** Notification Triggers is behind
-   a flag with no milestone; **UNSUPPORTED**.
-5. ❌ **"The app stays alive in the background."** *"A user agent may terminate service
-   workers at any time it: Has no event to handle."* Only `waitUntil()` and a bounded
-   budget exist.
-6. ❌ **"Background sync guarantees delivery."** Retries are UA-heuristic and capped at
-   3 attempts; the spec's own example falls back to telling the user.
-7. ❌ **"The purchase survives a roam."** Entitlement is address-scoped under R1; the
-   promise is a **bound on the loss**, not continuity.
-8. ❌ **"It works today."** It does not, until the portal is a secure context and
-   installable.
+Each prohibition carries the citation that **falsifies** it, so a future contributor cannot
+re-derive the claim from the same sources and believe it was never checked. Spike citations are to
+`~/reports/pwa-cashu/SPIKE-background-execution.md` by section ([SB §N]), which carries the
+[1]–[45] source list.
+
+1. ❌ **"The PWA tops up in the background while the phone is asleep."** Android Doze *"prevents apps
+   from accessing the network and defers their jobs, syncs, and standard alarms"* [SB §2.2][SB 36];
+   iOS has no non-push wake at all [SB §3.2][SB 42][SB 43][SB 8].
+2. ❌ **"iOS supports this."** With no push server, iOS background autonomy is **exactly zero**:
+   `PeriodicSyncManager` is `safari.version_added: false` [SB §3.2][SB 42] and `SyncManager`
+   likewise with WebKit bug 182565 open since 2018 [SB §3.2][SB 7][SB 43].
+3. ❌ **"Top-ups happen every N minutes/hours."** The developer's `minInterval` is a *request* rounded
+   **up** to `site_engagement_factor × 12 h`; the shipped floor is `kMinPeriodicSyncEventsInterval =
+   Hours(12)` and a zero engagement penalty returns `base::TimeDelta::Max()` — the event does not fire
+   late, it **never fires** [SB §2.3][SB 13][SB 15][SB 17].
+4. ❌ **"We schedule a local reminder notification."** Notification Triggers (`showTrigger`) is
+   *"In developer trial (Behind a flag)"* with **no milestone** and Firefox/Safari `None` — there is
+   **no web API to schedule a notification for a future time** [SB §2.1][SB 21].
+5. ❌ **"The app stays alive in the background."** *"A user agent may terminate service workers at any
+   time it: Has no event to handle"* [SB §4.1][SB 25]; only `waitUntil()` and a bounded budget
+   exist.
+6. ❌ **"Background sync guarantees delivery."** One-shot retries are UA-heuristic — *"the user agent
+   may decide to retry it at a time of its choosing"* — and capped at `kMaxSyncAttempts = 3` with a
+   5/15-minute backoff; the spec's own example falls back to telling the user [SB §2.4][SB 5][SB 13].
+7. ❌ **"The purchase survives a roam."** Entitlement is address-scoped under R1 (§2.2); the promise
+   is a **bound on the loss** (one granule, abandoned not retried), not continuity [SB §5.2].
+8. ❌ **"It works today."** It does not, until the portal is a **secure context and installable** —
+   Chrome's installability criteria require HTTPS or loopback and every background API is
+   secure-context-gated, and the portal is served on `http://<router-lan-ip>:2051` [SB §0][SB 26][SB 27][SB 28].
+9. ❌ **"Add to Home Screen on iOS and your money is safe — the install stops the 7-day deletion."**
+   Apple's published carve-out is a sentence of *expectation* about *"the first-party"*'s *"website
+   data"* and **does not name IndexedDB**; the 7-day cap is published by WebKit as a **cookie** cap
+   with script-writable storage *aligned* to it §5.6.5(a)–(c). The install is a **capability**
+   requirement (§5.6.4); durability is the `T` cap plus the export.
+10. ❌ **"In 7 days iOS deletes the wallet's IndexedDB."** The `UNVERIFIED` converse of item 9, and
+    equally not permitted as a flat statement §5.6.5(c). **Label it, do not assert it in either
+    direction.**
+11. ❌ **"Background sync registration is free and always available."** Registration *"may only be
+    made while the main app is open"*, i.e. the platform grants durability of the attempt, **not**
+    freedom to schedule it [SB §2.4][SB 29] — and Periodic Background Sync is
+    `CONTENT_SETTING_BLOCK` without an installed PWA and never prompts [SB §2.3][SB 16].
 
 #### 6.6.8 OPEN BLOCKING QUESTION — a MODULE policy question, before implementation
 
@@ -1037,6 +1239,20 @@ network**. Not a blocker; worth writing down.
   if taps *do* reach the worker, the push option is stronger than ranked here).
 - Verify whether Periodic Background Sync ever fires for a venue-portal origin at all,
   given the previously-connected-network gate and the first-visit case.
+- **Instrument the cross-platform asymmetry on both device families.** The launch-critical
+  observation is the one §6.6.2's promise rests on: that the Android path really can top up with the
+  app closed, and that the iOS path really does top up on next open. If the iOS observation
+  contradicts the promise, the **promise** changes — not the observation.
+- **Resolve the item that is currently `UNVERIFIED` and load-bearing in two places: does the iOS
+  Home Screen install actually protect the wallet's IndexedDB bucket from the 7-day cap?** The
+  published carve-out is about *"website data"* generically and does not name IndexedDB (§5.6.5(b)),
+  so it is recorded as an **open question §11(10)** rather than settled. Field check: install the
+  web app, leave it unopened for >7 days of Safari use, and read the IndexedDB bucket back. Until
+  that is done, no claim in either direction may appear in user-facing text.
+- **Confirm on-device what Apple's documentation states about `NEHotspotHelper` for the current
+  release train**, since it is `deprecated at 26.0` per Apple's own docs JSON (verified 2026-10-14,
+  §6.6.4.1 row 3). It governs whether any iOS native path is even technically available to a future
+  loop, so the deprecation is a planning input, not trivia.
 
 ### 6.7 Scope — what the operator has decided is in and out, and when
 
@@ -1061,6 +1277,12 @@ Decisions this section records:
 - **Sequencing unchanged:** the red baseline is fixed first (§6.2), the transport
   question resolves before any background-autonomy work (§3.4 / §6.6.1), and L0
   ships and is proven crash-safe before L1 or L2 are attempted (§6.6.4).
+- **`if`/`elif`, stated precisely so a future loop cannot over-build:** **`if`** the origin becomes
+  secure-context and installable (§3.4) **`then`** L0+L1 ship; **`elif`** the origin does not
+  **`then`** L0 alone is the entire product, and the "until §3.4 resolves" caveats come out of the
+  user-facing copy (§6.6.7 item 8) but nothing else changes; **L2 stays out either way until the
+  operator says otherwise.** §6.6.4.1 is an inventory, **not a backlog** — it exists so the option
+  does not have to be re-derived, not so it can be started.
 
 ---
 
@@ -1139,6 +1361,9 @@ is *"a UX convenience, explicitly not custody"*). The panel shows:
 | Panel 3 reachability corrected — reachable and designed-for, still never before a balance and never mid-payment | §5.5, §7.3 |
 | Secret-storage decision documented (device-local + persisted + cap; one-tap encrypted export; opportunistic PRF; FSA for the fleet) with traps and prohibitions | §5.6 |
 | Background-autonomy requirement documented with the honest per-platform limits, the three-layer ship decision (L0 mandatory / L1 mandatory best-effort / L2 optional-removable), the promises, the prohibitions, and the open blocking module question | §6.6 |
+| Background-execution **limits + documented workarounds** recorded as a decision-ready inventory (L2 included) with cost and sovereignty per option, explicitly marked NOT-to-build-now so a future loop need not re-derive it | §6.6.4.1 |
+| Every prohibition carries the citation that **falsifies** it, not just an assertion that it is false | §6.6.7 items 1–11 |
+| iOS install-durability claim scope-corrected: install = **capability** requirement, durability = the `T` cap + the export; carve-out scope labelled **UNVERIFIED** | §5.6.4, §5.6.5, §6.6.6 |
 | Operator's scope framing recorded (ADR consolidated to the default branch as part of this PR) | §6.7, §6.6.8 |
 | Every claim cited `file:line` or doc URL | inline throughout; unmeasured items labelled `UNMEASURED` |
 | Docs lint/render passes | §10 |
@@ -1240,6 +1465,22 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
 - **Cross-reference hygiene:** section numbering was re-checked after the two
   mandated sections were inserted. `§7.3` (not `§7.4`) is Panel 3; `§6.6` is
   background autonomy; `§6.7` is scope; the new open question is `§11(6)`.
+- **Amendment discipline (second pass, 2026-10-14) — limitations, workarounds, and the iOS correction:**
+  a follow-up pass added **no new section on background autonomy** (the concurrent pass had already
+  landed §6.6, so this pass **extended it in place**). What it added and changed: the decision-ready
+  workaround inventory **§6.6.4.1**; the honest per-platform user-facing promise in **§6.6.2**; the
+  falsifying citation on each of **§6.6.7 items 1–11** (items 9 and 10 are new and about install
+  durability); the [SB §N] citation convention, the spike's 375-line/45-source provenance, and the
+  global honesty rule in **§6.6**'s preamble; extra field-verification obligations in **§6.6.9**; the
+  `if`/`elif` scope note in **§6.7**; the §8 acceptance rows above; and open question **§11(10)**.
+  **The correction:** §5.6.4 was **restated** (install = capability requirement, not a data-durability
+  guarantee), the new §5.6.5 (the eviction-scope audit) was **added** to pin the published wording, label the carve-out's scope
+  `UNVERIFIED`, and prescribe the permitted sentence, and the strong version of the claim was
+  softened to match the evidence in **five more places** — §5.3's bullet, §5.6.3's table row,
+  the pre-existing prohibition subsection (renumbered §5.6.6 from §5.6.5), §6.6.5 item 6, and §6.6.6. **No claim was deleted and none was
+  strengthened**; the two directions that could not be verified from a primary source (the install
+  guarantees IndexedDB survival / iOS deletes IndexedDB in 7 days) are both labelled `UNVERIFIED`
+  rather than asserted or silently dropped.
 
 ---
 
@@ -1276,3 +1517,16 @@ pure dead dependency of the payment path, and the `CU105` i18n strings
    penalty observed on a real device; and the iOS `notificationclick` BCD absence,
    which is load-bearing for the push option and is flagged `must-verify-on-device`
    rather than treated as settled.
+9. **`NEHotspotHelper`'s deprecation in iOS 26** (Apple's docs JSON: `introduced 9.0`,
+   `deprecated at 26.0`, message *"Use NEHotspotManager API"* — verified 2026-10-14,
+   §6.6.4.1 row 3). Recorded as a **planning input** for any future iOS native path: the one
+   genuinely native iOS Wi-Fi wake primitive is being withdrawn, and its named replacement
+   (`NEHotspotManager`) has not been examined by this delta.
+10. **`UNVERIFIED` and load-bearing in two places — does the iOS Home Screen install actually
+    protect the wallet's IndexedDB bucket from the 7-day cap?** WebKit's published carve-out is
+    about *"website data"* generically and does not name IndexedDB, and the 7-day cap is published
+    as a **cookie** cap with script-writable storage aligned to it (§5.6.5(b)–(c)). This is the
+    document's own highest-priority field check: it is the difference between the install being a
+    *capability* requirement (what we claim) and a *data-durability* requirement (what we do not).
+    Until it is resolved, **both** the strong claim and its flat converse are `UNVERIFIED` and
+    neither may reach user-facing text.
