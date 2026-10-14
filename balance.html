@@ -9,6 +9,14 @@
     />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Tollgate Balance" />
+    <!--
+      balance.html accepts a pasted Cashu token, so it needs the SAME CSP as
+      index.html. It previously shipped none at all — the one entry point on
+      the portal with no policy, on the page that handles a bearer instrument.
+      Kept byte-for-byte equivalent to index.html's policy on purpose: two
+      policies that drift are how a hole gets opened in one of them.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https: ws: wss:; font-src 'self' data:; media-src 'self';" />
     <link rel="apple-touch-icon" href="/logo192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>Tollgate Balance</title>

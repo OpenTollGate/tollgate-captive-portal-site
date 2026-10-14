@@ -139,5 +139,17 @@
   "balance_empty": "Enter or scan a Cashu token above to see your internet balance.",
   "balance_rate": "Rate: {{price}} {{unit}} per {{step}}",
   "balance_summary": "A {{token}} token grants {{access}} of internet access.",
-  "balance_go_purchase": "Purchase Internet Access"
+  "balance_go_purchase": "Purchase Internet Access",
+  "install_signpost_title": "Save this portal to your home screen",
+  "install_signpost_unavailable": "Your browser cannot install this page directly — it is served over an unencrypted connection, which browsers only allow for installable apps over HTTPS. Follow the steps below to add it to your home screen instead.",
+  "install_signpost_manual_ios": "Tap the Share button, then choose \"Add to Home Screen\".",
+  "install_signpost_manual_android": "Open the browser menu (⋮) and choose \"Add to Home screen\".",
+  "install_signpost_manual_desktop": "Use your browser menu to pin or install this page as an app.",
+  "install_signpost_note": "Adding it to your home screen gives you a full-screen app that opens this portal directly. It works only while connected to this network.",
+  "install_signpost_already_installed": "You are running the installed app.",
+  "low_security_notice_title": "This connection is not encrypted",
+  "low_security_notice_body": "This portal is not served over HTTPS, so do not enter a seed phrase or any password here.",
+  "paste_fallback_title": "No app needed",
+  "paste_fallback_body": "You can pay without installing anything — paste a Cashu token below, or scan it with another device. The router checks it for you.",
+  "paste_fallback_trust_note": "Your token is sent to this router only. Nothing is stored in this browser beyond what is needed to complete the payment."
 }

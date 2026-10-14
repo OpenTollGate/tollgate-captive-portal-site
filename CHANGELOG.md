@@ -5,6 +5,57 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Security
+- **The CSP blocked every Cashu mint call, and `balance.html` had no CSP at all.**
+  `index.html` shipped `connect-src 'self' http: ws:`, and CSP scheme-sources are
+  scheme-exact — `http:` does not match an `https:` URL. Every mint the wallet talks to is
+  `https:` (e.g. `https://mint.minibits.cash`), so the mint fee pre-check was blocked,
+  `getMintSwapFee` fell back to `{status: 0}` ("no pre-check"), and the `CU110` "token
+  entirely eaten by the fee" guard **never fired** — the failure the file's own comment says
+  must never happen. `connect-src` now covers `https:` and `wss:`. Separately, `balance.html`
+  — the second entry point, and the one that accepts a pasted Cashu token, a bearer
+  instrument — shipped **no policy whatsoever** while `index.html` shipped a restrictive one;
+  it now carries the byte-identical policy, because two policies that drift is how a hole
+  opens in one of them.
+
+### Fixed
+- **The web app manifest could not install on the origin it is served from.**
+  `public/manifest.json` declared `start_url: "."`, which resolves to `/` — and the served
+  webroot contains `splash.html` and **no `index.html`** (the build renames it, and
+  `rename-html` rewrites `asset-manifest.json` only, never the manifest). The installed app
+  therefore opened a 404 on a real router. `start_url` is now `splash.html`, with an explicit
+  `scope`, an explicit **`id`**, a `purpose:"maskable"` icon, and a `background_color` that
+  matches the dark UI instead of flashing white. The `id` is the load-bearing field: without
+  it an installed app's identity *is* its `start_url`, so fixing `start_url` later would have
+  orphaned every existing install.
+- **The same three defects in the admin board's manifest.** `scripts/build-all.mjs` generated
+  `start_url: base` with no `id`, no `scope` and no maskable icon. Fixed in the same change;
+  the regenerated `admin/public/manifest.json` is committed.
+
+### Added
+- **`docs/architecture/pwa-wallet-secure-context-delta.md`** — the measured secure-context
+  finding and the install mechanism. Service workers, the install prompt, the Cache API,
+  `crypto.subtle` and `navigator.storage.persist` are all secure-context-gated, and a captive
+  portal is `http://<router-lan-ip>:2051`, which is Not Trustworthy per W3C Secure Contexts
+  §3.1 — "neither origin's domain nor port has any effect". The portal page is therefore a
+  **signpost**, not an install surface.
+- **`tests/e2e/installability.spec.mjs`** — the gate. The existing rails could not observe
+  this: `playwright.config.js` gives every test `baseURL = http://localhost:5173`, and
+  `localhost` is Potentially Trustworthy by spec — the one address exempt from the rule under
+  test. The spec binds the same bytes to a **non-loopback LAN address** (negative control:
+  every primitive absent) and to loopback (working path: every primitive present), so the
+  only variable is the hostname.
+- **`src/helpers/pwa-install.js`** — capability detection that branches on
+  `window.isSecureContext` **first**. On an insecure origin `navigator.serviceWorker` does not
+  exist at all, so the obvious feature-detect crashes with
+  `TypeError: Cannot read properties of undefined (reading 'register')` instead of
+  degrading — it is **not** a catchable `SecurityError`.
+- **`src/helpers/money-path.js`** + **`public/sw.js`** — the money-path cache contract, as an
+  executable predicate. The catastrophic bug is not a stale invoice but a fetch handler that
+  **synthesises a paid state**, so `shouldIntercept()` is the negation of `mustNotBeCached()`
+  and the fail-closed branch is the one needing no thought. POST is mechanically uncacheable
+  (the Cache API throws on a non-GET), so offline "pay later" must be an IndexedDB outbox with
+  idempotency keys, never a cache trick. The precache is a positive allow-list, never a glob.
+
 - **Admin board: fail closed against a router with no root credential.** rpcd's
   login check (`rpc_login_test_password`, `session.c`) begins with
   `if (!hash || !*hash) return true;` and the distribution's `/etc/config/rpcd`
