@@ -175,6 +175,19 @@ All notable changes to this project are documented here.
   actually owns instead of a fixed `:8443`.
 
 ### Tests
+- **TIP-01 parse-surface pinning suite (new, offline):** `tests/unit/tollgate-tip-surface.test.js`
+  pins byte-exact the user-facing protocol subset the portal parses — the bootstrap
+  pair (`GET /` details event + `GET /whoami` device text), the kind-21023 notice
+  mapping (level/code defaults, `retryable`, i18n fallbacks), and the price-sheet
+  tags (exact option mapping and price-per-step sort, TG004, malformed-tag skips)
+  — with fixtures taken from `OpenTollGate/tollgate` TIP-01.md's own examples.
+  Two pinned-as-is defects are now visible instead of tribal knowledge: skipped
+  `price_per_step` tags leave `undefined` holes in `getAccessOptions`' result
+  (trailing holes reach `UnitInput`'s `pricingInfo`), and an all-skipped result
+  still has truthy `.length`, so every consumer's `if (options.length)` gate
+  passes with `options[0] === undefined`. Mutation-checked (the notice mapping
+  and the sort comparator each drive a failure when reverted).
+  (part of [#34](https://github.com/OpenTollGate/tollgate-captive-portal-site/issues/34))
 - **`92` mapping + marker suites (new, offline):** `packaging/tests/test-92-entry-ui-mapping.sh`
   drives the whole script in a sandbox (`packaging/tests/lib-92-sandbox.sh`): both
   mappings against the literal port lists, invariant 3 (one binder per port, with
