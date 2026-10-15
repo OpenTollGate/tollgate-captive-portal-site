@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual trigger, added after the org-level Actions outage (#80): a dispatch
+  # needs no push and no PR, so once Actions is restored it is the cleanest
+  # probe that runs are being created again — and it lets maintainers re-run
+  # CI on main after a flake without a dummy commit.
+  workflow_dispatch:
 
 permissions:
   contents: read
