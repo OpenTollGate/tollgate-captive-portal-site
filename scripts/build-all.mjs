@@ -98,11 +98,35 @@ if (brand !== requested) {
 const name = desc.name;
 const themeColor = desc.themeColor || '#FF6961';
 
+// The admin board's manifest. Sibling of the guest portal's
+// `public/manifest.json`, which was structurally broken for the same reasons and
+// is fixed in the same change — see docs/architecture/pwa-client-wallet-adr-delta.md §6.3.
+//
+// `start_url: base` was a bare '/' (or the VITE_BASE_PATH), which resolves to a
+// directory request the board's webroot answers with index.html — so it happened
+// to work here. It is replaced with an explicit document for three reasons:
+//
+//  1. `id` must exist. Without it an installed app's identity is derived from
+//     `start_url`, so changing `start_url` later ORPHANS every existing install.
+//     `id` is origin-relative and must be stable forever.
+//  2. `scope` must be explicit. It defaults to the start_url's directory, which
+//     happens to be the origin root today; stated explicitly it cannot drift with
+//     `start_url`, and it is what lets the board own its own namespace if it is
+//     ever served from a sub-path.
+//  3. a `maskable` icon, or Android letterboxes the brand icon into a circle.
+//
+// `base` is normalised to end in '/' so scope resolution stays predictable.
+const scopeBase = base.endsWith('/') ? base : `${base}/`;
+
 const manifest = {
   name,
   short_name: name,
   description: `${name} Router Admin Dashboard`,
-  start_url: base,
+  // `id` is deliberately NOT derived from `base`: a reseller deploying under a
+  // different VITE_BASE_PATH must still be recognised as the same app.
+  id: 'tollgate-admin-board',
+  start_url: `${scopeBase}index.html`,
+  scope: scopeBase,
   display: 'standalone',
   background_color: '#111111',
   theme_color: themeColor,
@@ -111,11 +135,23 @@ const manifest = {
       src: `assets/brand/${brand}/icon-colour.png`,
       sizes: '192x192',
       type: 'image/png',
+      purpose: 'any',
     },
     {
       src: `assets/brand/${brand}/icon-colour.png`,
       sizes: '512x512',
       type: 'image/png',
+      purpose: 'any',
+    },
+    {
+      // The same artwork, declared maskable as well so Android does not
+      // letterbox it. A separate maskable-safe asset is the better long-term
+      // fix; declaring the existing icon is correct-but-conservative and must
+      // be revisited if the brand mark ever runs to the canvas edge.
+      src: `assets/brand/${brand}/icon-colour.png`,
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable',
     },
   ],
 };

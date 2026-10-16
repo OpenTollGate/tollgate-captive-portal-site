@@ -9,7 +9,24 @@
     />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Tollgate Captive Portal" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: ws:; font-src 'self' data:; media-src 'self';" />
+    <!--
+      CSP. `connect-src` must cover BOTH schemes deliberately:
+        - `http:` / `ws:` — the portal itself is served over plain HTTP on the
+          router's LAN IP, and the TollGate API lives on that same non-secure
+          origin.
+        - `https:` — every Cashu mint the wallet talks to (NUT-06/nUT-07 keyset
+          and fee calls, e.g. https://mint.minibits.cash). CSP scheme-sources
+          are SCHEME-EXACT: `http:` does not match an `https:` URL. Without
+          `https:` the mint fee pre-check is blocked, getMintSwapFee silently
+          falls back to {status: 0}, and the CU110 "token entirely eaten by the
+          fee" guard never fires — the failure mode src/helpers/mint-fee.js
+          says must never happen.
+      `worker-src` is intentionally unset: it falls back to `default-src 'self'`,
+      which is correct for a same-origin service worker. NOTE that the CSP is
+      NOT what blocks a service worker here — the missing secure context is
+      (see docs/architecture/pwa-client-wallet-adr-delta.md §3).
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https: ws: wss:; font-src 'self' data:; media-src 'self';" />
     <link rel="apple-touch-icon" href="/logo192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>Tollgate Captive Portal</title>
