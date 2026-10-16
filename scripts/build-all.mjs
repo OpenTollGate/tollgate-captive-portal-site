@@ -28,6 +28,7 @@ import {
   normalizeBrandId,
   validateDescriptor,
 } from './brand-id.mjs';
+import { applyGuestBranding } from './guest-brand.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
@@ -128,6 +129,40 @@ writeFileSync(
 console.log(
   `[build-all] brand="${brand}" (name="${name}") base="${base}" -> admin/public/manifest.json`,
 );
+
+// The GUEST portal is the page a customer sees on the captive network, and it takes its
+// wording from public/locales/<lng>.json and its PWA identity from public/manifest.json.
+// Brand those from the SAME descriptor, so the admin board and the guest page cannot
+// disagree about who is running the network.
+//
+// Owner-edit safety: a descriptor whose name is the generic default leaves the guest
+// files exactly as shipped, and `applyGuestBranding` returns the inputs unchanged when
+// there is nothing to apply - so an unbranded build writes back what it read.
+// Only when the operator actually SELECTED a brand (VITE_BRAND was given). With no
+// selection we fall back to the default descriptor for the ADMIN app, but the guest
+// files must stay exactly as upstream ships them - they already ARE the generic build's
+// asset, and rewriting them would change what every unbranded user sees.
+if (requested) {
+  const manifestPath = path.join(repo, 'public', 'manifest.json');
+  const localePath = path.join(repo, 'public', 'locales', 'en.json');
+  const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'));
+  const before = [readFileSync(manifestPath, 'utf8'), readFileSync(localePath, 'utf8')];
+  const guest = applyGuestBranding(readJson(manifestPath), readJson(localePath), desc);
+  const after = [
+    `${JSON.stringify(guest.manifest, null, 2)}\n`,
+    `${JSON.stringify(guest.strings, null, 2)}\n`,
+  ];
+  // Write only what actually changed, so an explicitly-branded build that happens to
+  // match the shipped values does not churn the files either.
+  if (after[0] !== before[0]) writeFileSync(manifestPath, after[0]);
+  if (after[1] !== before[1]) writeFileSync(localePath, after[1]);
+  console.log(
+    `[build-all] guest branding -> name="${guest.manifest.name}"` +
+      (after[0] === before[0] && after[1] === before[1] ? ' (already up to date)' : ''),
+  );
+} else {
+  console.log('[build-all] guest branding: not selected (VITE_BRAND unset) — guest files unchanged');
+}
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const run = (script, env = {}) =>
