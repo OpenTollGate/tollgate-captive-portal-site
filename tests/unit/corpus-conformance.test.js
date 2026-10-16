@@ -38,6 +38,7 @@ describe("token corpus decode conformance", () => {
   it.each([
     ["v4_v2_kg181", 4, 1],
     ["v3_v2_kg181", 4, 1],
+    ["v3_v2_full66", 4, 1],
     ["v3_v2_valid", 4, 2],
     ["v4_v2_valid", 4, 2],
   ])("accepts %s (V2-keyset era, cdk-minted)", (name, amount, proofCount) => {
