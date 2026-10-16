@@ -13,7 +13,8 @@ cdk-cli 0.18.1 against a V2-keyset fakewallet:
 | File | Shape | Expected portal verdict |
 |---|---|---|
 | `v4_v2_kg181.cashu` | known-good V4, V2 keyset, cdk 0.18.1 | accept |
-| `v3_v2_kg181.cashu` | known-good V3, V2 keyset, cdk 0.18.1 | accept |
+| `v3_v2_kg181.cashu` | known-good V3, V2 keyset, cdk 0.18.1 (short id spelling) | accept |
+| `v3_v2_full66.cashu` | V3 with the full 66-hex keyset-id spelling (wallet-side: Nutshell/cashu-ts) | accept |
 | `v3_v2_valid.cashu` | V3 valid (proofs spent at capture mint) | accept (decode) |
 | `v4_v2_valid.cashu` | V4 valid, 8-byte keyset-id prefix | accept (decode) |
 | `v3_v2_truncated_id.cashu` | V3 with the native 16-hex short keyset-id spelling (the CU109 incident shape) | accept |
