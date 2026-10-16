@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Panel 1 of 3 — install / intro.
+  Mockup only. No production code, no real token, no real mint URL.
+  See docs/architecture/pwa-client-wallet-adr-delta.md §7.1 and §3.3.
+  Design point: the panel must state WHICH install path the user is on,
+  because on HTTP-on-IP there is no install prompt and no offline mode.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 760" width="420" height="760"
+     font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" role="img"
+     aria-label="Panel 1: install and introduction screen">
+  <rect width="420" height="760" rx="26" fill="#0b0b0d"/>
+  <rect x="1" y="1" width="418" height="758" rx="25" fill="none" stroke="#2a2a30"/>
+
+  <!-- status bar -->
+  <text x="26" y="34" fill="#7d7d88" font-size="12">9:41</text>
+  <text x="394" y="34" fill="#7d7d88" font-size="12" text-anchor="end">&#9679;&#9679;&#9679;</text>
+
+  <!-- brand -->
+  <circle cx="210" cy="104" r="30" fill="#f7931a"/>
+  <text x="210" y="113" fill="#0b0b0d" font-size="24" font-weight="700" text-anchor="middle">T</text>
+  <text x="210" y="166" fill="#f2f2f5" font-size="21" font-weight="600" text-anchor="middle">Tollgate</text>
+  <text x="210" y="190" fill="#9a9aa6" font-size="13" text-anchor="middle">Get internet access</text>
+
+  <!-- what it is -->
+  <rect x="24" y="222" width="372" height="118" rx="14" fill="#15151a" stroke="#26262e"/>
+  <text x="44" y="252" fill="#f2f2f5" font-size="15" font-weight="600">This page can act like an app</text>
+  <text x="44" y="278" fill="#a8a8b4" font-size="12.5">Add it to your home screen for one-tap</text>
+  <text x="44" y="298" fill="#a8a8b4" font-size="12.5">access and a full-screen view. It still</text>
+  <text x="44" y="318" fill="#a8a8b4" font-size="12.5">needs the network to do anything.</text>
+
+  <!-- install path: the load-bearing disclosure -->
+  <rect x="24" y="358" width="372" height="186" rx="14" fill="#15151a" stroke="#3a2f18"/>
+  <rect x="24" y="358" width="4" height="186" rx="2" fill="#f7931a"/>
+  <text x="44" y="388" fill="#f0c274" font-size="13" font-weight="600">How to install on this device</text>
+
+  <text x="44" y="416" fill="#a8a8b4" font-size="12">Android / Chrome</text>
+  <text x="44" y="436" fill="#f2f2f5" font-size="12.5">No install prompt is available here.</text>
+  <text x="44" y="454" fill="#f2f2f5" font-size="12.5">Use the browser menu &#8594; "Add to Home</text>
+  <text x="44" y="472" fill="#f2f2f5" font-size="12.5">screen". The button below opens it.</text>
+
+  <rect x="44" y="486" width="150" height="34" rx="9" fill="#20202a" stroke="#33333f"/>
+  <text x="119" y="508" fill="#e6e6ee" font-size="12.5" font-weight="600" text-anchor="middle">Open menu guide</text>
+
+  <text x="44" y="536" fill="#9a9aa6" font-size="11.5">iOS / Safari: Share &#8594; Add to Home Screen</text>
+
+  <!-- honest offline statement -->
+  <rect x="24" y="560" width="372" height="104" rx="14" fill="#1a1212" stroke="#3d2222"/>
+  <text x="44" y="588" fill="#e8a0a0" font-size="12.5" font-weight="600">No offline mode</text>
+  <text x="44" y="610" fill="#b8a8a8" font-size="12">This portal is served over plain HTTP, so it</text>
+  <text x="44" y="628" fill="#b8a8a8" font-size="12">cannot work offline and cannot show a native</text>
+  <text x="44" y="646" fill="#b8a8a8" font-size="12">install prompt. Nothing you do here is stored.</text>
+
+  <!-- CTA -->
+  <rect x="24" y="682" width="372" height="46" rx="12" fill="#f7931a"/>
+  <text x="210" y="711" fill="#0b0b0d" font-size="15" font-weight="700" text-anchor="middle">Continue to payment</text>
+
+  <text x="210" y="744" fill="#6d6d78" font-size="11" text-anchor="middle">No seed phrase. No account. Nothing to remember.</text>
+</svg>
