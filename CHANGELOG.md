@@ -175,6 +175,19 @@ All notable changes to this project are documented here.
   actually owns instead of a fixed `:8443`.
 
 ### Tests
+- **Token conformance corpus vectors pin the decoder and the submit wire.**
+  `tests/unit/corpus-conformance.test.js` runs the canonical fixtures vendored
+  from the protocol repo's conformance corpus
+  ([OpenTollGate/tollgate `corpus/`](https://github.com/OpenTollGate/tollgate/pull/30),
+  v1 @ `5368dd8`, under `tests/fixtures/corpus/`) through `validateToken` and
+  `submitToken`. This is the regression lock for the v0.6.0 browser e-cash
+  incident (#82 / PRTA#247 / tmbg#952): the known-good cdk-0.18.1-minted V3/V4
+  V2-keyset tokens, the 16-hex truncated-id shape, and the hex-C shape must all
+  decode client-side (the merchant re-validates authoritatively on submit), and
+  a decode-passing token MUST reach `POST /` as a raw `text/plain` body — the
+  incident's packet capture showed 0 POSTs, so the wire shape is asserted
+  against a fetch mock. Fixtures carry a README with provenance and the resync
+  command for when the corpus revs.
 - **`92` mapping + marker suites (new, offline):** `packaging/tests/test-92-entry-ui-mapping.sh`
   drives the whole script in a sandbox (`packaging/tests/lib-92-sandbox.sh`): both
   mappings against the literal port lists, invariant 3 (one binder per port, with
