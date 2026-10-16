@@ -10,6 +10,7 @@ vi.mock("nostr-tools", () => ({
 }));
 
 import { validateToken, submitToken } from "../../src/helpers/cashu.js";
+import { getTollgateBaseUrl } from "../../src/helpers/tollgate.js";
 
 const i18n = (key, fallback) => fallback || key;
 
@@ -47,13 +48,14 @@ describe("token corpus decode conformance", () => {
     expect(result.value.unit).toBe("sat");
   });
 
-  it("accepts the truncated-16-hex-id regression shape (PRTA#247)", () => {
+  it("decodes the truncated-16-hex-id regression shape (PRTA#247)", () => {
     // The backend resolves the 16-hex prefix to the canonical V2 keyset
     // id and accepts (kind 1022); the portal decoder must not reject
     // what the reference stack redeems.
     const result = validateToken(fixture("v3_v2_truncated_id"), corpusMint, i18n);
     expect(result.status).toBe(1);
     expect(result.value.amount).toBe(4);
+    expect(result.value.proofCount).toBe(1);
   });
 
   it("decodes the hex-C shape and defers the verdict to the backend", () => {
@@ -65,6 +67,7 @@ describe("token corpus decode conformance", () => {
     const result = validateToken(fixture("v3_v2_hex_c"), corpusMint, i18n);
     expect(result.status).toBe(1);
     expect(result.value.amount).toBe(4);
+    expect(result.value.proofCount).toBe(2);
   });
 });
 
@@ -76,26 +79,11 @@ describe("submit wire conformance (HTTP-01 POST /)", () => {
     vi.unstubAllGlobals();
   });
 
-  const okSessionEvent = {
-    kind: 1022,
-    pubkey: "0".repeat(64),
-    tags: [
-      ["device-identifier", "mac", "aa:bb:cc:dd:ee:ff"],
-      ["allotment", "44040192"],
-      ["metric", "bytes"],
-    ],
-    content: "",
-  };
-
   it.each(["v3_v2_kg181", "v4_v2_kg181"])(
     "POSTs %s as a raw text/plain body to the tollgate root",
     async (name) => {
       const token = fixture(name);
-      const fetchMock = vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        clone: () => ({ json: async () => okSessionEvent }),
-      }));
+      const fetchMock = vi.fn(async () => ({ ok: true, status: 200 }));
       vi.stubGlobal("fetch", fetchMock);
 
       const result = await submitToken(token, { detailsEvent: { pubkey: "0".repeat(64) } }, "30m", i18n);
@@ -103,7 +91,7 @@ describe("submit wire conformance (HTTP-01 POST /)", () => {
       expect(result.status).toBe(1);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toMatch(/\/$/);
+      expect(url).toBe(`${getTollgateBaseUrl()}/`);
       expect(init.method).toBe("POST");
       expect(init.headers["Content-Type"]).toBe("text/plain");
       expect(init.body).toBe(token);
