@@ -59,9 +59,9 @@ describe("token corpus decode conformance", () => {
   });
 
   it("decodes the hex-C shape and defers the verdict to the backend", () => {
-    // CU102-class shape (C points hex-encoded instead of base64): the
-    // corpus records the authoritative rejection at the merchant (kind
-    // 21023 payment-processing-failed). The portal's contract is
+    // CU102-class shape (C bytes are not a point — a v0 corpus regen
+    // artifact): the corpus records the authoritative rejection at the
+    // merchant (kind 21023 payment-processing-failed). The portal's contract is
     // decode + submit; C-point validation is the backend's job, so the
     // decode must not strand the user client-side.
     const result = validateToken(fixture("v3_v2_hex_c"), corpusMint, i18n);

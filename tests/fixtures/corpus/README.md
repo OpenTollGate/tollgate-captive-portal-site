@@ -16,8 +16,8 @@ cdk-cli 0.18.1 against a V2-keyset fakewallet:
 | `v3_v2_kg181.cashu` | known-good V3, V2 keyset, cdk 0.18.1 | accept |
 | `v3_v2_valid.cashu` | V3 valid (proofs spent at capture mint) | accept (decode) |
 | `v4_v2_valid.cashu` | V4 valid, 8-byte keyset-id prefix | accept (decode) |
-| `v3_v2_truncated_id.cashu` | V3 with 16-hex truncated id (PRTA#247 shape) | accept (backend resolves; portal defers) |
-| `v3_v2_hex_c.cashu` | V3 with hex-encoded C points (CU102 class) | accept decode, defer C validation to the backend |
+| `v3_v2_truncated_id.cashu` | V3 with the native 16-hex short keyset-id spelling (the CU109 incident shape) | accept |
+| `v3_v2_hex_c.cashu` | V3 whose C bytes are not a point (v0 corpus regen artifact; CU102 class) | accept decode, defer C verdict to the backend |
 
 The portal is a *submitting* consumer: its decoder validates shape and
 unit, then the merchant re-decodes and validates authoritatively on
