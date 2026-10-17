@@ -175,6 +175,7 @@ All notable changes to this project are documented here.
   actually owns instead of a fixed `:8443`.
 
 ### Tests
+- **The advertisement → mint-selection → validation chain is pinned for V2-keyset mints (#952 frontend half).** `src/helpers/__tests__/v2-mint-flow.test.js` drives the app-level flow with the corpus fixtures: a realistic three-mint `price_per_step` advertisement (including a path-bearing coinos-style URL), a cdk-style V2 token (16-hex short keyset id) and a V4 token (8-byte id) both select their advertised mint and validate; a trailing-slash URL spelling still matches (both sides normalize); an unadvertised mint yields no option (the unsupported-mint path); and CU109 fires on **unit** mismatch — pinning that the current CU109 meaning is units, not keysets. Classification for the field incident: the current frontend has no token-format rejection, no keyset-id mismatch, and no mint-selection defect for V2; the failing deployment in portal#82's capture is an older build.
 - **Token conformance corpus vectors pin the decoder and the submit wire.**
   `tests/unit/corpus-conformance.test.js` runs the canonical fixtures vendored
   from the protocol repo's conformance corpus
