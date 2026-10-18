@@ -18,7 +18,7 @@
 //
 // The script never hardcodes a company brand; it reads the descriptor slot.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
@@ -28,7 +28,7 @@ import {
   normalizeBrandId,
   validateDescriptor,
 } from './brand-id.mjs';
-import { applyGuestBranding } from './guest-brand.mjs';
+import { applyGuestBranding, adminHTMLFrom } from './guest-brand.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
@@ -176,5 +176,23 @@ const run = (script, env = {}) =>
 // output (build/admin) must be produced afterwards.
 run('build:portal');
 run('build:admin', { VITE_BRAND: brand, VITE_BASE_PATH: base });
+
+// The admin app's <title> and theme-color are hard-coded literals in admin/index.html, so
+// the brand slot alone left them saying "TollGate Admin" / #111. Rewrite them AFTER the
+// build (the file is copied verbatim by vite), and only when a non-default brand is
+// selected — adminHTMLFrom returns the page unchanged otherwise.
+{
+  const adminIndex = path.join(repo, 'build', 'admin', 'index.html');
+  if (existsSync(adminIndex)) {
+    const before = readFileSync(adminIndex, 'utf8');
+    const after = adminHTMLFrom(before, desc);
+    if (after !== before) {
+      writeFileSync(adminIndex, after);
+      console.log('[build-all] admin chrome branded from the descriptor');
+    } else {
+      console.log('[build-all] admin chrome unchanged (default brand)');
+    }
+  }
+}
 
 console.log('[build-all] done: build/ (portal + balance) and build/admin/');

@@ -17,6 +17,8 @@
 //   * Structural fields (manifest icons, start_url, display, background_color) are never
 //     rewritten — branding is words and colour, not layout.
 
+import { DEFAULT_BRAND_ID } from './brand-id.mjs';
+
 /** A descriptor must carry these to brand anything; otherwise we change nothing. */
 const REQUIRED = ['id', 'name'];
 
@@ -57,6 +59,45 @@ export function guestBrandingFrom(desc) {
       powered_by: poweredBy,
     },
   };
+}
+
+/**
+ * Rewrite the ADMIN app's index.html for a brand.
+ *
+ * WHY: the admin UI was half-branded. The favicon and manifest already came from the brand
+ * slot, but `<title>` was the hard-coded literal "TollGate Admin" and theme-color was the
+ * hard-coded "#111" — so the tab a router owner looks at still said TollGate while the
+ * icons beside it said net4sats. Two surfaces of one app disagreeing is the same defect
+ * the guest-page branding exists to prevent.
+ *
+ * No descriptor (or one missing the fields) returns the input UNCHANGED, byte for byte, so
+ * an unbranded build cannot be perturbed by this.
+ *
+ * @param {string} html the raw `admin/index.html`
+ * @param {object|null|undefined} desc the parsed `admin/brand/<id>.json`
+ * @returns {string} the page to write
+ */
+export function adminHTMLFrom(html, desc) {
+  if (typeof html !== 'string' || !guestBrandingFrom(desc)) return html;
+  // The generic default descriptor describes the SAME product the page already ships:
+  // its title is "TollGate Admin" and its theme is the page's own #111. Rewriting to the
+  // descriptor's values would CHANGE upstream's page (#111 -> #FF6961, "TollGate Admin"
+  // -> "TollGate"), which is exactly the unbranded regression this must never cause.
+  // Only a non-default brand may rewrite the chrome.
+  if (!desc.id || String(desc.id).trim().toLowerCase() === DEFAULT_BRAND_ID) return html;
+  const name = desc.name.trim();
+  const title = desc.adminTitle?.trim() || name;
+  const theme = desc.themeColor || DEFAULT_THEME;
+
+  let out = html;
+  // <title> — replace the whole element's text.
+  out = out.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
+  // theme-color — replace the content attribute only, keeping the tag shape.
+  out = out.replace(
+    /(<meta[^>]*name=["']theme-color["'][^>]*content=["'])[^"']*(["'])/i,
+    `$1${theme}$2`,
+  );
+  return out;
 }
 
 /**
