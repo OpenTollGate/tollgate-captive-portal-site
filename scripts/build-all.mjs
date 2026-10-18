@@ -36,6 +36,13 @@ const repo = path.resolve(scriptsDir, '..');
 const requestedRaw = process.env.VITE_BRAND || '';
 const requested = normalizeBrandId(requestedRaw);
 const base = process.env.VITE_BASE_PATH || '/';
+if (base.startsWith('/admin')) {
+  throw new Error(
+    `VITE_BASE_PATH=${base} would put the admin base on the GUEST portal, whose assets live ` +
+      `at / - the portal would render blank. The admin base is pinned to '/' inside this script; ` +
+      `unset VITE_BASE_PATH.`,
+  );
+}
 
 // The brand slot: `admin/brand/<id>.json`, one descriptor per skin.
 const brandDir = path.join(repo, 'admin', 'brand');
@@ -175,7 +182,19 @@ const run = (script, env = {}) =>
 // Portal first: the React config's emptyOutDir wipes build/, so the admin
 // output (build/admin) must be produced afterwards.
 run('build:portal');
-run('build:admin', { VITE_BRAND: brand, VITE_BASE_PATH: base });
+// BOTH apps are served from a docroot ROOT: the guest portal at /, and the admin board at
+// the root of its OWN uhttpd (:8090, home=/www/<brand>) - admin/vite.config.mjs states that
+// contract. So both bases are '/'. The admin base is pinned HERE rather than read from the
+// environment, because one caller-supplied VITE_BASE_PATH feeding both builds is what let an
+// /admin/ value reach the guest splash.html, where src="/admin/assets/..." 404s and the
+// customer's portal renders BLANK (measured live: 0 mint buttons, no
+// .tollgate-captive-portal-view, empty body).
+// The admin board is served from TWO different roots depending on deployment: the root of
+// its own uhttpd (:8090, home=/www/<brand>) and /admin/ beneath the captive portal
+// (:2051/admin/). An absolute base cannot satisfy both, so emit RELATIVE asset paths
+// (base './') - the browser resolves them against whichever URL served the page. Measured:
+// base '/' 404s under :2051/admin/; base '/admin/' 404s on :8090.
+run('build:admin', { VITE_BRAND: brand, VITE_BASE_PATH: './' });
 
 // The admin app's <title> and theme-color are hard-coded literals in admin/index.html, so
 // the brand slot alone left them saying "TollGate Admin" / #111. Rewrite them AFTER the
