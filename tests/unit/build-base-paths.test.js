@@ -22,7 +22,10 @@ describe('build-all base paths', () => {
   });
 
   it('(C) an /admin base for the PORTAL is refused loudly, not silently applied', () => {
-    expect(src).toMatch(/startsWith\('\/admin'\)/);
+    // Exact-match guard (cold-review LOW): a startsWith('/admin') prefix also refused
+    // /administrator/ etc. with a misleading message. The guard now refuses exactly
+    // '/admin' and '/admin/' — the paths the ADMIN app is actually served under.
+    expect(src).toMatch(/=== '\/admin' \|\| base === '\/admin\/'/);
   });
 });
 

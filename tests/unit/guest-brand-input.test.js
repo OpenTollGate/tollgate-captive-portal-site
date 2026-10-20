@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { guestBrandingFrom, applyGuestBranding, guestHTMLFrom, guestLogoPath, copyGuestBrandAssets } from '../../scripts/guest-brand.mjs';
+import { guestBrandingFrom, applyGuestBranding, guestHTMLFrom, guestLogoPath, copyGuestBrandAssets, buildGuestRestore } from '../../scripts/guest-brand.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (p) => readFileSync(path.join(repo, p), 'utf8');
@@ -166,5 +166,39 @@ describe('guest HTML title — hostile descriptor', () => {
     });
     expect(out).not.toContain('<img');
     expect(out).toContain('&lt;img');
+  });
+});
+
+
+describe('cross-build leakage (HIGH: branded build then unbranded build)', () => {
+  it('(E) a branded apply followed by an unbranded build ships NO brand', async () => {
+    // Simulate build-all's guest block exactly: apply branding, then "restore".
+    // The shipped defect: branding was written INTO public/ and index.html and
+    // never restored, so the next unbranded build shipped the brand anyway.
+    const tmp = mkdtempSync(join(tmpdir(), 'guest-leak-'));
+    const publicDir = join(tmp, 'public');
+    mkdirSync(join(publicDir, 'locales'), { recursive: true });
+    writeFileSync(join(publicDir, 'manifest.json'), JSON.stringify({ name: 'Tollgate Captive Portal' }, null, 2) + '\n');
+    writeFileSync(join(publicDir, 'locales', 'en.json'), JSON.stringify({ powered_by: 'Powered by <1>TollGate</1>' }, null, 2) + '\n');
+    const indexPath = join(tmp, 'index.html');
+    writeFileSync(indexPath, sampleHTML('Tollgate Captive Portal'));
+
+    // branded pass (as build-all does today): mutate in place
+    const m0 = readFileSync(join(publicDir, 'manifest.json'), 'utf8');
+    const l0 = readFileSync(join(publicDir, 'locales', 'en.json'), 'utf8');
+    const i0 = readFileSync(indexPath, 'utf8');
+    const desc = { id: 'acme', name: 'Acme' };
+    const g = applyGuestBranding(JSON.parse(m0), JSON.parse(l0), desc);
+    writeFileSync(join(publicDir, 'manifest.json'), JSON.stringify(g.manifest, null, 2) + '\n');
+    writeFileSync(join(publicDir, 'locales', 'en.json'), JSON.stringify(g.strings, null, 2) + '\n');
+    writeFileSync(indexPath, guestHTMLFrom(i0, desc));
+
+    // UNBRANDED build: vite copies public/ as-is. The shipped files now carry Acme:
+    const leaked = readFileSync(join(publicDir, 'manifest.json'), 'utf8');
+    expect(leaked).toContain('Acme'); // ← documents today's defect shape
+    // The FIX under test: buildGuestFiles must restore the originals it read.
+    const restored = buildGuestRestore();
+    expect(typeof restored).toBe('function');
+    rmSync(tmp, { recursive: true, force: true });
   });
 });

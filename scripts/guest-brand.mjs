@@ -19,7 +19,8 @@
 
 import { DEFAULT_BRAND_ID } from './brand-id.mjs';
 import path from 'node:path';
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 /** A descriptor must carry these to brand anything; otherwise we change nothing. */
 const REQUIRED = ['id', 'name'];
@@ -45,8 +46,11 @@ export function guestBrandingFrom(desc) {
   const guestName = desc.guestName?.trim() || `${name} Captive Portal`;
   const tagline = desc.tagline?.trim() || 'Pay-as-you-go internet access';
   // The descriptor already carries a whole attribution line; reuse it rather than
-  // composing a second one, so the two surfaces cannot disagree.
-  const poweredBy = desc.poweredBy?.trim() || `Powered by ${name}`;
+  // composing a second one, so the two surfaces cannot disagree. The guest footer
+  // renders this through i18next <Trans> where <1>…</1> wraps the LINKED name — a
+  // branded line that drops the markup silently loses the outbound link and the
+  // trailing tagline, so the fallback composes it the same way.
+  const poweredBy = desc.poweredBy?.trim() || `Powered by <1>${name}</1> – Pay-as-you-go internet access`;
 
   return {
     manifest: {
@@ -214,4 +218,32 @@ export function copyGuestBrandAssets(brandAssetsDir, publicDir, id) {
   mkdirSync(destDir, { recursive: true });
   copyFileSync(src, path.join(destDir, 'logo-white.png'));
   return true;
+}
+
+
+/**
+ * Snapshot files and return a restore function. Used by build-all so a branded
+ * build can stage brand wording into the tree for vite to pick up and then put
+ * the TRACKED sources back byte-identically — even if the build throws.
+ *
+ * WHY: the first version of guest branding wrote the brand into public/ and
+ * index.html and left it there. The next UNbranded build then shipped the brand
+ * (cross-build leakage): "guest branding: not selected" printed, "Acme Captive
+ * Portal" shipped. A build may stage, but must never leave residue.
+ *
+ * @param {string[]} files absolute paths to snapshot
+ * @returns {() => void} restore() writes the original bytes back
+ */
+export function buildGuestRestore(files) {
+  const snap = (files || []).map((f) => [f, existsSync(f) ? readFileSync(f) : null]);
+  return () => {
+    for (const [f, bytes] of snap) {
+      if (bytes === null) {
+        if (existsSync(f)) rmSync(f, { recursive: true, force: true });
+      } else {
+        mkdirSync(dirname(f), { recursive: true });
+        writeFileSync(f, bytes);
+      }
+    }
+  };
 }

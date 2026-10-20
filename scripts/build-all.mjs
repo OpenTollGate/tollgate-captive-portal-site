@@ -28,7 +28,7 @@ import {
   normalizeBrandId,
   validateDescriptor,
 } from './brand-id.mjs';
-import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom, copyGuestBrandAssets } from './guest-brand.mjs';
+import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom, copyGuestBrandAssets, buildGuestRestore } from './guest-brand.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
@@ -36,7 +36,7 @@ const repo = path.resolve(scriptsDir, '..');
 const requestedRaw = process.env.VITE_BRAND || '';
 const requested = normalizeBrandId(requestedRaw);
 const base = process.env.VITE_BASE_PATH || '/';
-if (base.startsWith('/admin')) {
+if (base === '/admin' || base === '/admin/') {
   throw new Error(
     `VITE_BASE_PATH=${base} would put the admin base on the GUEST portal, whose assets live ` +
       `at / - the portal would render blank. The admin base is pinned to '/' inside this script; ` +
@@ -149,6 +149,15 @@ console.log(
 // selection we fall back to the default descriptor for the ADMIN app, but the guest
 // files must stay exactly as upstream ships them - they already ARE the generic build's
 // asset, and rewriting them would change what every unbranded user sees.
+let restoreGuestFiles = null;
+try {
+const stagedGuestFiles = requested ? [
+  path.join(repo, 'public', 'manifest.json'),
+  path.join(repo, 'public', 'locales', 'en.json'),
+  path.join(repo, 'index.html'),
+  path.join(repo, 'public', 'assets'), // copied brand logo dir (untracked) — swept too
+] : [];
+restoreGuestFiles = buildGuestRestore(stagedGuestFiles);
 if (requested) {
   const manifestPath = path.join(repo, 'public', 'manifest.json');
   const localePath = path.join(repo, 'public', 'locales', 'en.json');
@@ -229,3 +238,12 @@ run('build:admin', { VITE_BRAND: brand, VITE_BASE_PATH: './' });
 }
 
 console.log('[build-all] done: build/ (portal + balance) and build/admin/');
+} finally {
+  // Cross-build leakage guard (cold-review HIGH): the branded build staged brand
+  // wording into TRACKED files (public/manifest.json, public/locales/en.json,
+  // index.html) for vite to consume. Restore their pristine bytes now — win, lose,
+  // or crash — so the next UNbranded build can never ship a brand it never asked
+  // for. The staged branding already lives on in build/.
+  if (restoreGuestFiles) restoreGuestFiles();
+  console.log('[build-all] tracked guest sources restored');
+}

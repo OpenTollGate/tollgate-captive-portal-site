@@ -47,9 +47,17 @@ function generateAssetManifestPlugin() {
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
   define: {
-    // Guest brand slot: '' when unset, so the app falls back to the default logo
-    // and the unbranded bundle is unchanged.
-    'import.meta.env.VITE_BRAND': JSON.stringify(process.env.VITE_BRAND || ''),
+    // Guest brand slot: the NORMALIZED id (lowercase, brand-id alphabet) — the same
+    // spelling build-all writes assets under. VITE_BRAND=ACME must resolve
+    // /assets/brand/acme/... or the logo 404s on case-sensitive filesystems.
+    // '' when unset/unusable, so the app falls back to the default logo and the
+    // unbranded bundle is unchanged.
+    'import.meta.env.VITE_BRAND': JSON.stringify(
+      (() => {
+        const raw = (process.env.VITE_BRAND || '').trim().toLowerCase();
+        return /^[a-z0-9][a-z0-9-]*$/.test(raw) ? raw : '';
+      })(),
+    ),
   },
   plugins: [react(), generateAssetManifestPlugin()],
   build: {
