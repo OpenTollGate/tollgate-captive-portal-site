@@ -146,3 +146,25 @@ describe('guest logo slot', () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 });
+
+
+const sampleHTML = (title) =>
+  `<!doctype html>\n<html><head>\n    <title>${title}</title>\n    <meta name="description" content="x">\n</head><body></body></html>\n`;
+
+describe('guest HTML title — hostile descriptor', () => {
+  it('(C) HTML-escapes descriptor fields before interpolation', () => {
+    const out = guestHTMLFrom(sampleHTML('T'), {
+      id: 'x', name: 'x"><script>alert(1)</script>',
+    });
+    expect(out).not.toContain('<script>');
+    expect(out).toContain('&lt;script&gt;');
+  });
+
+  it('(C) escapes guestName too', () => {
+    const out = guestHTMLFrom(sampleHTML('T'), {
+      id: 'a', name: 'A', guestName: 'A <img src=x onerror=alert(2)>',
+    });
+    expect(out).not.toContain('<img');
+    expect(out).toContain('&lt;img');
+  });
+});

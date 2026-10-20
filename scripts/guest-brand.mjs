@@ -148,7 +148,15 @@ export function guestHTMLFrom(html, desc) {
   if (!html || typeof html !== 'string') return html;
   const b = guestBrandingFrom(desc);
   if (!b) return html;
-  const title = b.strings.html_title;
+  // Escape before interpolation: the descriptor is build INPUT from the distribution
+  // operator — a hostile or compromised descriptor must not be able to inject markup
+  // into the shipped index.html (title AND meta description carry it).
+  const esc = (v) => String(v)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+  const title = esc(b.strings.html_title);
   let out = html;
   let touched = false;
   const titleTag = /<title>([^<]*)<\/title>/;
