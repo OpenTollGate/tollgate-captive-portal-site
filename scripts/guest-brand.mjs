@@ -18,6 +18,8 @@
 //     rewritten — branding is words and colour, not layout.
 
 import { DEFAULT_BRAND_ID } from './brand-id.mjs';
+import path from 'node:path';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 
 /** A descriptor must carry these to brand anything; otherwise we change nothing. */
 const REQUIRED = ['id', 'name'];
@@ -160,4 +162,48 @@ export function guestHTMLFrom(html, desc) {
     touched = true;
   }
   return touched ? out : html;
+}
+
+
+/**
+ * The guest header logo's brand-slot path, or null when there is no brand.
+ *
+ * Mirrors the ADMIN icon convention (`assets/brand/<id>/logo-white.png` — see
+ * `assetPaths()` in admin/src/brand-core.ts) so ONE directory shape serves both
+ * apps and a skin author copies the same folder into both slots.
+ *
+ * @param {object|null|undefined} desc the parsed `admin/brand/<id>.json`
+ * @returns {string|null} public-dir-relative logo path, or null (no brand)
+ */
+export function guestLogoPath(desc) {
+  const b = guestBrandingFrom(desc);
+  if (!b) return null;
+  const id = String(desc.id).trim();
+  return `assets/brand/${id}/logo-white.png`;
+}
+
+/**
+ * Copy a brand's guest logo into the guest app's `public/` tree at build time.
+ *
+ * WHY copy instead of rewrite: the guest header uses a static Vite import for the
+ * TollGate logo (bundle-hashed, cache-busted). A runtime path cannot replace a
+ * static import without changing what the UNBRANDED build ships. Instead the BUILD
+ * copies the brand's `logo-white.png` into `public/assets/brand/<id>/` (exactly how
+ * the admin app's brand icons are shipped) and the app resolves it at runtime,
+ * falling back to the static import when no brand asset exists — so an unbranded
+ * build keeps byte-identical behaviour and assets.
+ *
+ * @param {string} brandAssetsDir e.g. `admin/public/assets/brand/<id>` (source)
+ * @param {string} publicDir the guest app's `public/`
+ * @param {string} id the brand id
+ * @returns {boolean} true when the guest logo asset was copied
+ */
+export function copyGuestBrandAssets(brandAssetsDir, publicDir, id) {
+  if (!brandAssetsDir || !publicDir || !id) return false;
+  const src = path.join(brandAssetsDir, 'logo-white.png');
+  if (!existsSync(src)) return false;
+  const destDir = path.join(publicDir, 'assets', 'brand', id);
+  mkdirSync(destDir, { recursive: true });
+  copyFileSync(src, path.join(destDir, 'logo-white.png'));
+  return true;
 }

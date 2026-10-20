@@ -28,7 +28,7 @@ import {
   normalizeBrandId,
   validateDescriptor,
 } from './brand-id.mjs';
-import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom } from './guest-brand.mjs';
+import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom, copyGuestBrandAssets } from './guest-brand.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
@@ -169,6 +169,13 @@ if (requested) {
   if (afterIndex !== beforeIndex) {
     writeFileSync(guestIndexPath, afterIndex);
     console.log(`[build-all] guest index.html <title> branded from the descriptor`);
+  }
+  // Guest logo slot: copy the brand's logo-white.png into the guest public tree so
+  // the runtime can prefer it over the default static import. Mirrors the admin
+  // icon shipping convention; absent asset -> nothing copied (default stays).
+  const guestAssetsDir = path.join(repo, 'src', 'assets', 'brand', brand);
+  if (copyGuestBrandAssets(path.join(repo, 'admin', 'public', 'assets', 'brand', brand), path.join(repo, 'public'), brand)) {
+    console.log(`[build-all] guest logo asset installed from the brand slot`);
   }
   console.log(
     `[build-all] guest branding -> name="${guest.manifest.name}"` +

@@ -6,10 +6,12 @@
 //
 // Same shape as the admin slot on purpose: one descriptor, one VITE_BRAND, one rule.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { guestBrandingFrom, applyGuestBranding, guestHTMLFrom } from '../../scripts/guest-brand.mjs';
+import { guestBrandingFrom, applyGuestBranding, guestHTMLFrom, guestLogoPath, copyGuestBrandAssets } from '../../scripts/guest-brand.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (p) => readFileSync(path.join(repo, p), 'utf8');
@@ -104,5 +106,43 @@ describe('guest HTML title', () => {
   it('(C) a <title> missing entirely returns the input unchanged', () => {
     const html = '<!doctype html>\n<html><head></head><body></body></html>\n';
     expect(guestHTMLFrom(html, { id: 'a', name: 'A' })).toBe(html);
+  });
+});
+
+
+describe('guest logo slot', () => {
+  it('(D) no descriptor -> no logo override', () => {
+    expect(guestLogoPath(null)).toBe(null);
+    expect(guestLogoPath({})).toBe(null);
+  });
+
+  it('(D) a descriptor maps to the conventional guest asset path', () => {
+    expect(guestLogoPath({ id: 'net4sats', name: 'net4sats' }))
+      .toBe('assets/brand/net4sats/logo-white.png');
+  });
+
+  it('(D) copyGuestBrandAssets copies the white logo into the guest public dir', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'guest-brand-'));
+    const brandAssets = join(tmp, 'brand-assets', 'net4sats');
+    const publicDir = join(tmp, 'public');
+    mkdirSync(brandAssets, { recursive: true });
+    mkdirSync(publicDir, { recursive: true });
+    writeFileSync(join(brandAssets, 'logo-white.png'), 'PNGDATA');
+    const copied = copyGuestBrandAssets(brandAssets, publicDir, 'net4sats');
+    expect(copied).toBe(true);
+    expect(readFileSync(join(publicDir, 'assets/brand/net4sats/logo-white.png'), 'utf8')).toBe('PNGDATA');
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('(D) copyGuestBrandAssets with a missing asset changes nothing and reports false', () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'guest-brand-'));
+    const brandAssets = join(tmp, 'brand-assets', 'net4sats');
+    const publicDir = join(tmp, 'public');
+    mkdirSync(brandAssets, { recursive: true });
+    mkdirSync(publicDir, { recursive: true });
+    const copied = copyGuestBrandAssets(brandAssets, publicDir, 'net4sats');
+    expect(copied).toBe(false);
+    expect(existsSync(join(publicDir, 'assets'))).toBe(false);
+    rmSync(tmp, { recursive: true, force: true });
   });
 });
