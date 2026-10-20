@@ -16,7 +16,14 @@ describe('admin app index.html branding', () => {
 
   it('(B) a brand rewrites the title and theme-color, and keeps the rest', () => {
     const html = read('admin/index.html');
-    const desc = JSON.parse(read('admin/brand/net4sats.json'));
+    // Inline descriptor: the brand slot ships ONLY the generic default (the anti-leak
+    // test pins that), so a vendor descriptor must never be read from disk here.
+    const desc = {
+      id: 'net4sats', name: 'net4sats', domain: 'net4sats.lan',
+      tagline: 'Router Admin Dashboard', poweredBy: 'Powered by net4sats',
+      website: 'https://net4sats.com/', version: 'net4sats v0.6.0',
+      themeColor: '#f7931a',
+    };
     const out = adminHTMLFrom(html, desc);
     expect(out).toContain('<title>net4sats</title>');
     expect(out).toContain('content="#f7931a"');
