@@ -28,7 +28,7 @@ import {
   normalizeBrandId,
   validateDescriptor,
 } from './brand-id.mjs';
-import { applyGuestBranding, adminHTMLFrom } from './guest-brand.mjs';
+import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom } from './guest-brand.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
@@ -155,6 +155,9 @@ if (requested) {
   const readJson = (f) => JSON.parse(readFileSync(f, 'utf8'));
   const before = [readFileSync(manifestPath, 'utf8'), readFileSync(localePath, 'utf8')];
   const guest = applyGuestBranding(readJson(manifestPath), readJson(localePath), desc);
+  const guestIndexPath = path.join(repo, 'index.html');
+  const beforeIndex = readFileSync(guestIndexPath, 'utf8');
+  const afterIndex = guestHTMLFrom(beforeIndex, desc);
   const after = [
     `${JSON.stringify(guest.manifest, null, 2)}\n`,
     `${JSON.stringify(guest.strings, null, 2)}\n`,
@@ -163,6 +166,10 @@ if (requested) {
   // match the shipped values does not churn the files either.
   if (after[0] !== before[0]) writeFileSync(manifestPath, after[0]);
   if (after[1] !== before[1]) writeFileSync(localePath, after[1]);
+  if (afterIndex !== beforeIndex) {
+    writeFileSync(guestIndexPath, afterIndex);
+    console.log(`[build-all] guest index.html <title> branded from the descriptor`);
+  }
   console.log(
     `[build-all] guest branding -> name="${guest.manifest.name}"` +
       (after[0] === before[0] && after[1] === before[1] ? ' (already up to date)' : ''),

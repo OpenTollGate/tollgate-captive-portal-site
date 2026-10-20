@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { guestBrandingFrom, applyGuestBranding } from '../../scripts/guest-brand.mjs';
+import { guestBrandingFrom, applyGuestBranding, guestHTMLFrom } from '../../scripts/guest-brand.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (p) => readFileSync(path.join(repo, p), 'utf8');
@@ -72,5 +72,37 @@ describe('guest brand input', () => {
     expect(Object.keys(out.manifest).sort()).toEqual(
       [...new Set([...Object.keys(manifest()), 'name', 'short_name', 'theme_color'])].sort(),
     );
+  });
+});
+
+
+describe('guest HTML title', () => {
+  const sample = (title) =>
+    `<!doctype html>\n<html><head>\n    <title>${title}</title>\n    <meta name="description" content="x">\n</head><body></body></html>\n`;
+
+  it('(C) no descriptor returns the HTML byte-identical', () => {
+    const html = sample('Tollgate Captive Portal');
+    expect(guestHTMLFrom(html, null)).toBe(html);
+    expect(guestHTMLFrom(html, {})).toBe(html);
+  });
+
+  it('(C) a descriptor rewrites the guest <title> and meta description', () => {
+    const out = guestHTMLFrom(sample('Tollgate Captive Portal'), {
+      id: 'net4sats', name: 'net4sats',
+    });
+    expect(out).toContain('<title>net4sats Captive Portal</title>');
+    expect(out).not.toContain('Tollgate');
+  });
+
+  it('(C) guestName overrides the composed title', () => {
+    const out = guestHTMLFrom(sample('Tollgate Captive Portal'), {
+      id: 'acme', name: 'Acme', guestName: 'Acme WiFi',
+    });
+    expect(out).toContain('<title>Acme WiFi</title>');
+  });
+
+  it('(C) a <title> missing entirely returns the input unchanged', () => {
+    const html = '<!doctype html>\n<html><head></head><body></body></html>\n';
+    expect(guestHTMLFrom(html, { id: 'a', name: 'A' })).toBe(html);
   });
 });

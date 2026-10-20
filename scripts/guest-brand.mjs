@@ -120,3 +120,44 @@ export function applyGuestBranding(manifest, strings, desc) {
     strings: { ...strings, ...b.strings },
   };
 }
+
+
+/**
+ * Rewrite the GUEST app's index.html <title> (and meta description) for a brand.
+ *
+ * WHY: `strings.html_title` already brands the runtime-locale title, but the static
+ * `index.html` ships a hard-coded "Tollgate Captive Portal" — that literal is what a
+ * browser shows first (tab, bookmarks, OS window list) BEFORE any JS runs, and what
+ * crawlers see. The tab said TollGate while the page said net4sats: two surfaces of
+ * one page disagreeing, the exact defect this module exists to prevent.
+ *
+ * Rules mirror the rest of this file:
+ *   * no descriptor (or one missing the fields) -> the input is returned UNCHANGED,
+ *     byte for byte, so an unbranded build cannot be perturbed;
+ *   * the descriptor is the single source; the title is `${name} Captive Portal`
+ *     unless `guestName` is given, matching guestBrandingFrom exactly;
+ *   * a <title> that isn't there means we have nothing to brand -> unchanged.
+ *
+ * @param {string} html the raw guest `index.html`
+ * @param {object|null|undefined} desc the parsed `admin/brand/<id>.json`
+ * @returns {string} the page to write
+ */
+export function guestHTMLFrom(html, desc) {
+  if (!html || typeof html !== 'string') return html;
+  const b = guestBrandingFrom(desc);
+  if (!b) return html;
+  const title = b.strings.html_title;
+  let out = html;
+  let touched = false;
+  const titleTag = /<title>([^<]*)<\/title>/;
+  if (titleTag.test(out)) {
+    out = out.replace(titleTag, `<title>${title}</title>`);
+    touched = true;
+  }
+  const descTag = /<meta\s+name="description"\s+content="([^"]*)"/;
+  if (descTag.test(out)) {
+    out = out.replace(descTag, `<meta name="description" content="${title}"`);
+    touched = true;
+  }
+  return touched ? out : html;
+}
