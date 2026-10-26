@@ -29,6 +29,7 @@ import {
   validateDescriptor,
 } from './brand-id.mjs';
 import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom, guestBalanceHTMLFrom, copyGuestBrandAssets, buildGuestRestore } from './guest-brand.mjs';
+import { assertFeatures } from './check-features.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
@@ -127,6 +128,17 @@ const manifest = {
     },
   ],
 };
+
+// The admin PWA manifest is a TRACKED file that this build rewrites with brand wording for
+// vite to consume. Snapshot it first and put it back in the `finally`, exactly like the
+// guest files — otherwise a branded build leaves brand wording in the tree, and the next
+// UNbranded build ships a brand nobody selected. That is the same cross-build leak the
+// guest restore exists for; it was simply never applied to the admin half.
+let restoreAdminManifest = null;
+{
+  const adminManifestPath = path.join(repo, 'admin/public/manifest.json');
+  restoreAdminManifest = buildGuestRestore([adminManifestPath]);
+}
 
 mkdirSync(path.join(repo, 'admin/public'), { recursive: true });
 writeFileSync(
@@ -256,5 +268,31 @@ console.log('[build-all] done: build/ (portal + balance) and build/admin/');
   // or crash — so the next UNbranded build can never ship a brand it never asked
   // for. The staged branding already lives on in build/.
   if (restoreGuestFiles) restoreGuestFiles();
+  if (restoreAdminManifest) restoreAdminManifest();
   console.log('[build-all] tracked guest sources restored');
+}
+
+// The customer-facing features must survive everything above: the branding step rewrites
+// index.html and balance.html, writes the manifest and locale strings, and restores the
+// source files afterwards. Any of that going wrong drops a page a customer needs, and no
+// other test can see it — the unit tests exercise the branding functions on fixtures, and
+// the e2e suite does not currently run green on main. So the BUILD refuses to finish if a
+// feature is missing, branded or not.
+//
+// DELIBERATELY AFTER THE finally. An earlier draft called process.exit(1) from inside the
+// try, which SKIPS `finally` — leaving brand wording staged in tracked files. That is the
+// cross-build leak the finally exists to prevent, and it made the next unbranded build
+// ship a brand nobody selected. Restore first, then judge: build/ is not touched by the
+// restore, so checking here is equally valid and cannot leak.
+{
+  let featureChecks;
+  try {
+    featureChecks = assertFeatures(path.join(repo, 'build'));
+  } catch (err) {
+    // A missing feature must read as a failed BUILD, not a stack trace: the operator
+    // needs to know what shipped wrong, not where the throw happened.
+    console.error(`\n${err.message}\n`);
+    process.exit(1);
+  }
+  for (const c of featureChecks) console.log(`[build-all] ok  ${c.id}: ${c.what}`);
 }

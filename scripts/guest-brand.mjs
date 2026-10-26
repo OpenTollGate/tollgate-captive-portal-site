@@ -19,7 +19,7 @@
 
 import { DEFAULT_BRAND_ID } from './brand-id.mjs';
 import path from 'node:path';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 /** A descriptor must carry these to brand anything; otherwise we change nothing. */
@@ -265,7 +265,20 @@ export function copyGuestBrandAssets(brandAssetsDir, publicDir, id) {
  * @returns {() => void} restore() writes the original bytes back
  */
 export function buildGuestRestore(files) {
-  const snap = (files || []).map((f) => [f, existsSync(f) ? readFileSync(f) : null]);
+  const snap = (files || []).map((f) => {
+    if (!existsSync(f)) return [f, null];
+    if (statSync(f).isDirectory()) {
+      // A directory in this list is a build artefact (the copied brand logo tree), never
+      // a tracked source, so it is snapshotted as "absent" and removed on restore.
+      //
+      // This has to be explicit: the previous version called readFileSync on every entry,
+      // so the SECOND branded build crashed with EISDIR — the first build had created
+      // public/assets, and the restore list still named it. One build worked, two in a row
+      // did not, which is exactly the shape of bug that reaches a release.
+      return [f, null];
+    }
+    return [f, readFileSync(f)];
+  });
   return () => {
     for (const [f, bytes] of snap) {
       if (bytes === null) {

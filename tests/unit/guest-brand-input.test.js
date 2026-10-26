@@ -136,6 +136,26 @@ describe('guest HTML title', () => {
 });
 
 
+describe('guest restore handles a directory in the list', () => {
+  it('(E) does not crash when an entry is an existing directory, and removes it', async () => {
+    // The restore list carries public/assets — the copied brand logo tree, which is a
+    // DIRECTORY. Reading it as bytes threw EISDIR on the second branded build in a row:
+    // one build worked, two did not.
+    const { mkdtempSync, mkdirSync, writeFileSync, existsSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const pathMod = await import('node:path');
+    const root = mkdtempSync(pathMod.join(tmpdir(), 'restore-dir-'));
+    const dirPath = pathMod.join(root, 'public', 'assets', 'brand');
+    mkdirSync(dirPath, { recursive: true });
+    writeFileSync(pathMod.join(dirPath, 'logo.png'), 'PNG');
+
+    const restore = buildGuestRestore([dirPath]);
+    expect(existsSync(dirPath)).toBe(true);
+    restore();
+    expect(existsSync(dirPath)).toBe(false);
+  });
+});
+
 describe('guest logo slot', () => {
   it('(D) no descriptor -> no logo override', () => {
     expect(guestLogoPath(null)).toBe(null);
