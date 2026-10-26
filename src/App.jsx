@@ -323,7 +323,14 @@ export const AccessGranted = ({ allocation, metric, onRenew }) => {
   // build the persistent standalone balance-page URL from the gateway host.
   // the balance page is served by the portal on :2051 (not the :2121 backend,
   // which has no /portal route).
-  const balanceUrl = `${getPortalBaseUrl()}/balance.html`;
+  //
+  // `/balance/` is the canonical address on purpose: it is short enough to
+  // retype from memory when the user wants their remaining balance later and
+  // the tab is long gone. It resolves without any client state — the backend
+  // identifies the client from the request socket (DHCP-lease MAC), so a bare
+  // reopened URL works for a MAC-authenticated session. `/balance.html` keeps
+  // working for old links and bookmarks.
+  const balanceUrl = `${getPortalBaseUrl()}/balance/`;
 
   return <div className="tollgate-captive-portal-access-granted">
     <div id="captive-portal-access-granted-checkmark" className="tollgate-captive-portal-access-granted-checkmark">
@@ -382,7 +389,11 @@ export const AccessGranted = ({ allocation, metric, onRenew }) => {
         {t('usage_unreachable_notice')}
       </p>}
 
-      {/* link to the persistent balance page so the user can return later */}
+      {/* link to the persistent balance page so the user can return later.
+          `target=_blank` on purpose: the portal must not lose the payment
+          screen. The address itself is printed underneath, because the reported
+          bug is that once this tab is closed the page is unreachable again — a
+          URL the user can retype (or bookmark) is the durable part. */}
       <a
         href={balanceUrl}
         target="_blank"
@@ -391,7 +402,9 @@ export const AccessGranted = ({ allocation, metric, onRenew }) => {
       >
         {t('view_balance')}
       </a>
-      <p className="small">{t('balance_link_hint')}</p>
+      <p className="small" data-testid="balance-url-hint">
+        {t('balance_link_hint', { url: balanceUrl })}
+      </p>
     </div>
   </div>
 }

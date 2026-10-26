@@ -20,6 +20,10 @@ const MOCK_TOLLGATE_DETAILS = {
 };
 
 const CASHU_HELPER_STUB = `
+// The stub must export EVERY name src/components/Cashu.jsx imports. A missing
+// one is a module-graph failure ("does not provide an export named X") and the
+// whole app — including the balance page — renders nothing, which used to make
+// four e2e tests look like a portal bug.
 export const validateToken = (token, mint, i18n) => {
   if (!token || typeof token !== 'string' || !token.startsWith('cashu')) {
     return { status: 0, code: 'CU101', label: 'Invalid', message: 'bad token' };
@@ -28,6 +32,12 @@ export const validateToken = (token, mint, i18n) => {
 };
 export const submitToken = async () => ({ status: 1, label: 'ok', message: 'ok' });
 export const extractProofsFromToken = () => [];
+// no client-side "submit anyway" bypass and no auto-selected mint in the stub:
+// the tests drive the default access option explicitly.
+export const canSubmitAnyway = () => false;
+export const mintUrlFromToken = () => null;
+export const findMintOption = () => null;
+export const normalizeMintUrl = (url) => (typeof url === 'string' ? url.trim().replace(/\\/+$/, '') : '');
 `;
 
 export const TEST_TOKEN = 'cashuBtest123MockTokenForE2E';
