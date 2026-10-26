@@ -17,7 +17,15 @@
  *
  * Detection accepts either signal. The name is the fast path; the structural
  * one (an AP bound to the `private` network) is the safety net for a
- * module-side rename — the exact case a name prefix alone would miss.
+ * module-side rename — the exact case a name fast path alone would miss.
+ *
+ * The name fast path matches the two declared sections EXACTLY. A bare
+ * `private_radio` prefix test would also accept `private_radio2`,
+ * `private_radio99` or `private_radioevil`, routing an unrelated section's
+ * SSID edit into `tollgate config_set private_ssid` — which rewrites the
+ * module's private SSID on BOTH radios instead of the section the operator
+ * selected. Unrecognized names fall through to the structural check, which is
+ * the signal that actually generalizes.
  *
  * Two data shapes carry the structural signal, and both are read:
  *   - netifd's `network.wireless status` nests the UCI values under a
@@ -28,6 +36,15 @@
  *     count, so the mock cannot lie about which path the board takes.
  */
 export const PRIVATE_RADIO_SECTION_PREFIX = 'private_radio';
+/**
+ * The module's declared section names (see the contract above) — an exact
+ * list, not a prefix match. Kept next to the prefix so a module-side rename
+ * updates both in one place.
+ */
+export const PRIVATE_RADIO_SECTIONS: readonly string[] = [
+  `${PRIVATE_RADIO_SECTION_PREFIX}0`,
+  `${PRIVATE_RADIO_SECTION_PREFIX}1`,
+];
 export const PRIVATE_NETWORK_NAME = 'private';
 
 interface IfaceLike {
@@ -40,7 +57,10 @@ interface IfaceLike {
 }
 
 export function isPrivateRadioIface(section: string, iface?: IfaceLike): boolean {
-  if (section.startsWith(PRIVATE_RADIO_SECTION_PREFIX)) {
+  // Exact match on the module's declared sections. A prefix test would also
+  // accept `private_radio2`/`private_radioevil` and misroute their SSID edit
+  // into the module's private SSID.
+  if (PRIVATE_RADIO_SECTIONS.includes(section)) {
     return true;
   }
   const cfg = iface?.config || iface;
