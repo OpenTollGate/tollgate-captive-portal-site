@@ -92,4 +92,18 @@ describe('post-build feature guard', () => {
     expect(() => checkFeatures(path.join(dir, 'nope'))).toThrow(/not a build directory/);
     expect(() => checkFeatures('')).toThrow(/not a build directory/);
   });
+  it('the required-feature list is exactly the set the shell also checks', () => {
+    // The same four markers are asserted twice, in two repositories: here (node, building
+    // the portal) and in net4sats/installer's scripts/check-portal-features.sh (bash,
+    // shipping it). Neither repo's CI can see the other, so each pins the canonical list
+    // locally — an edit that changes one side without the other fails HERE first.
+    //
+    // When you change this list, change net4sats/installer too, and vice versa.
+    expect(REQUIRED_FEATURES.map((f) => f.id)).toEqual([
+      'lightning-invoice',
+      'paste-ecash',
+      'balance-page',
+      'balance-copy',
+    ]);
+  });
 });
