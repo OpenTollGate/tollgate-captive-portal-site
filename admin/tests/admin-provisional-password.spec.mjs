@@ -64,6 +64,58 @@ test.describe('admin board: forced password choice at first login', () => {
     await expect(page.locator('.app-header')).toHaveCount(0);
   });
 
+  test('an out-of-bounds WiFi passphrase is refused before the router is asked', async ({
+    page,
+  }) => {
+    await page.goto('./?mockProvisional=1&mockWifiProvisional=1');
+    await expect(page.locator('#new-password')).toBeVisible({ timeout: 30000 });
+
+    const chosen = 'a-good-enough-one';
+    await page.locator('#new-password').fill(chosen);
+    await page.locator('#confirm-password').fill(chosen);
+    // 7 characters: below the WPA2-PSK floor. The router refuses this with
+    // `weak-wifi-passphrase`; the board must not spend a round trip to learn it,
+    // and before the router-side fix it lost the passphrase silently instead.
+    await page.locator('#wifi-passphrase').fill('seven77');
+    await page.locator('#provisional-password-choice button[type="submit"]').click();
+    await expect(page.locator('#provisional-error')).toContainText(/at least 8/i);
+
+    // Nothing reached the router, and the board is still closed.
+    const sent = await page.evaluate(() =>
+      JSON.parse(window.sessionStorage.getItem('tg.mock.admin_password_set') || '[]')
+    );
+    expect(sent).toEqual([]);
+    await expect(page.locator('.app-header')).toHaveCount(0);
+
+    // Too long is refused the same way.
+    await page.locator('#wifi-passphrase').fill('x'.repeat(64));
+    await page.locator('#provisional-password-choice button[type="submit"]').click();
+    await expect(page.locator('#provisional-error')).toContainText(/at most 63/i);
+
+    // Still nothing sent.
+    expect(
+      await page.evaluate(() =>
+        JSON.parse(window.sessionStorage.getItem('tg.mock.admin_password_set') || '[]')
+      )
+    ).toEqual([]);
+  });
+
+  test('a blank WiFi passphrase stays legal when the WiFi marker is absent', async ({
+    page,
+  }) => {
+    // Only the admin marker: the WiFi field is optional here, and blank means
+    // "keep the installed key" — the router's own contract.
+    await page.goto('./?mockProvisional=1');
+    await expect(page.locator('#new-password')).toBeVisible({ timeout: 30000 });
+
+    const chosen = 'a-good-enough-one';
+    await page.locator('#new-password').fill(chosen);
+    await page.locator('#confirm-password').fill(chosen);
+    await page.locator('#wifi-passphrase').fill('');
+    await page.locator('#provisional-password-choice button[type="submit"]').click();
+    await expect(page.locator('.app-header')).toBeVisible({ timeout: 30000 });
+  });
+
   test('choosing a password sets it on the router, drops the marker, opens the board', async ({
     page,
   }) => {

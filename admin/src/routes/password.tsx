@@ -5,6 +5,7 @@ import {
   PROVISIONAL_MARKER_PATH,
   PRIVATE_WIFI_PROVISIONAL_MARKER_PATH,
   validatePasswordChoice,
+  validateWifiPassphrase,
 } from '../lib/provisional';
 import { BRAND } from '../brand';
 import { withBase } from '../lib/paths';
@@ -54,6 +55,15 @@ export default function PasswordChoicePage({
       setError(
         `Choose a management WiFi password too — the installed one is the default. Use at least ${MIN_ADMIN_PASSWORD_LENGTH} characters.`
       );
+      return;
+    }
+    // The router refuses an out-of-bounds passphrase with `weak-wifi-passphrase`,
+    // but only after the submit; catching it here keeps the owner from losing a
+    // round trip (and, before the router-side fix, from losing the passphrase
+    // silently). Blank still means "keep the installed key".
+    const wifiProblem = validateWifiPassphrase(wifi);
+    if (wifiProblem) {
+      setError(wifiProblem);
       return;
     }
     setError('');

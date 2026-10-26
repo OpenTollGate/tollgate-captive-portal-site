@@ -44,9 +44,22 @@ SHADOW_FILE="${TOLLGATE_SHADOW_FILE:-/etc/shadow}"
 ADMIN_PROVISIONAL_MARKER="${ADMIN_PROVISIONAL_MARKER:-/etc/tollgate/admin-credential-provisional}"
 PRIVATE_WIFI_PROVISIONAL_MARKER="${PRIVATE_WIFI_PROVISIONAL_MARKER:-/etc/tollgate/private-wifi-credential-provisional}"
 
+# root_hash_string: root's raw shadow hash FIELD exactly as stored — no `x`
+# indirection, because /etc/shadow holds the hash itself and rpcd's own login
+# check goes through getspnam() to the same field.
+#
+# This is the only way to prove that a write landed: two STATES can be equal
+# before and after a `passwd` that changed nothing (both `set`, which is the
+# normal first-run pre-state), so state comparison cannot distinguish success
+# from failure. Empty output means "empty field OR unreadable file" — callers
+# that must tell those apart pair it with root_hash_state().
+root_hash_string() {
+    awk -F: '$1=="root"{print $2}' "$SHADOW_FILE" 2>/dev/null
+}
+
 root_hash_state() {
     local h
-    h=$(awk -F: '$1=="root"{print $2}' "$SHADOW_FILE" 2>/dev/null)
+    h=$(root_hash_string)
     case "$h" in
         "")        echo empty ;;
         '!'*|'*'*) echo locked ;;
@@ -85,6 +98,59 @@ json_credential_refusal() {
     json_add_string "error" "no-admin-credential"
     json_add_string "message" "router has no usable root password: refusing. While root's /etc/shadow hash is unset, rpcd accepts ANY password (including an empty one), so an authenticated session cannot be trusted. Set a root password on the router (passwd root) and re-run the board setup."
     json_dump
+}
+
+# write_private_radio_key PASSPHRASE -> 0 when every private radio now carries
+# that key on disk, 1 otherwise.
+#
+# The contract is the module's own write path
+# (tollgate-module-basic-go src/cli/network.go, setPrivateRadioOption):
+#   - write ONLY the sections that exist. `uci set` on a missing named section
+#     CREATES it, so a single-band router (setup deletes a stale radio1) would
+#     otherwise mint a typeless `wireless.private_radio1` wifi-iface that binds
+#     to nothing;
+#   - check every exit code. `uci -q` is quiet, not infallible: a read-only
+#     overlay, a locked config database or a full disk leaves the setting
+#     unwritten while the call still looks fine;
+#   - prove it by re-reading, not by believing the exit code.
+#
+# The section names are the two the module declares today
+# (operator_settings.go privateRadio0Section/privateRadio1Section). This plugin
+# cannot enumerate the way the module does: it has no `existingPrivateRadioSections`
+# helper and must not grow one before the first-run page works. When the module
+# renames or renumbers its private sections, THIS LIST MUST FOLLOW — the
+# re-read below is what turns that drift into a refusal instead of a silent
+# miss.
+write_private_radio_key() {
+    _psk=$1
+    _wrote=0
+    for _section in private_radio0 private_radio1; do
+        # Existence check only (no read of the value): an absent section is not
+        # a failure to report.
+        uci -q get "wireless.$_section" >/dev/null 2>&1 || continue
+        uci -q set "wireless.$_section.key=$_psk" 2>/dev/null || return 1
+        _wrote=$((_wrote + 1))
+    done
+    if [ "$_wrote" = 0 ]; then
+        # Nothing to write is not success: the owner asked for a passphrase and
+        # the router has no section to hold it, so the WiFi half would silently
+        # keep whatever key it has while the reply claims otherwise.
+        return 1
+    fi
+    uci -q commit wireless 2>/dev/null || return 1
+    for _section in private_radio0 private_radio1; do
+        uci -q get "wireless.$_section" >/dev/null 2>&1 || continue
+        _now=$(uci -q get "wireless.$_section.key" 2>/dev/null)
+        [ "$_now" = "$_psk" ] || return 1
+    done
+    # `ubus call network.wireless reload` is what puts the committed key on the
+    # air. A key that is on disk but not loaded is not the outcome the owner
+    # asked for, so a failed reload is a refusal too — the same call the
+    # module's own write path makes (network.go finishPrivateRadioWrite errors
+    # on it). WIFI_RELOAD_FAILED tells the caller which half failed, so the
+    # reply can be honest about the password having landed.
+    ubus call network.wireless reload >/dev/null 2>&1 || { WIFI_RELOAD_FAILED=1; return 1; }
+    return 0
 }
 
 case "$1" in
@@ -158,6 +224,13 @@ case "$1" in
     # window: it refuses the moment the marker is gone, and it is reachable only
     # on the management path (the board is not on the captive/guest network).
     # It sets ONLY the root password and the private radios' PSK; nothing else.
+    #
+    # Every requested write is VERIFIED before the markers are dropped, and a
+    # refusal never closes the one-shot window: the reply is the only thing the
+    # owner gets, so a reply that says "done" while a write did not land locks
+    # this board out permanently (the generated credential is never printed, and
+    # the forced page disappears with the marker). The ordering is therefore
+    # passwd -> verify -> WiFi bounds -> WiFi write -> verify -> markers.
     if [ "$2" = "admin_credential_setup" ]; then
         if ! admin_credential_provisional; then
             json_init
@@ -168,9 +241,29 @@ case "$1" in
             exit 0
         fi
         INPUT=$(cat)
-        PW=$(echo "$INPUT" | jsonfilter -e '@.password' 2>/dev/null)
-        PW2=$(echo "$INPUT" | jsonfilter -e '@.password2' 2>/dev/null)
-        WIFI=$(echo "$INPUT" | jsonfilter -e '@.wifi_passphrase' 2>/dev/null)
+        # printf, not echo: `echo` is not required to preserve backslashes, and
+        # dash — a real POSIX sh, and this script's shebang target off OpenWrt —
+        # interprets them. A JSON body is full of `\\` (JSON.stringify escapes
+        # one typed backslash as two), so `echo` would hand jsonfilter a body
+        # whose escapes are already eaten.
+        PW=$(printf '%s' "$INPUT" | jsonfilter -e '@.password' 2>/dev/null)
+        PW2=$(printf '%s' "$INPUT" | jsonfilter -e '@.password2' 2>/dev/null)
+        WIFI=$(printf '%s' "$INPUT" | jsonfilter -e '@.wifi_passphrase' 2>/dev/null)
+        # Control characters are refused, not stripped: `passwd` is fed the
+        # password twice on separate lines (`printf '%s\n%s\n'`), so a newline
+        # inside it makes the two confirm reads mismatch and the change never
+        # happens. A multi-line paste is the realistic trigger. `[[:cntrl:]]` is
+        # POSIX and matches in dash, BusyBox ash and bash alike.
+        case "$PW" in
+            *[[:cntrl:]]*)
+                json_init
+                json_add_boolean "success" 0
+                json_add_string "error" "invalid-password"
+                json_add_string "message" "The admin password may not contain control characters (a newline from a multi-line paste is the usual cause)"
+                json_dump
+                exit 0
+                ;;
+        esac
         if [ "${#PW}" -lt 8 ]; then
             json_init
             json_add_boolean "success" 0
@@ -179,6 +272,9 @@ case "$1" in
             json_dump
             exit 0
         fi
+        # `password2` is connective tissue for the form, not a control: a direct
+        # caller that omits it sets the password without confirmation, and that
+        # is allowed (the caller already owns the credential).
         if [ -n "$PW2" ] && [ "$PW" != "$PW2" ]; then
             json_init
             json_add_boolean "success" 0
@@ -187,23 +283,74 @@ case "$1" in
             json_dump
             exit 0
         fi
-        printf '%s\n%s\n' "$PW" "$PW" | passwd root >/dev/null 2>&1
-        case "$(root_hash_state)" in
-            set|locked) : ;;
-            *)
+        # WiFi bounds are checked BEFORE `passwd`, so a refused passphrase costs
+        # the owner nothing and leaves both credentials untouched. Out of bounds
+        # used to be skipped silently while the reply said success — the owner
+        # was told the WiFi password was set, the installed key stayed, and the
+        # window closed. Nobody can recover that key: the module does not print
+        # it either.
+        if [ -n "$WIFI" ]; then
+            if [ "${#WIFI}" -lt 8 ] || [ "${#WIFI}" -gt 63 ]; then
                 json_init
                 json_add_boolean "success" 0
-                json_add_string "error" "password-not-applied"
-                json_add_string "message" "the router did not accept the new admin password"
+                json_add_string "error" "weak-wifi-passphrase"
+                json_add_string "message" "The management WiFi password must be 8 to 63 characters"
                 json_dump
                 exit 0
-                ;;
-        esac
-        if [ -n "$WIFI" ] && [ "${#WIFI}" -ge 8 ] && [ "${#WIFI}" -le 63 ]; then
-            uci -q set wireless.private_radio0.key="$WIFI" 2>/dev/null
-            uci -q set wireless.private_radio1.key="$WIFI" 2>/dev/null
-            uci -q commit wireless 2>/dev/null
-            ubus call network.wireless reload >/dev/null 2>&1
+            fi
+            case "$WIFI" in
+                *[[:cntrl:]]*)
+                    json_init
+                    json_add_boolean "success" 0
+                    json_add_string "error" "invalid-wifi-passphrase"
+                    json_add_string "message" "The management WiFi password may not contain control characters"
+                    json_dump
+                    exit 0
+                    ;;
+            esac
+        fi
+        # The hash STRING before the write, so "did it land?" is a comparison and
+        # not a guess. Reading the STATE instead is vacuous: on the normal
+        # first-run path the pre-state is already `set` (the generated
+        # credential), so a `passwd` that failed on a read-only /etc leaves
+        # state=set and a state-only check reports success. `locked` is not
+        # accepted either: nobody authenticates by password against a locked
+        # account, and a single `passwd` cannot set-then-lock.
+        PRE_HASH=$(root_hash_string)
+        printf '%s\n%s\n' "$PW" "$PW" | passwd root >/dev/null 2>&1
+        POST_HASH=$(root_hash_string)
+        if [ -z "$POST_HASH" ] || [ "$POST_HASH" = "$PRE_HASH" ] \
+                || [ "$(root_hash_state)" != "set" ]; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_string "error" "password-not-applied"
+            json_add_string "message" "the router did not accept the new admin password"
+            json_dump
+            exit 0
+        fi
+        # A failed WiFi write refuses BEFORE any marker is dropped, for the same
+        # reason as above: the admin password has landed (the owner can log in),
+        # but the WiFi half has not, and the forced page has to keep asking for
+        # it. The refusal names the split so the owner knows the password took.
+        if [ -n "$WIFI" ]; then
+            if ! write_private_radio_key "$WIFI"; then
+                json_init
+                json_add_boolean "success" 0
+                json_add_boolean "password_set" 1
+                json_add_boolean "provisional" 1
+                if [ "${WIFI_RELOAD_FAILED:-0}" = "1" ]; then
+                    # The key reached /etc/config/wireless and the radios did not
+                    # pick it up. Retrying the same passphrase is harmless, and
+                    # the WiFi marker stays, so the forced page keeps asking.
+                    json_add_string "error" "wifi-not-reloaded"
+                    json_add_string "message" "the admin password is set and the WiFi password was saved, but the radios did not reload it; retry"
+                else
+                    json_add_string "error" "wifi-not-applied"
+                    json_add_string "message" "the admin password is set, but the router did not accept the management WiFi password; retry"
+                fi
+                json_dump
+                exit 0
+            fi
             # The owner's own passphrase now stands: drop the WiFi marker so the
             # board stops forcing a WiFi choice. It is LEFT IN PLACE when the
             # WiFi was not set, so the forced choice persists — the UI requires

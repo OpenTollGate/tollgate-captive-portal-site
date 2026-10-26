@@ -61,12 +61,15 @@ describe('credential state probe (pre-auth)', () => {
 
     // A router that does not answer the marker question is not a provisional
     // one: `provisional` defaults to false and is only true on an explicit
-    // answer (see tests/unit/admin-provisional-credential.test.js).
+    // answer (see tests/unit/admin-provisional-credential.test.js). The same
+    // holds for the companion `privateWifiProvisional` fact the WiFi marker
+    // added, so both flags are present and false on a silent router.
     expect(status).toEqual({
       state: 'set',
       passwordSet: true,
       username: 'root',
       provisional: false,
+      privateWifiProvisional: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
@@ -157,10 +160,12 @@ describe('credential state probe (pre-auth)', () => {
     const status = await fetchCredentialStatus();
 
     // `provisional` is the /etc/tollgate/admin-credential-provisional marker
-    // state (a generated credential the owner must replace); it is a fact about
-    // the credential, still never a value.
+    // state (a generated credential the owner must replace), and
+    // `privateWifiProvisional` its WiFi companion; both are facts about the
+    // credential, still never a value.
     expect(Object.keys(status).sort()).toEqual([
       'passwordSet',
+      'privateWifiProvisional',
       'provisional',
       'state',
       'username',

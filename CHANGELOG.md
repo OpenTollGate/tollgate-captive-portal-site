@@ -38,6 +38,39 @@ All notable changes to this project are documented here.
     against an empty hash a blank one "succeeds", so it must never be sent.
   - CI: both packaging guards and the admin credential-guard e2e run as
     mandatory steps, so this cannot regress silently.
+- **Admin board: the first-run credential change is verified, not assumed.** The
+  pre-auth `tollgate admin_credential_setup` (the only write a session-less
+  caller may make) used to check root's credential STATE after `passwd` and
+  accept `set|locked`. On the normal first-run path the pre-state is *already*
+  `set` — the installer minted a credential — so a `passwd` that failed
+  (read-only `/etc`, unwritable shadow, full disk) left `state=set`, and the
+  method answered `success:1`, told the owner "sign in with it", and dropped the
+  one-shot marker. The typed password was never applied, the generated one is
+  deliberately never printed, and the forced page never comes back: a permanent
+  lockout of the board. Fixed by capturing root's shadow **hash string** before
+  the write and requiring it to have CHANGED, with the resulting state `set` (a
+  state comparison cannot work: pre == post == `set` on the happy path; and
+  `locked` is not accepted, because nobody authenticates against a locked
+  account). The same class of silent loss on the WiFi half is closed with it:
+  - an out-of-bounds `wifi_passphrase` is refused (`weak-wifi-passphrase`) and a
+    rejected `uci set`/`uci commit`/wireless reload is refused
+    (`wifi-not-applied` / `wifi-not-reloaded`) **before** any marker is dropped,
+    instead of skipping the write and reporting success;
+  - the PSK is written only to the private radios that exist, then re-read to
+    prove it landed — `uci set` on a missing NAMED section CREATES it, so the
+    unconditional writes minted a phantom `wireless.private_radio1` on a
+    single-band router;
+  - passwords with control characters are refused (a newline from a multi-line
+    paste broke the `printf '%s\n%s\n' | passwd` idiom), and the JSON body is fed
+    to `jsonfilter` with `printf` rather than `echo`, which dash does not
+    guarantee to pass through byte-exact for the escaped backslashes a JSON body
+    carries;
+  - a refusal after the password landed says so (`password_set:1`) rather than
+    pretending nothing happened.
+  `packaging/tests/test-rpcd-tollgate-credential-guard.sh` grows a stub
+  `passwd`/`uci`/`ubus`/`jsonfilter` battery that drives the shipped plugin
+  through all of it (31 new assertions, 63 in the file); the board's own form
+  refuses an out-of-bounds passphrase before spending the round trip.
 - **Admin board: the :8090 login is no longer a password field on a cleartext
   origin, and :8443 no longer serves a certificate nobody can validate.**
   `92-tollgate-admin-setup` pinned the board's own TLS listener to the OpenWrt
