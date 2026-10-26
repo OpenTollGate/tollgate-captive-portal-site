@@ -1,10 +1,18 @@
 /* ─── TollGate theme tokens ────────────────────────────────────────────
  *
  * This file is the ONLY place either UI's colours are defined. Every rule in
- * admin.css / base.css paints from a token here, so re-colouring the board is
+ * admin.css paints from a token here, so re-colouring the board is
  * a token edit and never a rewrite (the brand-token mechanism, #153: a
  * distribution supplies `brand/<id>.json` + `VITE_BRAND=<id>` and gets its own
  * skin without forking).
+ *
+ * NOT listed above: styles/base.css. That file is dead — nothing imports it
+ * (main.tsx loads variables.css then admin.css), it has been unreferenced
+ * since the net4sats port in #39, and it still contains the old #f60 / #fff
+ * literals. It does not reach the built CSS (verified: zero `#f60` in
+ * build/admin/assets/*.css), so it is not a theming surface. Left untouched
+ * rather than rethemed, so this PR stays a colour change; deleting 889 lines
+ * of dead stylesheet is its own piece of work.
  *
  * The palette is measured, not chosen by eye: `tools/contrast.py` scores every
  * pair below with WCAG 2.1 relative luminance and fails the build if any pair
