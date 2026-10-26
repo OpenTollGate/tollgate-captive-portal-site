@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'preact/hooks';
 import { useRoute, navigate, type Route } from '../lib/router';
 import { getSessionUser, logout as doLogout, fetchUiLinks } from '../lib/ubus';
-import { withBase } from '../lib/paths';
 import type { UiLinks } from '../lib/ui-links';
-import { BRAND } from '../brand';
+import BrandLogo from './brand-logo';
 import ParticleBg from './particle-bg';
 import UiCrossLink from './ui-cross-link';
 import Dashboard from '../routes/dashboard';
@@ -136,11 +135,7 @@ export default function Layout() {
       {/* Header */}
       <header className="app-header">
         <div className="header-brand">
-          <img
-            src={withBase(BRAND.logo)}
-            alt={BRAND.name}
-            style={{ height: '26px' }}
-          />
+          <BrandLogo height="26px" marginBottom="0" />
           <span className="header-user">{user}</span>
         </div>
         <div className="header-actions">

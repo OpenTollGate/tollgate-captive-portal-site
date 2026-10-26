@@ -1,34 +1,105 @@
-:root {
-  --bg: #111;
-  --card: #1a1a1a;
-  --card-hover: #222;
-  --border: #2a2a2a;
-  --text: #fff;
-  --text-muted: rgba(255, 255, 255, 0.45);
-  --text-dim: rgba(255, 255, 255, 0.25);
-  --accent: #f60;
-  --accent-hover: #e55a00;
-  --accent-dim: rgba(255, 102, 0, 0.15);
-  --success: #32d74b;
-  --error: #ff453a;
+/* ─── TollGate theme tokens ────────────────────────────────────────────
+ *
+ * This file is the ONLY place either UI's colours are defined. Every rule in
+ * admin.css / base.css paints from a token here, so re-colouring the board is
+ * a token edit and never a rewrite (the brand-token mechanism, #153: a
+ * distribution supplies `brand/<id>.json` + `VITE_BRAND=<id>` and gets its own
+ * skin without forking).
+ *
+ * The palette is measured, not chosen by eye: `tools/contrast.py` scores every
+ * pair below with WCAG 2.1 relative luminance and fails the build if any pair
+ * drops under its threshold. Run `python3 tools/contrast.py` for the table.
+ *
+ * WHY THESE VALUES, given the report was "white is hard to read on a glossy
+ * screen":
+ *
+ *  - Body text is #eef1f7, NOT #fff. Pure white on a near-black ground is a
+ *    21:1 step; a reflection adds luminance to glyph and ground alike and the
+ *    glyph blooms. An off-white keeps a 14.5:1 ratio while lowering the peak
+ *    that blooms.
+ *  - The ground is #14161d, not #000. A uniform black field gives the reflected
+ *    image nothing to sit on and the contrast step reads harsher.
+ *  - Secondary text is an OPAQUE #b3bccd, replacing rgba(255,255,255,.45) —
+ *    that translucent token composited to #818181, which is 4.47:1 on a card:
+ *    just under AA, and the exact grey that reads thin under a reflection.
+ *  - The primary button label is DARK (#1a1114) on coral, not white. White on
+ *    #ff6961 is 2.82:1 — the objective failure present in the shipped theme.
+ *
+ * A light palette is also shipped, selected by `prefers-color-scheme: light`.
+ * Dark-on-light is the strongest answer to glare: the reflected image lifts
+ * both glyph and ground, so the ratio survives, whereas a light-on-dark glyph
+ * loses its glow entirely to the added light. It is opt-in via the OS setting,
+ * not the default, because the TollGate identity is dark.
+ * ───────────────────────────────────────────────────────────────────── */
 
-  /* Captive portal tokens */
-  --color: #fff;
-  --color-black: #111;
-  --color-white: #fff;
-  --color-white-transparent: rgba(255,255,255,0.9);
-  --color-gray-darken: rgba(0,0,0,0.4);
-  --color-cta: #f60;
-  --color-cta-hover: #e55a00;
-  --color-negative: rgba(255,255,255,0.35);
-  --color-green: #32d74b;
-  --color-green-transparent: rgba(50,215,75,0.15);
-  --color-red: #ff3b30;
-  --color-red-transparent: rgba(255,59,48,0.15);
+:root {
+  /* surfaces */
+  --bg: #14161d;
+  --card: #1c1f28;
+  --card-hover: #232733;
+  --border: #3a4152;
+  /* Control borders are a WCAG 1.4.11 non-text pair and need 3:1 against the
+     surface they sit on; a decorative hairline does not, so they are separate
+     tokens. #6a7590 is 3.92 on --bg and 3.57 on --card. */
+  --border-control: #6a7590;
+
+  /* text */
+  --text: #eef1f7;
+  --text-muted: #b3bccd;
+  --text-dim: #8e99ad;
+  --text-on-accent: #1a1114;
+
+  /* Disabled controls get their OWN pair rather than `opacity`, because
+     opacity composites the fill AND the label toward the page: at the shipped
+     `.btn:disabled { opacity: .45 }` the coral fill became rgb(130,64,66) and
+     the dark label rgb(27,25,31) — 2.29:1, which is the "hard to read" state
+     the login page OPENS in (the Sign In button is disabled until a password
+     is typed). WCAG 1.4.3 exempts inactive controls, so this is not an AA
+     failure, but shipping the complaint is not a fix. A grey pair that still
+     reads: 7.80:1. */
+  --disabled-bg: #232733;
+  --disabled-text: #b3bccd;
+  --disabled-border: #3a4152;
+
+  /* accent (TollGate coral) */
+  --accent: #ff6961;
+  --accent-hover: #ff857e;
+  --accent-dim: rgba(255, 105, 97, 0.16);
+  --focus-ring: #8ab4ff;
+
+  /* semantic */
+  --success: #7ad19a;
+  --success-dim: rgba(122, 209, 154, 0.16);
+  --error: #ff9b95;
+  --error-strong: #c2352d;
+  --error-dim: rgba(255, 155, 149, 0.14);
+  --warning: #ffc46b;
+  --warning-dim: rgba(255, 196, 107, 0.14);
+
+  /* scrim / overlay */
+  --scrim: rgba(10, 12, 17, 0.92);
+  --overlay-tint: rgba(255, 255, 255, 0.06);
+
+  /* ── captive-portal alias set ──────────────────────────────────────
+     The guest SCSS paints from --color-*; aliasing keeps ONE palette. */
+  --color: var(--text);
+  --color-black: var(--bg);
+  --color-white: var(--text);
+  --color-white-transparent: var(--card);
+  --color-gray-darken: var(--card-hover);
+  --color-cta: var(--accent);
+  --color-cta-hover: var(--accent-hover);
+  --color-negative: var(--text-muted);
+  --color-green: var(--success);
+  --color-green-transparent: var(--success-dim);
+  --color-red: var(--error);
+  --color-red-transparent: var(--error-dim);
+
+  /* geometry / type — unchanged by the retheme, kept here because this file is
+     the board's single style entry point. */
   --border-radius: 12px;
   --border-radius-large: 20px;
   --border-radius-small: 8px;
-
   --radius: 14px;
   --radius-sm: 8px;
   --font-size: 0.9rem;
@@ -39,4 +110,54 @@
   --header-h: 54px;
   --nav-h: 64px;
   --content-max: 520px;
+}
+
+/* ─── Light: the glare-first palette ───────────────────────────────────
+ * Same token names, so no rule changes — one media query swaps the values.
+ * Measured: body 17.05:1, secondary 7.10:1, button label 5.47:1.
+ * ───────────────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f7fa;
+    --card: #ffffff;
+    --card-hover: #eef0f6;
+    --border: #c3cbd9;
+    --border-control: #767f92;
+
+    --text: #12151c;
+    --text-muted: #4a5468;
+    --text-dim: #5d667a;
+    --text-on-accent: #ffffff;
+
+    --disabled-bg: #eef0f6;
+    --disabled-text: #5d667a;
+    --disabled-border: #c3cbd9;
+
+    --accent: #c2352d;
+    --accent-hover: #a8271f;
+    --accent-dim: rgba(194, 53, 45, 0.10);
+    --focus-ring: #1f4fd8;
+
+    --success: #1c6b36;
+    --success-dim: rgba(28, 107, 54, 0.10);
+    --error: #a8271f;
+    --error-strong: #8d1f18;
+    --error-dim: rgba(168, 39, 31, 0.10);
+    --warning: #7a4d00;
+    --warning-dim: rgba(122, 77, 0, 0.10);
+
+    --scrim: rgba(246, 247, 250, 0.94);
+    --overlay-tint: rgba(18, 21, 28, 0.05);
+
+    --color-white-transparent: var(--card);
+    --color-gray-darken: var(--card-hover);
+  }
+}
+
+/* Respect an explicit choice from the OS-level "increase contrast" setting:
+   the palette above already clears AA, this only firms up the hairlines. */
+@media (prefers-contrast: more) {
+  :root {
+    --border: var(--border-control);
+  }
 }

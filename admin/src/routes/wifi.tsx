@@ -42,9 +42,12 @@ interface ConfiguredUpstream {
 }
 
 function signalQuality(dbm: number): { label: string; color: string } {
+  // Every branch is a token: the "Good" and "Fair" stops were fixed #4da6ff /
+  // #e88a3a, which do not exist in the palette and did not move with it — on
+  // the light palette #e88a3a on white is 2.4:1.
   if (dbm >= -50) return { label: 'Excellent', color: 'var(--success)' };
-  if (dbm >= -60) return { label: 'Good', color: '#4da6ff' };
-  if (dbm >= -70) return { label: 'Fair', color: '#e88a3a' };
+  if (dbm >= -60) return { label: 'Good', color: 'var(--accent)' };
+  if (dbm >= -70) return { label: 'Fair', color: 'var(--warning)' };
   return { label: 'Weak', color: 'var(--error)' };
 }
 

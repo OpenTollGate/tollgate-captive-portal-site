@@ -10,7 +10,10 @@
 
     .cancel {
       background-color: transparent;
-      color: var(--color-gray-darken);
+      /* was --color-gray-darken (#C4C4C4 on the net4sats board): a FIXED light
+         grey used as an icon colour, so on the light palette it dropped to
+         1.6:1. It is an icon label, so it takes the dimmed body colour. */
+      color: var(--color-dim);
       opacity: 0.8;
       font-size: var(--font-size);
       display: flex;

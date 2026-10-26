@@ -20,6 +20,7 @@ import './App.scss'
 
 // import the tollgate logos
 import logoWhite from './assets/logo/TollGate_Logo-C-white.png';
+import logoBlack from './assets/logo/TollGate_Logo-C-black.png';
 
 // main component
 export const App = () => {
@@ -159,11 +160,19 @@ export const App = () => {
 }
 
 // header component showing tollgate logo above container
+//
+// Two assets, swapped by the palette: the wordmark is white, so on the light
+// palette it disappears (white on a near-white ground). A <picture> swaps the
+// dark-ink wordmark in under `prefers-color-scheme: light` without JS, keeping
+// one code path and no flash.
 export const Header = () => {
   const { t } = useTranslation();
 
   return <div className="tollgate-captive-portal-header">
-    <img src={logoWhite} alt={t('header_image_alt')}></img>
+    <picture>
+      <source srcSet={logoBlack} media="(prefers-color-scheme: light)" />
+      <img src={logoWhite} alt={t('header_image_alt')}></img>
+    </picture>
   </div>
 }
 

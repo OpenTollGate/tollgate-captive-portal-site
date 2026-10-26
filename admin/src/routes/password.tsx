@@ -6,8 +6,7 @@ import {
   PRIVATE_WIFI_PROVISIONAL_MARKER_PATH,
   validatePasswordChoice,
 } from '../lib/provisional';
-import { BRAND } from '../brand';
-import { withBase } from '../lib/paths';
+import BrandLogo from '../components/brand-logo';
 import ParticleBg from '../components/particle-bg';
 
 /**
@@ -103,11 +102,7 @@ export default function PasswordChoicePage({
           }}
         >
           <div style={{ textAlign: 'center' }}>
-            <img
-              src={withBase(BRAND.logo)}
-              alt={BRAND.name}
-              style={{ height: '44px', marginBottom: '0.4rem' }}
-            />
+            <BrandLogo height="44px" />
             <p
               style={{
                 fontSize: 'var(--font-size-xsmall)',
@@ -233,7 +228,7 @@ export default function PasswordChoicePage({
                 style={{
                   textAlign: 'center',
                   padding: '0.45rem 0.6rem',
-                  background: 'rgba(255,69,58,0.1)',
+                  background: 'var(--error-dim)',
                   borderRadius: 'var(--radius-sm)',
                 }}
               >
@@ -266,8 +261,11 @@ export default function PasswordChoicePage({
                   style={{
                     width: '16px',
                     height: '16px',
-                    borderTopColor: '#fff',
-                    border: '2px solid rgba(255,255,255,0.3)',
+                    // same pairing as the login button: the moving segment is the
+                    // button's label colour (`border` first — the shorthand
+                    // resets the longhand that follows)
+                    border: '2px solid var(--overlay-tint)',
+                    borderTopColor: 'var(--text-on-accent)',
                   }}
                 />
               ) : (

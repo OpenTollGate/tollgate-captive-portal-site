@@ -116,14 +116,21 @@ button {
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  /* NOT `opacity`: see --disabled-bg in variables.css. Opacity composites the
+     fill and the label toward the page and collapsed this pair to 2.29:1 —
+     the exact "hard to read" symptom, in the state the login page opens in. */
+  opacity: 1;
+  background: var(--disabled-bg);
+  border-color: var(--disabled-border);
+  color: var(--disabled-text);
   cursor: not-allowed;
   transform: none;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  /* a dark label on the coral: white on #ff6961 is 2.82:1 and fails AA */
+  color: var(--text-on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -131,21 +138,25 @@ button {
 }
 
 .btn-secondary {
-  background: var(--border);
+  /* a button is a *surface*, not a hairline: painting it --border (the 1px
+     separator colour) made it read as a disabled block. It takes the raised
+     surface, with a control border that clears 1.4.11's 3:1. */
+  background: var(--card-hover);
+  border: 1px solid var(--border-control);
   color: var(--text);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--card-hover);
+  background: var(--overlay-tint);
 }
 
 .btn-danger {
   background: var(--error);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #d93a30;
+  background: var(--error-strong);
 }
 
 .btn-sm {
@@ -163,7 +174,11 @@ button {
   width: 100%;
   padding: 0.7rem 0.9rem;
   background: var(--bg);
-  border: 1px solid var(--border);
+  /* an input is a CONTROL: WCAG 1.4.11 wants 3:1 against its surroundings, so
+     it takes --border-control (3.92:1 on --bg). It shipped on --border, the
+     decorative hairline (1.77:1), which is why the fields read as flat panels
+     with no edge. */
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: var(--font-size);
@@ -205,12 +220,12 @@ button {
 }
 
 .badge-success {
-  background: rgba(50, 215, 75, 0.15);
+  background: var(--success-dim);
   color: var(--success);
 }
 
 .badge-error {
-  background: rgba(255, 69, 58, 0.15);
+  background: var(--error-dim);
   color: var(--error);
 }
 
@@ -220,7 +235,7 @@ button {
 }
 
 .badge-muted {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay-tint);
   color: var(--text-muted);
 }
 
@@ -443,7 +458,7 @@ button {
   left: 0;
   right: 0;
   height: var(--header-h);
-  background: rgba(17, 17, 17, 0.92);
+  background: var(--scrim);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
@@ -480,7 +495,7 @@ button {
 
 .btn-logout:hover {
   color: var(--error);
-  background: rgba(255, 69, 58, 0.1);
+  background: var(--error-dim);
 }
 
 .header-actions {
@@ -532,7 +547,7 @@ button {
   left: 0;
   right: 0;
   height: var(--nav-h);
-  background: rgba(17, 17, 17, 0.95);
+  background: var(--scrim);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);

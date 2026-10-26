@@ -8,6 +8,7 @@ import {
 import { withBase } from '../lib/paths';
 import { navigate } from '../lib/router';
 import { BRAND } from '../brand';
+import BrandLogo from '../components/brand-logo';
 import ParticleBg from '../components/particle-bg';
 
 export default function LoginPage({
@@ -94,11 +95,7 @@ export default function LoginPage({
           }}
         >
           <div style={{ textAlign: 'center' }}>
-            <img
-              src={withBase(BRAND.logo)}
-              alt={BRAND.name}
-              style={{ height: '44px', marginBottom: '0.4rem' }}
-            />
+            <BrandLogo height="44px" />
             <p
               style={{
                 fontSize: 'var(--font-size-xsmall)',
@@ -126,7 +123,7 @@ export default function LoginPage({
               style={{
                 width: '100%',
                 background: 'var(--card)',
-                border: '1px solid rgba(255,69,58,0.5)',
+                border: '1px solid var(--error)',
                 borderRadius: 'var(--radius)',
                 padding: '1.5rem',
                 display: 'flex',
@@ -196,8 +193,8 @@ export default function LoginPage({
                   style={{
                     fontSize: 'var(--font-size-xsmall)',
                     color: 'var(--text-dim)',
-                    background: 'rgba(255,159,10,0.1)',
-                    border: '1px solid rgba(255,159,10,0.4)',
+                    background: 'var(--warning-dim)',
+                    border: '1px solid var(--warning)',
                     borderRadius: 'var(--radius-sm)',
                     padding: '0.6rem 0.75rem',
                     lineHeight: 1.5,
@@ -216,8 +213,8 @@ export default function LoginPage({
                   style={{
                     fontSize: 'var(--font-size-xsmall)',
                     color: 'var(--text-dim)',
-                    background: 'rgba(255,159,10,0.1)',
-                    border: '1px solid rgba(255,159,10,0.4)',
+                    background: 'var(--warning-dim)',
+                    border: '1px solid var(--warning)',
                     borderRadius: 'var(--radius-sm)',
                     padding: '0.6rem 0.75rem',
                     lineHeight: 1.5,
@@ -240,8 +237,8 @@ export default function LoginPage({
                   style={{
                     fontSize: 'var(--font-size-xsmall)',
                     color: 'var(--text-dim)',
-                    background: 'rgba(255,159,10,0.1)',
-                    border: '1px solid rgba(255,159,10,0.4)',
+                    background: 'var(--warning-dim)',
+                    border: '1px solid var(--warning)',
                     borderRadius: 'var(--radius-sm)',
                     padding: '0.6rem 0.75rem',
                     lineHeight: 1.5,
@@ -320,7 +317,7 @@ export default function LoginPage({
                 style={{
                   textAlign: 'center',
                   padding: '0.45rem 0.6rem',
-                  background: 'rgba(255,69,58,0.1)',
+                  background: 'var(--error-dim)',
                   borderRadius: 'var(--radius-sm)',
                 }}
               >
@@ -340,8 +337,12 @@ export default function LoginPage({
                   style={{
                     width: '16px',
                     height: '16px',
-                    borderTopColor: '#fff',
-                    border: '2px solid rgba(255,255,255,0.3)',
+                    // the spinner sits ON the coral button, so its moving segment
+                    // must be the button's label colour, not white (white on
+                    // #ff6961 is 2.82:1). `border` first, `borderTopColor`
+                    // after — the shorthand resets the longhand.
+                    border: '2px solid var(--overlay-tint)',
+                    borderTopColor: 'var(--text-on-accent)',
                   }}
                 />
               ) : (
