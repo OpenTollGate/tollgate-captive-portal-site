@@ -8,7 +8,7 @@
  *
  * NOT listed above: styles/base.css. That file is dead — nothing imports it
  * (main.tsx loads variables.css then admin.css), it has been unreferenced
- * since the net4sats port in #39, and it still contains the old #f60 / #fff
+ * since the original port in #39, and it still contains the old #f60 / #fff
  * literals. It does not reach the built CSS (verified: zero `#f60` in
  * build/admin/assets/*.css), so it is not a theming surface. Left untouched
  * rather than rethemed, so this PR stays a colour change; deleting 889 lines
