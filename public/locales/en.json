@@ -60,7 +60,7 @@
   "access_granted_subtitle": "You now have {{purchased}} of internet access. Your connection is active.",
   "access_duration_label": "Access purchased",
   "view_balance": "💰 View Balance",
-  "balance_link_hint": "You can check your remaining internet balance at any time.",
+  "balance_link_hint": "Bookmark this page to check your remaining internet balance later: {{url}}",
   "session_expired_title": "Session ended",
   "session_expired_message": "Your internet access has expired. You can buy more time right here — no need to disconnect.",
   "session_expired_buy_more": "Buy more time",
@@ -139,5 +139,17 @@
   "balance_empty": "Enter or scan a Cashu token above to see your internet balance.",
   "balance_rate": "Rate: {{price}} {{unit}} per {{step}}",
   "balance_summary": "A {{token}} token grants {{access}} of internet access.",
-  "balance_go_purchase": "Purchase Internet Access"
+  "balance_go_purchase": "Purchase Internet Access",
+  "balance_remaining": "Remaining",
+  "balance_used": "Used",
+  "balance_total": "Total",
+  "balance_metric": "Metered by",
+  "balance_data": "Data",
+  "balance_time": "Time",
+  "balance_started_at": "Started {{value}}",
+  "balance_active_label": "Session active",
+  "balance_active_message": "Your internet access is active. This page updates itself.",
+  "balance_no_session_message": "No active internet session was found for this device.",
+  "refresh_balance": "Refresh balance",
+  "return_to_portal": "Back to the portal"
 }
