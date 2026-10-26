@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { guestBrandingFrom, applyGuestBranding, guestHTMLFrom, guestLogoPath, copyGuestBrandAssets, buildGuestRestore } from '../../scripts/guest-brand.mjs';
+import { guestBrandingFrom, applyGuestBranding, guestHTMLFrom, guestBalanceHTMLFrom, guestLogoPath, copyGuestBrandAssets, buildGuestRestore } from '../../scripts/guest-brand.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (p) => readFileSync(path.join(repo, p), 'utf8');
@@ -101,6 +101,32 @@ describe('guest HTML title', () => {
       id: 'acme', name: 'Acme', guestName: 'Acme WiFi',
     });
     expect(out).toContain('<title>Acme WiFi</title>');
+  });
+
+  it('(C) brands the balances page title without taking the portal title', () => {
+    // The balance page is a SEPARATE html entry, and it shipped with its own
+    // hardcoded title ("Tollgate Balance"). Branding only the portal left a
+    // branded router showing the upstream name on the page a customer opens to
+    // check their remaining time. Both pages must come from one descriptor, and a
+    // balance page must not be titled "… Captive Portal".
+    const out = guestBalanceHTMLFrom(sample('Tollgate Balance'), {
+      id: 'acme', name: 'acme',
+    });
+    expect(out).toContain('<title>acme Balance</title>');
+    expect(out).not.toContain('Tollgate');
+  });
+
+  it('(C) guestName overrides the balance page name too', () => {
+    const out = guestBalanceHTMLFrom(sample('Tollgate Balance'), {
+      id: 'acme', name: 'Acme', guestName: 'Acme WiFi',
+    });
+    expect(out).toContain('<title>Acme WiFi Balance</title>');
+  });
+
+  it('(C) no descriptor leaves the balance page byte-identical', () => {
+    const html = sample('Tollgate Balance');
+    expect(guestBalanceHTMLFrom(html, null)).toBe(html);
+    expect(guestBalanceHTMLFrom(html, {})).toBe(html);
   });
 
   it('(C) a <title> missing entirely returns the input unchanged', () => {

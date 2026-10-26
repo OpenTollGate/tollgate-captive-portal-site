@@ -28,7 +28,7 @@ import {
   normalizeBrandId,
   validateDescriptor,
 } from './brand-id.mjs';
-import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom, copyGuestBrandAssets, buildGuestRestore } from './guest-brand.mjs';
+import { applyGuestBranding, adminHTMLFrom, guestHTMLFrom, guestBalanceHTMLFrom, copyGuestBrandAssets, buildGuestRestore } from './guest-brand.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
@@ -155,6 +155,7 @@ const stagedGuestFiles = requested ? [
   path.join(repo, 'public', 'manifest.json'),
   path.join(repo, 'public', 'locales', 'en.json'),
   path.join(repo, 'index.html'),
+  path.join(repo, 'balance.html'), // separate html entry, separate hardcoded <title>
   path.join(repo, 'public', 'assets'), // copied brand logo dir (untracked) — swept too
 ] : [];
 restoreGuestFiles = buildGuestRestore(stagedGuestFiles);
@@ -178,6 +179,16 @@ if (requested) {
   if (afterIndex !== beforeIndex) {
     writeFileSync(guestIndexPath, afterIndex);
     console.log(`[build-all] guest index.html <title> branded from the descriptor`);
+  }
+  // The balance page is a second html entry with its own hardcoded title. Branding only
+  // the portal would leave a branded router showing upstream's name on the page a
+  // customer opens to check their remaining time.
+  const balancePath = path.join(repo, 'balance.html');
+  const beforeBalance = readFileSync(balancePath, 'utf8');
+  const afterBalance = guestBalanceHTMLFrom(beforeBalance, desc);
+  if (afterBalance !== beforeBalance) {
+    writeFileSync(balancePath, afterBalance);
+    console.log(`[build-all] balance page <title> branded from the descriptor`);
   }
   // Guest logo slot: copy the brand's logo-white.png into the guest public tree so
   // the runtime can prefer it over the default static import. Mirrors the admin

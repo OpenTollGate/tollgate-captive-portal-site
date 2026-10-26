@@ -178,6 +178,36 @@ export function guestHTMLFrom(html, desc) {
 
 
 /**
+ * Brand a SEPARATE guest page's `<title>` — today that is the balance page.
+ *
+ * WHY THIS EXISTS
+ *
+ *   The balance page is its own html entry with its own hardcoded title, so branding
+ *   only the portal left a branded router showing upstream's name on the page a
+ *   customer opens to check how much time they have left. One descriptor must drive
+ *   every guest surface, and the balance page is one of them.
+ *
+ *   It is titled "<name> Balance" rather than the portal's "… Captive Portal" because
+ *   the two pages are different surfaces; reusing the portal title would be worse than
+ *   leaving it alone.
+ *
+ *   Same rules as `guestHTMLFrom`: the value is escaped there, and no descriptor (or no
+ *   usable name) returns the input byte-identical so an unbranded build changes nothing.
+ *
+ * @param {string} html the balance page's html
+ * @param {object|null|undefined} desc the parsed `admin/brand/<id>.json`
+ * @returns {string} branded html, or the input unchanged
+ */
+export function guestBalanceHTMLFrom(html, desc) {
+  const b = guestBrandingFrom(desc);
+  if (!b) return html;
+  const base = String(desc.guestName || desc.name || '').trim();
+  if (!base) return html;
+  return guestHTMLFrom(html, { ...desc, guestName: `${base} Balance` });
+}
+
+
+/**
  * The guest header logo's brand-slot path, or null when there is no brand.
  *
  * Mirrors the ADMIN icon convention (`assets/brand/<id>/logo-white.png` — see
