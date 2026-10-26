@@ -73,7 +73,7 @@ export function guestBrandingFrom(desc) {
  * WHY: the admin UI was half-branded. The favicon and manifest already came from the brand
  * slot, but `<title>` was the hard-coded literal "TollGate Admin" and theme-color was the
  * hard-coded "#111" — so the tab a router owner looks at still said TollGate while the
- * icons beside it said net4sats. Two surfaces of one app disagreeing is the same defect
+ * icons beside it said the operator's brand. Two surfaces of one app disagreeing is the same defect
  * the guest-page branding exists to prevent.
  *
  * No descriptor (or one missing the fields) returns the input UNCHANGED, byte for byte, so
@@ -134,7 +134,7 @@ export function applyGuestBranding(manifest, strings, desc) {
  * WHY: `strings.html_title` already brands the runtime-locale title, but the static
  * `index.html` ships a hard-coded "Tollgate Captive Portal" — that literal is what a
  * browser shows first (tab, bookmarks, OS window list) BEFORE any JS runs, and what
- * crawlers see. The tab said TollGate while the page said net4sats: two surfaces of
+ * crawlers see. The tab said TollGate while the page said the operator's brand: two surfaces of
  * one page disagreeing, the exact defect this module exists to prevent.
  *
  * Rules mirror the rest of this file:

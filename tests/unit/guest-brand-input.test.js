@@ -90,9 +90,9 @@ describe('guest HTML title', () => {
 
   it('(C) a descriptor rewrites the guest <title> and meta description', () => {
     const out = guestHTMLFrom(sample('Tollgate Captive Portal'), {
-      id: 'net4sats', name: 'net4sats',
+      id: 'acme', name: 'acme',
     });
-    expect(out).toContain('<title>net4sats Captive Portal</title>');
+    expect(out).toContain('<title>acme Captive Portal</title>');
     expect(out).not.toContain('Tollgate');
   });
 
@@ -117,30 +117,30 @@ describe('guest logo slot', () => {
   });
 
   it('(D) a descriptor maps to the conventional guest asset path', () => {
-    expect(guestLogoPath({ id: 'net4sats', name: 'net4sats' }))
-      .toBe('assets/brand/net4sats/logo-white.png');
+    expect(guestLogoPath({ id: 'acme', name: 'acme' }))
+      .toBe('assets/brand/acme/logo-white.png');
   });
 
   it('(D) copyGuestBrandAssets copies the white logo into the guest public dir', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'guest-brand-'));
-    const brandAssets = join(tmp, 'brand-assets', 'net4sats');
+    const brandAssets = join(tmp, 'brand-assets', 'acme');
     const publicDir = join(tmp, 'public');
     mkdirSync(brandAssets, { recursive: true });
     mkdirSync(publicDir, { recursive: true });
     writeFileSync(join(brandAssets, 'logo-white.png'), 'PNGDATA');
-    const copied = copyGuestBrandAssets(brandAssets, publicDir, 'net4sats');
+    const copied = copyGuestBrandAssets(brandAssets, publicDir, 'acme');
     expect(copied).toBe(true);
-    expect(readFileSync(join(publicDir, 'assets/brand/net4sats/logo-white.png'), 'utf8')).toBe('PNGDATA');
+    expect(readFileSync(join(publicDir, 'assets/brand/acme/logo-white.png'), 'utf8')).toBe('PNGDATA');
     rmSync(tmp, { recursive: true, force: true });
   });
 
   it('(D) copyGuestBrandAssets with a missing asset changes nothing and reports false', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'guest-brand-'));
-    const brandAssets = join(tmp, 'brand-assets', 'net4sats');
+    const brandAssets = join(tmp, 'brand-assets', 'acme');
     const publicDir = join(tmp, 'public');
     mkdirSync(brandAssets, { recursive: true });
     mkdirSync(publicDir, { recursive: true });
-    const copied = copyGuestBrandAssets(brandAssets, publicDir, 'net4sats');
+    const copied = copyGuestBrandAssets(brandAssets, publicDir, 'acme');
     expect(copied).toBe(false);
     expect(existsSync(join(publicDir, 'assets'))).toBe(false);
     rmSync(tmp, { recursive: true, force: true });

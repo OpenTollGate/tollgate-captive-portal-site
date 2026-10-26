@@ -19,13 +19,13 @@ describe('admin app index.html branding', () => {
     // Inline descriptor: the brand slot ships ONLY the generic default (the anti-leak
     // test pins that), so a vendor descriptor must never be read from disk here.
     const desc = {
-      id: 'net4sats', name: 'net4sats', domain: 'net4sats.lan',
-      tagline: 'Router Admin Dashboard', poweredBy: 'Powered by net4sats',
-      website: 'https://net4sats.com/', version: 'net4sats v0.6.0',
+      id: 'acme', name: 'acme', domain: 'acme.lan',
+      tagline: 'Router Admin Dashboard', poweredBy: 'Powered by acme',
+      website: 'https://example.com/', version: 'acme v0.6.0',
       themeColor: '#f7931a',
     };
     const out = adminHTMLFrom(html, desc);
-    expect(out).toContain('<title>net4sats</title>');
+    expect(out).toContain('<title>acme</title>');
     expect(out).toContain('content="#f7931a"');
     expect(out).not.toContain('TollGate Admin');
     expect(out).not.toContain('content="#111"');
