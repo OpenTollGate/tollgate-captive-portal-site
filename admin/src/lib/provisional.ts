@@ -109,3 +109,29 @@ export function validatePasswordChoice(
   }
   return '';
 }
+
+/** WPA2-PSK bounds. The router enforces the same pair (`weak-wifi-passphrase`). */
+export const MIN_WIFI_PASSPHRASE_LENGTH = 8;
+export const MAX_WIFI_PASSPHRASE_LENGTH = 63;
+
+/**
+ * The management-WiFi passphrase policy: '' when acceptable, otherwise the
+ * sentence to show. An EMPTY value is acceptable — leaving the field blank means
+ * "keep the installed key", which is the router's contract too.
+ *
+ * The bounds are checked here because the router's own refusal arrives only
+ * AFTER the owner has typed and submitted: the reply says the passphrase was
+ * rejected, which is a worse way to learn it.
+ */
+export function validateWifiPassphrase(passphrase: string): string {
+  if (passphrase === '') {
+    return '';
+  }
+  if (passphrase.length < MIN_WIFI_PASSPHRASE_LENGTH) {
+    return `Use at least ${MIN_WIFI_PASSPHRASE_LENGTH} characters for the WiFi password`;
+  }
+  if (passphrase.length > MAX_WIFI_PASSPHRASE_LENGTH) {
+    return `Use at most ${MAX_WIFI_PASSPHRASE_LENGTH} characters for the WiFi password`;
+  }
+  return '';
+}
