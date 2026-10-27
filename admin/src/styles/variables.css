@@ -72,7 +72,11 @@
   /* accent (TollGate coral) */
   --accent: #ff6961;
   --accent-hover: #ff857e;
-  --accent-dim: rgba(255, 105, 97, 0.16);
+  /* .16 was the one density that failed: the badge paints --accent AS TEXT on
+     this tint, and over a card-hover ground the pair was 4.19:1. At .10 the
+     worst ground is 4.59:1 and the tint still reads as a tint (this also
+     matches --color-cta-transparent on the guest side). */
+  --accent-dim: rgba(255, 105, 97, 0.10);
   /* Focus ring. This is the one token WCAG 2.4.11 scores against the control
      it lands on, not against the page: the ring has to differ from the
      RESTING border (--border-control) by >= 3:1, because that is what it
@@ -159,9 +163,13 @@
     --disabled-text: #5d667a;
     --disabled-border: #c3cbd9;
 
-    --accent: #c2352d;
+    /* #b32f28, matching the guest palette's light accent. The badge paints
+       --accent ON --accent-dim at 10%, and on the page (not only on a card) the
+       old #c2352d composited to 4.42:1 — under AA. Three grounds are gated now
+       (page 5.01, card 5.34, raised 4.73), and the white button label is 6.26. */
+    --accent: #b32f28;
     --accent-hover: #a8271f;
-    --accent-dim: rgba(194, 53, 45, 0.10);
+    --accent-dim: rgba(179, 47, 40, 0.10);
     /* 3.64:1 against the light resting border #767f92, 13.67:1 on the page. */
     --focus-ring: #0a2460;
 

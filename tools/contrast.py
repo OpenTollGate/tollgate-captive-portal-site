@@ -227,6 +227,14 @@ PAIRS: dict[str, list[tuple]] = {
         # so it is the state the "hard to read" report is about. Gate it at AA
         # anyway: opacity-based disabling composited this pair to ~2.3:1.
         ("disabled button label", "disabled-text", "disabled-bg", 4.5, None),
+        # The badge is `background: var(--accent-dim)` over whatever it lands on.
+        # It appears on the PAGE (devices.tsx:119, next to the heading) and in
+        # card rows (wifi.tsx:472), so BOTH grounds are gated — the page one was
+        # missing, and over the 0.30-brighter white card the composite was light
+        # enough to hide a real 4.41:1 failure on the page ground.
+        ("accent badge text on tint (page)", "accent", "accent-dim", 4.5, "bg"),
+        ("accent badge text on tint (card)", "accent", "accent-dim", 4.5, "surface"),
+        ("accent badge text on tint (raised)", "accent", "accent-dim", 4.5, "raised"),
         # The ghost CTA paints the ACCENT AS TEXT on a tint of that same accent.
         # That is a text pair on a ground the tint makes lighter/darker than the
         # page, and it was the one painted pair nothing scored: at the old .16
@@ -265,7 +273,14 @@ PAIRS: dict[str, list[tuple]] = {
         ("secondary button label", "text", "raised", 4.5, None),
         ("success badge text", "success", "success-dim", 4.5, "surface"),
         ("error badge text", "error", "error-dim", 4.5, "surface"),
-        ("accent badge text", "accent", "accent-dim", 4.5, "surface"),
+        # Same ground problem as the guest block: the badge renders on the PAGE
+        # (devices.tsx:119) and in card rows (wifi.tsx:472), so all three grounds
+        # are gated. Gating only "over card" scored the composite over white,
+        # which is lighter than the page and turned the page's real 4.41:1 into a
+        # passing 4.71:1.
+        ("accent badge text on tint (page)", "accent", "accent-dim", 4.5, "bg"),
+        ("accent badge text on tint (card)", "accent", "accent-dim", 4.5, "surface"),
+        ("accent badge text on tint (raised)", "accent", "accent-dim", 4.5, "raised"),
         ("UI control border on card", "border-control", "surface", 3.0, None),
         ("UI control border on page", "border-control", "bg", 3.0, None),
         # The cross-link and its reason line are --text-dim text that used to be

@@ -64,6 +64,49 @@ for (const scheme of ['dark', 'light']) {
     check(scheme, 'banner <strong> text', parse(banner.strongColor || banner.color), parse(banner.bg), page, 4.5);
     check(scheme, 'banner border vs page (1.4.11)', parse(banner.border), page, page, 3.0);
   }
+
+  // The devices board: the elements a glance at the screenshot reads as "faint"
+  // — the connected-count badge, the IP line, the MAC label and the uptime chip.
+  // Measured, not judged: a screenshot review called the badge "low contrast".
+  // A SEPARATE context without the locked query, because `locked` means
+  // not-authenticated and #/devices would redirect straight back to login.
+  const dctx = await browser.newContext({ viewport: { width: 1000, height: 1100 }, colorScheme: scheme });
+  const dp = await dctx.newPage();
+  await dp.goto('http://localhost:5199/#/devices', { waitUntil: 'networkidle' });
+  await dp.waitForTimeout(1400);
+  if (!(await dp.$('#password'))) {
+    console.log(`\n=== admin devices board / ${scheme} ===`);
+  } else {
+    console.log(`\n=== admin devices board / ${scheme} ===  (landed on LOGIN, board not reachable)`);
+  }
+  const dev = await dp.evaluate(() => {
+    const out = [];
+    const push = (label, el, need) => {
+      if (!el) { out.push({ label, missing: true }); return; }
+      const cs = getComputedStyle(el);
+      let g = el, bg = 'rgba(0, 0, 0, 0)';
+      while (g && (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent')) {
+        bg = getComputedStyle(g).backgroundColor;
+        g = g.parentElement;
+      }
+      out.push({ label, color: cs.color, bg, need, opacity: cs.opacity, text: el.textContent.trim().slice(0, 24) });
+    };
+    push('connected-count badge', document.querySelector('.badge, .chip, [class*="count"]'), 4.5);
+    const card = document.querySelector('.device-card, [class*="device"]');
+    const ip = [...document.querySelectorAll('span, div, p')].find((n) => n.children.length === 0 && /^\d+\.\d+\.\d+\.\d+$/.test(n.textContent.trim()));
+    push('device IP line', ip, 4.5);
+    const macLabel = [...document.querySelectorAll('span, div, p, label')].find((n) => n.children.length === 0 && /mac/i.test(n.textContent.trim()) && n.textContent.trim().length < 20);
+    push('MAC label', macLabel, 4.5);
+    const uptime = [...document.querySelectorAll('span, div, p')].find((n) => n.children.length === 0 && /^\d+h \d+m$/.test(n.textContent.trim()));
+    push('uptime chip', uptime, 4.5);
+    return out;
+  });
+  for (const d of dev) {
+    if (d.missing) { console.log(`       ${d.label}: absent`); continue; }
+    check(scheme, `${d.label} ("${d.text}")`, parse(d.color), parse(d.bg), page, d.need);
+    if (Number(d.opacity) < 1) fails.push(`${scheme}: ${d.label} uses opacity ${d.opacity}`);
+  }
+  await dctx.close();
   await actx.close();
 
   const gctx = await browser.newContext({ viewport: { width: 900, height: 1050 }, colorScheme: scheme });

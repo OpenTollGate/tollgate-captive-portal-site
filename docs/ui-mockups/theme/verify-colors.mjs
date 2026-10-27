@@ -41,7 +41,7 @@ const EXPECT = {
     markAsset: '/assets/brand/tollgate/logo-white.png',
   },
   light: {
-    bg: 'rgb(246, 247, 250)', text: 'rgb(18, 21, 28)', accent: 'rgb(194, 53, 45)',
+    bg: 'rgb(246, 247, 250)', text: 'rgb(18, 21, 28)', accent: 'rgb(179, 47, 40)',
     onAccent: 'rgb(255, 255, 255)', surface: 'rgb(255, 255, 255)',
     success: 'rgb(28, 107, 54)', successTint: 'rgba(28, 107, 54, 0.1)',
     disabledBg: 'rgb(238, 240, 246)', disabledText: 'rgb(93, 102, 122)',
