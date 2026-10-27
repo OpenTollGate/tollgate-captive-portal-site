@@ -5,6 +5,20 @@
 * - css variables
 **/
 
+/* ─── TollGate theme tokens (guest portal + balance page) ──────────────
+ *
+ * ONE palette for the whole repo. The values here are the same measured set as
+ * `admin/src/styles/variables.css`; `tools/contrast.py` scores both and is the
+ * gate. See that file's header for why body text is off-white rather than #fff
+ * and why the primary button label is dark — that reasoning is the fix for
+ * "white is hard to read on a glossy screen".
+ *
+ * The `--color-*` names are the guest SCSS's historical vocabulary and are kept
+ * so this is a token change rather than a rewrite: every value below is either
+ * the palette or an alias of it, and the few rules that painted a literal white
+ * (`background: #fff`, `background-color: white`) now paint `--color-surface*`.
+ * ───────────────────────────────────────────────────────────────────── */
+
 :root {
   --font-size-xsmall: clamp(1rem, .3205vw + .8718rem, 1.2rem); /* 400px = 10px to 1024px = 12px */
   --font-size-small: clamp(1.2rem, .3205vw + 1.0718rem, 1.4rem); /* 400px = 12px to 1024px = 14px */
@@ -12,32 +26,124 @@
   --font-size-medium: clamp(1.6rem, .3205vw + 1.4718rem, 1.8rem); /* 400px = 16px to 1024px = 18px */
   --font-size-large: clamp(1.8rem, .3205vw + 1.6718rem, 2rem); /* 400px = 18px to 1024px = 20px */
 
-  --color-black: #000000;
-  --color-black-transparent: rgba(0,0,0,0.90);
+  /* surfaces */
+  --color-bg: #14161d;
+  --color-surface: #1c1f28;
+  --color-surface-raised: #232733;
+  --color-border: #3a4152;
+  --color-border-control: #6a7590;
 
-  --color: #171D35;
-  --color-negative: #959CB1;
-  
-  --color-cta: #FFB54C;
-  --color-cta-transparent: rgba(255, 181, 76, .8);
+  /* text */
+  --color: #eef1f7;
+  --color-negative: #b3bccd;
+  --color-dim: #8e99ad;
+  --color-on-accent: #1a1114;
 
-  --color-white: #ffffff;
-  --color-white-transparent: rgba(255,255,255,0.90);
+  /* accent (TollGate coral) */
+  --color-cta: #ff6961;
+  --color-cta-hover: #ff857e;
+  /* .16 was too dense: the ghost button paints the accent AS TEXT on this
+     tint, and .16 over --color-surface-raised gave only 4.19:1. At .10 the
+     same pair is 4.59:1 while still reading as a tint. */
+  --color-cta-transparent: rgba(255, 105, 97, .10);
+  /* Focus ring: scored against the RESTING control border, because that is
+     what it replaces when focus arrives (WCAG 2.4.11 wants 3:1 there). #cfdcf5
+     is 3.34:1 against #6a7590 and 13.09:1 on the page; the previous #8ab4ff
+     was 2.20:1 against the border — invisible. */
+  --color-focus-ring: #cfdcf5;
 
-  --color-red: #c32222;
-  --color-red-transparent: rgba(220,33,33,0.53);
+  /* aliases the existing rules read */
+  --color-black: var(--color-bg);
+  --color-black-transparent: rgba(10, 12, 17, 0.92);
+  --color-white: var(--color);
+  --color-white-transparent: var(--color-surface);
 
-  --color-green: #4AA922;
-  --color-green-transparent: rgba(74,169,34,0.55);
+  /* semantic. Each state has a *text* colour, a *ground* tint and a label
+     colour for the filled case — the balance header paints its label ON the
+     green, so it needs the dark label, not the page colour (9.82:1). */
+  --color-red: #ff9b95;
+  --color-red-transparent: rgba(255, 155, 149, 0.14);
+  --color-green: #7ad19a;
+  --color-green-transparent: rgba(122, 209, 154, 0.16);
+  --color-on-success: var(--color-bg);
 
-  --color-gray: #DBDBDB;
-  --color-gray-darken: #C4C4C4;
-  --color-gray-transparent: rgba(245, 245, 245, .9);
+  /* Disabled controls: an explicit pair, never `opacity`. Opacity composites
+     the fill AND the label toward the page, so `.4` on the coral CTA dropped
+     the label to ~2:1 — the "hard to read" state, and the state a form opens
+     in. Same reasoning as --disabled-* in admin/src/styles/variables.css.
+     Measured: 7.80:1 dark, 5.76:1 light. */
+  --color-disabled-bg: #232733;
+  --color-disabled-text: #b3bccd;
+  --color-disabled-border: #3a4152;
+
+  /* QR codes are scanned by a camera, not read by a person: the modules must
+     stay black on a light ground in BOTH palettes. This is the one pair that
+     must NOT follow the theme, and naming it here is what keeps a future
+     "make everything dark" edit from breaking scanning. */
+  --color-qr-ink: #000000;
+  --color-qr-ground: #eef1f7;
+
+  /* `--color-error` is what App.scss reaches for (the clipboard button pair);
+     defining it here closes a real gap — it was undefined, so those two rules
+     painted `unset` borders and no ground. */
+  --color-error: var(--color-red);
+  --color-error-transparent: var(--color-red-transparent);
+
+  --color-gray: var(--color-border);
+  --color-gray-darken: var(--color-border-control);
+  --color-gray-transparent: var(--color-surface-raised);
+
+  /* A filled chip/label ground: it must carry the page colour as its text, so
+     it is tuned as a *surface*, not as a border. #7c87a3 is 5.03:1 against
+     --color-bg and 4.15:1 against --color-surface-raised. */
+  --color-chip: #7c87a3;
 
   --border-radius-small: .3rem;
   --border-radius: .6rem;
   --border-radius-large: 1.2rem;
   --border-width: .2rem;
+}
+
+/* Light palette, selected by the OS setting. Dark-on-light is the strongest
+   answer to glare: the reflected image lifts glyph and ground together, so the
+   ratio survives, while a light-on-dark glyph loses its glow to the added
+   light. Same token names, so no rule changes. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-bg: #f6f7fa;
+    --color-surface: #ffffff;
+    --color-surface-raised: #eef0f6;
+    --color-border: #c3cbd9;
+    --color-border-control: #767f92;
+
+    --color: #12151c;
+    --color-negative: #4a5468;
+    --color-dim: #5d667a;
+    --color-on-accent: #ffffff;
+
+    --color-disabled-bg: #eef0f6;
+    --color-disabled-text: #5d667a;
+    --color-disabled-border: #c3cbd9;
+
+    --color-cta: #b32f28;
+    --color-cta-hover: #a8271f;
+    --color-cta-transparent: rgba(179, 47, 40, .10);
+    /* 3.64:1 against the resting border #767f92, 13.67:1 on the page. */
+    --color-focus-ring: #0a2460;
+
+    --color-black: var(--color-bg);
+    --color-black-transparent: rgba(246, 247, 250, 0.94);
+
+    --color-red: #a8271f;
+    --color-red-transparent: rgba(168, 39, 31, 0.10);
+    --color-green: #1c6b36;
+    --color-green-transparent: rgba(28, 107, 54, 0.10);
+    /* on light the filled green is dark, so its label flips to white (6.55:1) */
+    --color-on-success: #ffffff;
+    --color-qr-ground: #ffffff;
+
+    --color-chip: #656d7f;
+  }
 }
 
 html {
@@ -50,7 +156,7 @@ html, body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  background-color: #080e1d;
+  background-color: var(--color-bg);
   color: var(--color-white);
 }
 
@@ -92,7 +198,11 @@ a {
 a:hover,
 a:active,
 a:focus {
-  opacity: .8;
+  /* not `opacity: .8`: that dims the glyph AND lets the ground show through,
+     and on a link whose colour is already the accent it is the difference
+     between passing and not. Underline is the hover affordance; the colour is
+     left to the token. */
+  text-decoration: underline;
 }
 
 input[type=text],
@@ -112,13 +222,27 @@ textarea {
   width: 100%;
   background: var(--color-white-transparent);
   border-width: var(--border-width);
-  border-color: #DBDBDB;
+  border-color: var(--color-border-control);
   border-style: solid;
   border-radius: var(--border-radius);
   padding: .8rem;
 
+  /* Focus needs a signal that survives the border swap alone: moving
+     --color-border-control -> --color-cta is only 1.36:1 in the light palette
+     (1.63:1 dark), well under WCAG 2.4.11's 3:1 for a focus indicator. The
+     ring token clears 3:1 against the RESTING border it replaces (3.34:1 dark
+     / 3.64:1 light). */
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* the placeholder takes the dim token outright. It used to be body --color
+     multiplied by opacity .6, which painted 2.94:1 dark / 2.53:1 light on the
+     field ground — the same opacity class of defect as the disabled button. */
   &::placeholder {
-    opacity: .6;
+    color: var(--color-dim);
+    opacity: 1;
   }
 }
 
@@ -135,17 +259,32 @@ a.btn {
   border-width: var(--border-width);
   border-color: transparent;
   border-style: solid;
-  background-color: #B9B9B9;
+  background-color: var(--color-surface-raised);
   font-weight: 600;
-  color: var(--color-white);
-  opacity: .9;
+  color: var(--color);
+  /* No `opacity` here. This rule dimmed EVERY guest button to .9, which
+     composites the label toward the fill and the fill toward the page: the
+     opaque coral CTA held only 4.93:1 dark / 4.14:1 light (the light one under
+     AA) instead of the 6.56 / 5.47 its tokens define. The hierarchy it was
+     reaching for comes from the per-variant tokens (.cta, .ghost) instead. */
   font-weight: 600;
   text-decoration: none;
   display: inline-block;
   text-align: center;
 
   &[disabled] {
-    opacity: .4;
+    /* not `opacity`: see --color-disabled-bg in this file's token block */
+    opacity: 1;
+    background-color: var(--color-disabled-bg);
+    border-color: var(--color-disabled-border);
+    color: var(--color-disabled-text);
+
+    &.cta {
+      /* the CTA keeps its shape but loses the coral, so "disabled" stays
+         legible instead of turning into a dark smear */
+      background-color: var(--color-disabled-bg);
+      color: var(--color-disabled-text);
+    }
   }
 
   &:not([disabled]) {
@@ -160,17 +299,25 @@ a.btn {
 
   &.cta {
     background-color: var(--color-cta);
-    color: var(--color-white);
+    /* dark label on coral: white on #ff6961 is 2.82:1, below AA */
+    color: var(--color-on-accent);
   }
   
   &.ghost {
     border-color: var(--color-gray);
-    color: var(--color-gray-darken);
+    color: var(--color);
     background-color: var(--color-gray-transparent);
   
     &.cta {
       border-color: var(--color-cta);
-      color: var(--color-white);
+      /* the tinted ghost ground is nearly the page colour, so the label has to
+         be the accent as TEXT, not the on-accent (dark) colour the opaque
+         coral button takes. That makes accent-on-own-tint a real text pair,
+         and it was failing: at the old .16 tint the light accent held only
+         4.15:1 on a raised surface. The tint is kept light enough to stay a
+         tint (not a fill) and the light accent moved to #b32f28 so the pair
+         clears AA on every ground it lands on — 4.59:1 dark / 4.73:1 light. */
+      color: var(--color-cta);
       background-color: var(--color-cta-transparent);
     }
   }
@@ -185,15 +332,20 @@ a.btn {
 
 select {
   text-transform: uppercase;
-  background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23ffffff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.4-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
+  /* The chevron used to be an inline SVG with a hardcoded fill (#ffffff here,
+     #C4C4C4 on `.ghost`). An image cannot read a custom property, so on the
+     light palette a white chevron sat on a near-white select and disappeared.
+     Two gradients paint the same chevron from currentColor, which is
+     --color and therefore follows the theme. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
   background-repeat: no-repeat;
-  background-position: right .7em top 50%;
-  background-size: .65em auto;
+  background-position:
+    right 1em top 50%,
+    right .6em top 50%;
+  background-size: .4em .4em, .4em .4em;
   padding-right: 2em;
-  
-  &.ghost:not(.cta) {
-    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23C4C4C4%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.4-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');    
-  }
 }
 
 .ellipsis {
@@ -242,7 +394,7 @@ select {
 }
 
 .checkmark-circle {
-  stroke: var(--color-green, #4AA922);
+  stroke: var(--color-green);
   stroke-width: 4;
   stroke-miterlimit: 10;
   fill: none;
@@ -252,7 +404,7 @@ select {
 }
 
 .checkmark-check {
-  stroke: var(--color-green, #4AA922);
+  stroke: var(--color-green);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;

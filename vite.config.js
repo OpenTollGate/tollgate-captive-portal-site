@@ -47,6 +47,12 @@ function generateAssetManifestPlugin() {
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
   plugins: [react(), generateAssetManifestPlugin()],
+  // The admin app (:5199) resolves `vite` out of the SAME node_modules symlink,
+  // so by default both dev servers share `node_modules/.vite`. Whichever
+  // optimizes last invalidates the other's pre-bundled deps and every module
+  // request then 504s with "Outdated Optimize Dep", rendering the page empty and
+  // unstyled. Opt-in only: unset, Vite uses its normal cache exactly as before.
+  cacheDir: process.env.VITE_CACHE_DIR || undefined,
   build: {
     outDir: "build",
     rollupOptions: {

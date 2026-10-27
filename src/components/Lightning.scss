@@ -37,7 +37,10 @@
       aspect-ratio: 1/1;
       width: 100%;
       padding: 1rem;
-      background-color: var(--color-white);
+      /* QR ground: the invoice SVG paints black modules, so this panel must be
+         light in BOTH palettes or the code stops scanning. It is the one
+         surface in the app that intentionally does not follow the theme. */
+      background-color: var(--color-qr-ground);
       border-radius: var(--border-radius);
       cursor: pointer;
 
