@@ -66,7 +66,11 @@ for (const scheme of ['dark', 'light']) {
   // ── admin board ──────────────────────────────────────────────────────
   const actx = await browser.newContext({ viewport: { width: 1000, height: 900 }, colorScheme: scheme });
   const ap = await actx.newPage();
-  await ap.goto('http://localhost:5199/#/login', { waitUntil: 'networkidle' });
+  // `?mockCredentialState=locked` — a mock build with a `set` credential
+  // auto-logins, so #/login redirects to the dashboard and there is no form to
+  // measure. The locked state keeps the form on screen (login.tsx renders the
+  // locked banner AND the form), which is the shape these assertions need.
+  await ap.goto('http://localhost:5199/?mockCredentialState=locked#/login', { waitUntil: 'networkidle' });
   await ap.waitForTimeout(900);
   console.log(`\n=== admin / ${scheme} ===`);
 
@@ -74,11 +78,16 @@ for (const scheme of ['dark', 'light']) {
   const disabled = await ap.evaluate(() => {
     const btn = document.querySelector('.btn-primary');
     return {
+      found: !!btn,
       isDisabled: !!(btn && btn.disabled),
       bg: btn && getComputedStyle(btn).backgroundColor,
       text: btn && getComputedStyle(btn).color,
     };
   });
+  // assert the FORM is there before asserting anything about its button:
+  // otherwise a redirected-to-dashboard run reports three "FAIL"s about null
+  // and then dies on a 30s locator timeout, which reads like a theme regression.
+  check(scheme, 'login form rendered (not redirected)', String(disabled.found), 'true');
   check(scheme, 'submit disabled on load (blank password)', String(disabled.isDisabled), 'true');
   check(scheme, 'disabled button bg', disabled.bg, e.disabledBg);
   check(scheme, 'disabled button label', disabled.text, e.disabledText);
