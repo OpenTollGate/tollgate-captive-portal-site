@@ -42,8 +42,15 @@
   /* accent (TollGate coral) */
   --color-cta: #ff6961;
   --color-cta-hover: #ff857e;
-  --color-cta-transparent: rgba(255, 105, 97, .16);
-  --color-focus-ring: #8ab4ff;
+  /* .16 was too dense: the ghost button paints the accent AS TEXT on this
+     tint, and .16 over --color-surface-raised gave only 4.19:1. At .10 the
+     same pair is 4.59:1 while still reading as a tint. */
+  --color-cta-transparent: rgba(255, 105, 97, .10);
+  /* Focus ring: scored against the RESTING control border, because that is
+     what it replaces when focus arrives (WCAG 2.4.11 wants 3:1 there). #cfdcf5
+     is 3.34:1 against #6a7590 and 13.09:1 on the page; the previous #8ab4ff
+     was 2.20:1 against the border — invisible. */
+  --color-focus-ring: #cfdcf5;
 
   /* aliases the existing rules read */
   --color-black: var(--color-bg);
@@ -118,10 +125,11 @@
     --color-disabled-text: #5d667a;
     --color-disabled-border: #c3cbd9;
 
-    --color-cta: #c2352d;
+    --color-cta: #b32f28;
     --color-cta-hover: #a8271f;
-    --color-cta-transparent: rgba(194, 53, 45, .10);
-    --color-focus-ring: #1f4fd8;
+    --color-cta-transparent: rgba(179, 47, 40, .10);
+    /* 3.64:1 against the resting border #767f92, 13.67:1 on the page. */
+    --color-focus-ring: #0a2460;
 
     --color-black: var(--color-bg);
     --color-black-transparent: rgba(246, 247, 250, 0.94);
@@ -190,7 +198,11 @@ a {
 a:hover,
 a:active,
 a:focus {
-  opacity: .8;
+  /* not `opacity: .8`: that dims the glyph AND lets the ground show through,
+     and on a link whose colour is already the accent it is the difference
+     between passing and not. Underline is the hover affordance; the colour is
+     left to the token. */
+  text-decoration: underline;
 }
 
 input[type=text],
@@ -215,8 +227,22 @@ textarea {
   border-radius: var(--border-radius);
   padding: .8rem;
 
+  /* Focus needs a signal that survives the border swap alone: moving
+     --color-border-control -> --color-cta is only 1.36:1 in the light palette
+     (1.63:1 dark), well under WCAG 2.4.11's 3:1 for a focus indicator. The
+     ring token clears 3:1 against the RESTING border it replaces (3.34:1 dark
+     / 3.64:1 light). */
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* the placeholder takes the dim token outright. It used to be body --color
+     multiplied by opacity .6, which painted 2.94:1 dark / 2.53:1 light on the
+     field ground — the same opacity class of defect as the disabled button. */
   &::placeholder {
-    opacity: .6;
+    color: var(--color-dim);
+    opacity: 1;
   }
 }
 
@@ -236,7 +262,11 @@ a.btn {
   background-color: var(--color-surface-raised);
   font-weight: 600;
   color: var(--color);
-  opacity: .9;
+  /* No `opacity` here. This rule dimmed EVERY guest button to .9, which
+     composites the label toward the fill and the fill toward the page: the
+     opaque coral CTA held only 4.93:1 dark / 4.14:1 light (the light one under
+     AA) instead of the 6.56 / 5.47 its tokens define. The hierarchy it was
+     reaching for comes from the per-variant tokens (.cta, .ghost) instead. */
   font-weight: 600;
   text-decoration: none;
   display: inline-block;
@@ -282,7 +312,11 @@ a.btn {
       border-color: var(--color-cta);
       /* the tinted ghost ground is nearly the page colour, so the label has to
          be the accent as TEXT, not the on-accent (dark) colour the opaque
-         coral button takes. */
+         coral button takes. That makes accent-on-own-tint a real text pair,
+         and it was failing: at the old .16 tint the light accent held only
+         4.15:1 on a raised surface. The tint is kept light enough to stay a
+         tint (not a fill) and the light accent moved to #b32f28 so the pair
+         clears AA on every ground it lands on — 4.59:1 dark / 4.73:1 light. */
       color: var(--color-cta);
       background-color: var(--color-cta-transparent);
     }

@@ -25,6 +25,24 @@ Thresholds (WCAG 2.1):
          them that way is the point — an unlabelled 1.3:1 row that silently
          passes is how a theme rots.
 
+WHAT THIS FILE STRUCTURALLY CANNOT SEE: `opacity`.
+
+Every row above scores two token VALUES. `opacity` is not a value — it is a
+multiply applied at paint time, so a rule can pair two passing tokens and still
+emit a failing pair:
+
+    color: var(--text-dim);   /* 6.29:1 on --bg — passes */
+    opacity: 0.8;             /* painted #767f90 on the page = 4.47:1 */
+
+That is not hypothetical: it is how `.btn:disabled`, `.ui-crosslink`,
+`.ui-crosslink-reason`, the guest placeholder, the guest `.cancel` button and
+the whole guest button base all shipped below AA while this file said 0
+failures. The fix each time is the same — express the de-emphasis as a COLOUR
+token instead — so the class is also gated structurally, by
+tools/check-no-text-opacity.py, which fails if a rule that sets a text colour
+also multiplies it by opacity. A pair list alone will always be one rule
+behind; the structural check is what makes the class unrepeatable.
+
 Run: python3 tools/contrast.py [--json] [--before]
 """
 
@@ -209,6 +227,20 @@ PAIRS: dict[str, list[tuple]] = {
         # so it is the state the "hard to read" report is about. Gate it at AA
         # anyway: opacity-based disabling composited this pair to ~2.3:1.
         ("disabled button label", "disabled-text", "disabled-bg", 4.5, None),
+        # The ghost CTA paints the ACCENT AS TEXT on a tint of that same accent.
+        # That is a text pair on a ground the tint makes lighter/darker than the
+        # page, and it was the one painted pair nothing scored: at the old .16
+        # tint the light accent held 4.15:1 on a raised surface, under AA.
+        ("ghost CTA accent text on own tint (card)", "accent", "accent-dim", 4.5, "surface"),
+        ("ghost CTA accent text on own tint (raised)", "accent", "accent-dim", 4.5, "raised"),
+        # A placeholder is text the user reads to know what to type, and it sits
+        # on the field ground. It used to be body colour x opacity .6 = 2.94:1.
+        ("placeholder text on field", "dim", "surface", 4.5, None),
+        # WCAG 2.4.11: the focus indicator must differ from the control's
+        # RESTING state by >= 3:1. A border swap border-control -> accent is
+        # 1.63:1 dark / 1.36:1 light, so the ring token is what carries it.
+        ("focus ring vs resting control border", "focus-ring", "border-control", 3.0, None),
+        ("focus ring vs page", "focus-ring", "bg", 3.0, None),
         # QR: modules are pure black, the ground must stay light in BOTH palettes
         ("QR modules on QR ground", "qr-ink", "qr-ground", 4.5, None),
         # decorative hairline, no state -> no gate (see module docstring)
@@ -225,11 +257,27 @@ PAIRS: dict[str, list[tuple]] = {
         ("accent text on card", "accent", "surface", 4.5, None),
         ("PRIMARY BUTTON label", "on-accent", "accent", 4.5, None),
         ("danger button label", "on-accent", "error", 4.5, None),
+        # The HOVER fill is a separate pair and was untested: hover swapped to
+        # --error-strong (a dark red) while the label stayed --text-on-accent
+        # (dark in this palette), landing at 3.39:1 — below AA, and worse than
+        # the rest state. Gated so the hover fill cannot drift from its label.
+        ("danger button label on HOVER fill", "on-accent", "error-hover", 4.5, None),
         ("secondary button label", "text", "raised", 4.5, None),
         ("success badge text", "success", "success-dim", 4.5, "surface"),
         ("error badge text", "error", "error-dim", 4.5, "surface"),
+        ("accent badge text", "accent", "accent-dim", 4.5, "surface"),
         ("UI control border on card", "border-control", "surface", 3.0, None),
         ("UI control border on page", "border-control", "bg", 3.0, None),
+        # The cross-link and its reason line are --text-dim text that used to be
+        # multiplied by opacity .8 / .7. The opacity composited them UNDER AA
+        # (4.47:1 and 3.72:1 dark, 3.55:1 and 2.93:1 light) while --text-dim on
+        # its own is fine — the classic gate-cannot-see-opacity failure.
+        ("cross-link text on header", "dim", "header", 4.5, "bg"),
+        ("cross-link text on raised panel", "dim", "raised", 4.5, None),
+        # WCAG 2.4.11, see the guest block: the ring must clear 3:1 against the
+        # RESTING border it replaces, not just against the page.
+        ("focus ring vs resting control border", "focus-ring", "border-control", 3.0, None),
+        ("focus ring vs page", "focus-ring", "bg", 3.0, None),
         # see the guest block: disabled is the state a form opens in
         ("disabled button label", "disabled-text", "disabled-bg", 4.5, None),
         ("card border on page (decorative)", "border", "bg", 0.0, None),
@@ -244,6 +292,7 @@ SOURCES = {
         "bg": "--color-bg", "surface": "--color-surface", "raised": "--color-surface-raised",
         "text": "--color", "muted": "--color-negative", "dim": "--color-dim",
         "accent": "--color-cta", "on-accent": "--color-on-accent",
+        "accent-dim": "--color-cta-transparent", "focus-ring": "--color-focus-ring",
         "success": "--color-green", "success-dim": "--color-green-transparent",
         "error": "--color-red", "error-dim": "--color-red-transparent",
         "on-success": "--color-on-success", "chip": "--color-chip",
@@ -253,10 +302,14 @@ SOURCES = {
     }),
     ADMIN: (ROOT / "admin/src/styles/variables.css", {
         "bg": "--bg", "surface": "--card", "raised": "--card-hover",
+        # the header/nav ground is a translucent scrim over the page, so a pair
+        # "on header" composites it over --bg rather than treating it as opaque
+        "header": "--scrim",
         "text": "--text", "muted": "--text-muted", "dim": "--text-dim",
         "accent": "--accent", "on-accent": "--text-on-accent",
+        "accent-dim": "--accent-dim", "focus-ring": "--focus-ring",
         "success": "--success", "success-dim": "--success-dim",
-        "error": "--error", "error-dim": "--error-dim",
+        "error": "--error", "error-hover": "--error-hover", "error-dim": "--error-dim",
         "border": "--border", "border-control": "--border-control",
         "disabled-bg": "--disabled-bg", "disabled-text": "--disabled-text",
     }),

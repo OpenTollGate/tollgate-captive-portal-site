@@ -73,12 +73,15 @@
   }
   
   &-tabs-tab[data-active=false] {
-    opacity: .85;
+    /* de-emphasis by colour token, not `opacity`: .85 on body text was fine,
+       but opacity is the class that silently undercuts the pair (see
+       .ui-crosslink in admin.css). The muted token is the intended step down. */
+    color: var(--color-negative);
 
     &:hover,
     &:focus,
     &:active {
-      opacity: .9;
+      color: var(--color);
     }
   }
 

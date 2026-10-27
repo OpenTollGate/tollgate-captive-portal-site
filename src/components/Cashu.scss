@@ -12,9 +12,10 @@
       background-color: transparent;
       /* was --color-gray-darken (#C4C4C4 on the old board): a FIXED light
          grey used as an icon colour, so on the light palette it dropped to
-         1.6:1. It is an icon label, so it takes the dimmed body colour. */
+         1.6:1. It is an icon label, so it takes the dimmed body colour — at
+         full strength, not multiplied by opacity .8 (which painted 4.18:1
+         dark / 3.71:1 light, under AA on a card). */
       color: var(--color-dim);
-      opacity: 0.8;
       font-size: var(--font-size);
       display: flex;
       align-items: center;
@@ -25,7 +26,7 @@
       &:hover,
       &:focus,
       &:active {
-        opacity: 1;
+        color: var(--color);
       }
     }
 

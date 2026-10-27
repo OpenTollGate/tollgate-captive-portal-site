@@ -73,13 +73,31 @@
   --accent: #ff6961;
   --accent-hover: #ff857e;
   --accent-dim: rgba(255, 105, 97, 0.16);
-  --focus-ring: #8ab4ff;
+  /* Focus ring. This is the one token WCAG 2.4.11 scores against the control
+     it lands on, not against the page: the ring has to differ from the
+     RESTING border (--border-control) by >= 3:1, because that is what it
+     replaces when focus arrives. #8ab4ff was 8.65:1 on the page but only
+     2.20:1 against #6a7590 — a focus state a user cannot see. #cfdcf5 is
+     3.34:1 against the resting border and 13.09:1 on the page. */
+  --focus-ring: #cfdcf5;
 
   /* semantic */
   --success: #7ad19a;
   --success-dim: rgba(122, 209, 154, 0.16);
   --error: #ff9b95;
-  --error-strong: #c2352d;
+  /* The danger button's HOVER fill is its own token, because the dark palette
+     pairs the danger fill with a DARK label (--text-on-accent #1a1114): the
+     base fill #ff9b95 is a LIGHT chip (9.15:1) and a hover state must stay
+     light enough to carry that label. It used to reuse --error-strong
+     (#c2352d), which is a dark red — the label stayed dark and the pair fell
+     to 3.39:1, i.e. hover made the button WORSE than rest. #e35c52 reads as a
+     clear darkening step (1.75:1 from the base fill) while holding the label
+     at 5.22:1.
+
+     --error-strong is GONE rather than kept alongside: after this change nothing
+     read it, and a colour token no rule paints is exactly the dead-token trap
+     review round 1 flagged on --focus-ring. One token per painted state. */
+  --error-hover: #e35c52;
   --error-dim: rgba(255, 155, 149, 0.14);
   --warning: #ffc46b;
   --warning-dim: rgba(255, 196, 107, 0.14);
@@ -144,12 +162,15 @@
     --accent: #c2352d;
     --accent-hover: #a8271f;
     --accent-dim: rgba(194, 53, 45, 0.10);
-    --focus-ring: #1f4fd8;
+    /* 3.64:1 against the light resting border #767f92, 13.67:1 on the page. */
+    --focus-ring: #0a2460;
 
     --success: #1c6b36;
     --success-dim: rgba(28, 107, 54, 0.10);
     --error: #a8271f;
-    --error-strong: #8d1f18;
+    /* Same dark fill as --error: this palette pairs it with a WHITE label, and
+       #8d1f18 holds that at 8.97:1 while still darkening from rest. */
+    --error-hover: #8d1f18;
     --error-dim: rgba(168, 39, 31, 0.10);
     --warning: #7a4d00;
     --warning-dim: rgba(122, 77, 0, 0.10);

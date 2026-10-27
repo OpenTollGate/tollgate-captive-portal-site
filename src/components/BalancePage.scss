@@ -72,7 +72,10 @@
     }
 
     .muted {
-      opacity: 0.85;
+      /* a colour token, not opacity: .85 multiplied body text toward the green
+         tint under it (4.94:1 dark / 4.62:1 light). The muted token is the
+         intended de-emphasis and holds 6.14:1 / 6.56:1 on the same tint. */
+      color: var(--color-negative);
     }
   }
 }

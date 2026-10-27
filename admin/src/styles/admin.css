@@ -156,7 +156,10 @@ button {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: var(--error-strong);
+  /* NOT --error-strong: the label above is --text-on-accent, which is DARK in
+     this palette, so the hover fill has to stay light enough to carry it.
+     --error-strong is a dark red and dropped the pair to 3.39:1. */
+  background: var(--error-hover);
 }
 
 .btn-sm {
@@ -182,12 +185,23 @@ button {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: var(--font-size);
-  outline: none;
+  /* no blanket `outline: none` — that suppressed the UA focus ring for
+     keyboard users and left only the border-colour swap below */
   transition: border-color 0.15s ease;
 }
 
+/* Focus is signalled two ways, because either one alone was not enough:
+   the border still moves to --accent for a mouse user, and a
+   :focus-visible outline paints --focus-ring, which clears WCAG 2.4.11's
+   3:1 against the resting border (3.34:1 dark / 3.64:1 light). The border
+   swap on its own was 1.63:1 — a focus state that could not be seen. */
 .input:focus {
   border-color: var(--accent);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .input::placeholder {
@@ -506,25 +520,30 @@ button {
 
 /* Cross-link to the other admin UI (LuCI). Rendered only from the router's
    ui_links answer: an anchor when it names an HTTPS url, otherwise the plain
-   reason line below — never a disabled-looking dead button. */
+   reason line below — never a disabled-looking dead button.
+
+   Neither rule multiplies its colour by `opacity`. Both used to (.8 / .7), and
+   `opacity` composites the painted pixels toward whatever is behind them, so
+   the pair that actually ships is not the token pair the gate scores:
+   --text-dim is 6.29:1 on the page, but at .8 it painted 4.47:1 (under AA) and
+   the reason line at .7 painted 3.72:1. The de-emphasis now comes from the
+   --text-dim token itself, which is already the darkest readable step above
+   --text-muted. Hover still brightens by moving to --accent. */
 .ui-crosslink {
   font-size: var(--font-size-xsmall);
   color: var(--text-dim);
   text-decoration: none;
-  opacity: 0.8;
   white-space: nowrap;
 }
 
 .ui-crosslink:hover {
   color: var(--accent);
-  opacity: 1;
 }
 
 .ui-crosslink-reason {
   margin: 0;
   font-size: var(--font-size-xsmall);
   color: var(--text-dim);
-  opacity: 0.7;
   white-space: nowrap;
   max-width: 22ch;
   overflow: hidden;
