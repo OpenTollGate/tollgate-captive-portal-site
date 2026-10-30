@@ -310,5 +310,6 @@
   "Peer with this gateway": "Rekan dengan gateway ini",
   "Peering": "Mengintip",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "Temukan sesama operator TollGate, rekankan mereka, dan susun SATs.",
-  "Manage peering →": "Kelola peering →"
+  "Manage peering →": "Kelola peering →",
+  "Buy upstream access for sats": "Beli akses upstream untuk sats"
 }

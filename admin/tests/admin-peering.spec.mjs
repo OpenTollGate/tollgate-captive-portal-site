@@ -29,6 +29,8 @@ test.describe('admin board: peering', () => {
     await expect(page.getByText('Peered with !TollGate-CD34')).toBeVisible();
 
     const toggles = page.locator('.toggle-row input');
+    await expect(toggles.nth(0)).toBeChecked();
+    await expect(toggles.nth(1)).toBeChecked();
     await toggles.nth(0).click();
     await toggles.nth(1).click();
 

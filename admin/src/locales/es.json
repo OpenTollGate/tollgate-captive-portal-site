@@ -310,5 +310,6 @@
   "Peer with this gateway": "Comparar con esta puerta de enlace",
   "Peering": "Mirando",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "Encuentre otros operadores de TollGate, compárese con ellos y apile SATs.",
-  "Manage peering →": "Administrar el emparejamiento →"
+  "Manage peering →": "Administrar el emparejamiento →",
+  "Buy upstream access for sats": "Comprar acceso upstream para sats"
 }

@@ -310,5 +310,6 @@
   "Peer with this gateway": "Bu ağ geçidiyle eşleş",
   "Peering": "Bakma",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "Diğer TollGate operatörlerini bulun, onlarla eşleşin ve SATs yığınını yapın.",
-  "Manage peering →": "Eşlemeyi yönet →"
+  "Manage peering →": "Eşlemeyi yönet →",
+  "Buy upstream access for sats": "Sats için yukarı akış erişimi satın alın"
 }

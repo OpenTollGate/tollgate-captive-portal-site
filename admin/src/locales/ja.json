@@ -310,5 +310,6 @@
   "Peer with this gateway": "このゲートウェイとピアリングします",
   "Peering": "ピアリング",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "仲間の TollGate オペレーターを見つけてピアリングし、SATs を積み上げます。",
-  "Manage peering →": "ピアリングの管理 →"
+  "Manage peering →": "ピアリングの管理 →",
+  "Buy upstream access for sats": "衛星放送用のアップストリーム アクセスを購入する"
 }

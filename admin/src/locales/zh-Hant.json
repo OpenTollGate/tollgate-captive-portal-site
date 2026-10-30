@@ -310,5 +310,6 @@
   "Peer with this gateway": "與此網關對等",
   "Peering": "對等",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "找其他 TollGate 操作員，與他們對等，並堆疊 SATs。",
-  "Manage peering →": "管理對等互連 →"
+  "Manage peering →": "管理對等互連 →",
+  "Buy upstream access for sats": "購買衛星上游存取"
 }

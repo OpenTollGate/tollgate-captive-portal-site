@@ -310,5 +310,6 @@
   "Peer with this gateway": "نظير مع هذه البوابة",
   "Peering": "التناظر",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "ابحث عن زملائك من مشغلي TollGate، وقارنهم، وقم بتجميع SATs.",
-  "Manage peering →": "إدارة التناظر →"
+  "Manage peering →": "إدارة التناظر →",
+  "Buy upstream access for sats": "شراء الوصول المنبع لSats"
 }

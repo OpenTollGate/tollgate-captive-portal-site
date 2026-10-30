@@ -310,5 +310,6 @@
   "Peer with this gateway": "Пир с этим шлюзом",
   "Peering": "Пиринг",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "Найдите коллег-операторов TollGate, пообщайтесь с ними и объедините SATs.",
-  "Manage peering →": "Управление пирингом →"
+  "Manage peering →": "Управление пирингом →",
+  "Buy upstream access for sats": "Купить восходящий доступ для спутников"
 }

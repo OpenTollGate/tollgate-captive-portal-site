@@ -310,5 +310,6 @@
   "Peer with this gateway": "Ngang hàng với cổng này",
   "Peering": "ngang hàng",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "Tìm những người vận hành TollGate đồng nghiệp, ngang hàng với họ và xếp chồng SATs.",
-  "Manage peering →": "Quản lý ngang hàng →"
+  "Manage peering →": "Quản lý ngang hàng →",
+  "Buy upstream access for sats": "Mua quyền truy cập ngược dòng cho sats"
 }

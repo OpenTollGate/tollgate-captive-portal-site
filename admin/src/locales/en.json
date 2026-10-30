@@ -310,5 +310,6 @@
   "Peer with this gateway": "Peer with this gateway",
   "Peering": "Peering",
   "Find fellow TollGate operators, peer with them, and stack SATs.": "Find fellow TollGate operators, peer with them, and stack SATs.",
-  "Manage peering →": "Manage peering →"
+  "Manage peering →": "Manage peering →",
+  "Buy upstream access for sats": "Buy upstream access for sats"
 }

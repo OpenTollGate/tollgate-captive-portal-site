@@ -124,7 +124,7 @@ export default function Peering() {
   const fetchConfig = useCallback(async () => {
     try {
       const data = await ubusCall('tollgate', 'config_get');
-      setConfig(data?.config || {});
+      setConfig(data?.data?.config || {});
     } catch {
       setConfig({});
     }
@@ -377,7 +377,7 @@ export default function Peering() {
             <input type="checkbox" checked={resellerMode} disabled={toggling === 'reseller_mode'}
               onChange={(e) => toggleConfig('reseller_mode', (e.target as HTMLInputElement).checked, 'SAT stacking')} />
             <span>
-              <strong>Buy upstream access and stack SATs</strong>
+              <strong>Buy upstream access for sats</strong>
               <span className="text-dim">This router pays the selected peer and resells access to your customers.</span>
             </span>
           </label>
