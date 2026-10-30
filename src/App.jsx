@@ -7,6 +7,7 @@ import classNames from 'classnames';
 import Background from './components/Background.jsx'
 import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
+import GatewayObjectivePicker from './components/GatewayObjectivePicker.jsx'
 import { Error } from './components/Status.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon.jsx'
@@ -151,6 +152,13 @@ export const App = () => {
               {!loading && !error && method === 'cashu' && <Cashu tollgateDetails={tollgateDetails.value} />}
               {!loading && !error && method === 'lightning' && <Lightning tollgateDetails={tollgateDetails.value} />}
             </div>
+
+            {/* Gateway objective picker, pre-purchase: the buyer states how
+                their traffic should leave the internet BEFORE paying, because
+                the router derives the mix at session start. The component
+                renders nothing at all (not even a wrapper) unless the backend
+                serves the objectives endpoint, so no dead block is left here. */}
+            {!loading && !error && <GatewayObjectivePicker />}
 
           </div>
         </div>
