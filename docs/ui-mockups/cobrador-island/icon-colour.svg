@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+
+  <circle cx="256" cy="256" r="224" fill="#FF6961"/>
+  <circle cx="256" cy="256" r="204" fill="none" stroke="#0C1420" stroke-width="8" opacity=".32"/>
+  <!-- island + tide -->
+  <path d="M70 366c52-58 108-87 168-87 62 0 120 30 174 88" fill="none" stroke="#0C1420" stroke-width="18" stroke-linecap="round"/>
+  <path d="M116 364c36-32 76-48 120-48 46 0 88 16 126 49" fill="none" stroke="#6FD3D9" stroke-width="9" stroke-linecap="round"/>
+  <!-- lighthouse: tapered tower, gallery, lantern, dome -->
+  <path d="M228 366h56l-10-116h-36z" fill="#0C1420"/>
+  <path d="M236 276h40l-4 42h-32z" fill="#EEF1F7"/>
+  <path d="M241 324h31l-3 34h-25z" fill="#EEF1F7"/>
+  <rect x="232" y="248" width="48" height="14" rx="4" fill="#EEF1F7"/>
+  <path d="M238 248l8-30h20l8 30z" fill="#0C1420"/>
+  <rect x="246" y="226" width="20" height="18" rx="3" fill="#FFE8E4"/>
+  <path d="M250 226h12l-2-12h-8z" fill="#0C1420"/>
+  <path d="M256 208v-16" stroke="#0C1420" stroke-width="7" stroke-linecap="round"/>
+  <!-- beams -->
+  <path d="M256 236L116 198l42 40-42 40z" fill="#FFE8E4" opacity=".7"/>
+  <path d="M256 236l140-38-42 40 42 40z" fill="#FFE8E4" opacity=".7"/>
+  <!-- base rocks -->
+  <path d="M184 372c18-18 42-27 72-27s54 9 72 27z" fill="#0C1420" opacity=".8"/>
+</svg>

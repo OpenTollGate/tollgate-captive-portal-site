@@ -5,7 +5,35 @@ import HttpBackend from "i18next-http-backend";
 import LanguageDetector from "i18next-browser-languagedetector";
 
 // list of supported languages for the app
-export const supportedLanguages = ["en"]; // add more as needed
+export const supportedLanguages = [
+  "en", "zh-Hans", "zh-Hant", "es", "fr", "ar", "pt",
+  "ru", "id", "de", "ja", "vi", "tr", "it",
+];
+
+// Native language names for the picker. A reader who cannot read the current
+// UI must still recognize their own language.
+export const languageNames = {
+  en: "English",
+  "zh-Hans": "简体中文",
+  "zh-Hant": "繁體中文",
+  es: "Español",
+  fr: "Français",
+  ar: "العربية",
+  pt: "Português",
+  ru: "Русский",
+  id: "Bahasa Indonesia",
+  de: "Deutsch",
+  ja: "日本語",
+  vi: "Tiếng Việt",
+  tr: "Türkçe",
+  it: "Italiano",
+};
+
+export const rtlLanguages = new Set(["ar", "fa", "he", "ur"]);
+
+export function isRTL(language) {
+  return rtlLanguages.has(String(language || "").split("-")[0]);
+}
 
 // utility function to get available languages
 export function getAvailableLanguages() {
@@ -39,6 +67,16 @@ i18n
       useSuspense: false,
     },
   });
+
+function applyDocumentLanguage(language) {
+  if (typeof document === "undefined") return;
+  const tag = String(language || "en");
+  document.documentElement.lang = tag;
+  document.documentElement.dir = isRTL(tag) ? "rtl" : "ltr";
+}
+
+i18n.on("languageChanged", applyDocumentLanguage);
+applyDocumentLanguage(i18n.language);
 
 // export the configured i18n instance
 export default i18n;

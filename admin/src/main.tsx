@@ -12,12 +12,17 @@ import {
 } from './lib/ubus';
 import { requiresPasswordChoice, requiresWifiChoice } from './lib/provisional';
 import { BRAND } from './brand';
+import { startTranslationObserver } from './lib/i18n';
+import './styles/cobrador-island.css';
 import Layout from './components/layout';
 import LoginPage from './routes/login';
 import PasswordChoicePage from './routes/password';
 
 // apply the build's brand chrome before first paint
 document.title = `${BRAND.name} Admin`;
+if (import.meta.env.VITE_THEME === 'cobrador-island' || BRAND.id === 'cobrador') {
+  document.documentElement.classList.add('theme-cobrador-island');
+}
 (() => {
   const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (icon) icon.href = `${import.meta.env.BASE_URL}${BRAND.icon}`;
@@ -34,6 +39,11 @@ function AdminApp() {
   // to choose their own before ANY route renders (see below).
   const [credential, setCredential] = useState<CredentialStatus | null>(null);
   const route = useRoute();
+
+  useEffect(() => {
+    const stopTranslations = startTranslationObserver();
+    return stopTranslations;
+  }, []);
 
   useEffect(() => {
     initRouter();

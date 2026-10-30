@@ -49,6 +49,44 @@ function StatRow({ label, value }: { label: string; value: any }) {
   );
 }
 
+function CobradorWelcome() {
+  const [visible, setVisible] = useState(() => {
+    try { return localStorage.getItem('tollgate_cobrador_welcome') !== 'dismissed'; } catch { return true; }
+  });
+  const [open, setOpen] = useState(false);
+  if (!visible) return null;
+  function dismiss() {
+    setVisible(false);
+    try { localStorage.setItem('tollgate_cobrador_welcome', 'dismissed'); } catch { /* best effort */ }
+  }
+  return (
+    <div className="card animate-in cobrador-welcome-card">
+      <div className="card-header">
+        <div className="card-title">Welcome home, Cobrador!</div>
+        <div className="flex items-center gap-sm">
+          <button
+            type="button"
+            className="cobrador-info"
+            aria-label="What is a Cobrador?"
+            aria-expanded={open ? 'true' : 'false'}
+            onClick={() => setOpen((v) => !v)}
+          >i</button>
+          <button type="button" className="cobrador-dismiss" onClick={dismiss} aria-label="Dismiss">×</button>
+        </div>
+      </div>
+      <p className="cobrador-lead">
+        Cobrador Island is where TollGate operators meet, peer, and stack SATs.
+      </p>
+      {open && (
+        <p className="cobrador-info-body">
+          Cobrador is Spanish for the person who collects the toll — the operator of a TollGate.
+          Find a fellow operator, peer with them, and stack SATs together.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [board, setBoard] = useState<any>(null);
   const [info, setInfo] = useState<any>(null);
@@ -120,6 +158,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col gap-md">
+      <CobradorWelcome />
       <InfoCard
         title="System"
         className="animate-in"

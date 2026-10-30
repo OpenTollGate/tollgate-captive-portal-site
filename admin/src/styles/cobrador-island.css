@@ -1,0 +1,64 @@
+/* Opt-in Cobrador Island skin. The default TollGate theme stays subtle; this
+   layer is only activated by VITE_THEME=cobrador-island or
+   VITE_BRAND=cobrador. */
+.theme-cobrador-island {
+  --bg: #0c1420;
+  --text-dim: #c7d3df;
+  --text-muted: #b8c5d4;
+  --border: #2b4459;
+  --border-control: #45627d;
+  --surface: #122030;
+  --card: #142435;
+  --text: #eef1f7;
+  --text-dim: #b3c2d1;
+  --accent: #ff6961;
+  --border: #23384d;
+  --border-control: #35506b;
+}
+.theme-cobrador-island body {
+  background:
+    linear-gradient(rgba(8, 14, 24, 0.5), rgba(8, 14, 24, 0.76)),
+    url('/assets/brand/cobrador/island-scene.svg') center / cover fixed no-repeat,
+    #0c1420;
+}
+.theme-cobrador-island .app-header,
+.theme-cobrador-island .app-nav {
+  background: rgba(12, 20, 32, 0.9);
+  border-color: #23384d;
+}
+.theme-cobrador-island .card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 45%), #142435;
+  border-color: #2b4459;
+}
+.theme-cobrador-island .cobrador-welcome-card {
+  background:
+    radial-gradient(circle at 100% 0, rgba(255,105,97,0.18), transparent 18rem),
+    #142435;
+}
+.theme-cobrador-island .cobrador-mark {
+  color: #6fd3d9;
+  filter: drop-shadow(0 0 6px rgba(111, 211, 217, 0.35));
+}
+.cobrador-mark-wrap { display: inline-flex; align-items: center; color: #6fd3d9; cursor: help; }
+
+.theme-cobrador-island .stat-label,
+.theme-cobrador-island .input-label,
+.theme-cobrador-island .text-muted,
+.theme-cobrador-island .card-title,
+.theme-cobrador-island label {
+  color: #c7d3df;
+}
+.theme-cobrador-island .stat-value,
+.theme-cobrador-island .input,
+.theme-cobrador-island select { color: #eef1f7; }
+.theme-cobrador-island .btn-primary,
+.theme-cobrador-island .btn.btn-primary { color: #1a1114; }
+.theme-cobrador-island .btn-secondary {
+  color: #eef1f7;
+}
+.theme-cobrador-island .btn-secondary {
+  background: #1b2b3d;
+  border-color: #45627d;
+}
+.theme-cobrador-island .badge-success { color: #071019; background: #8fe2b0; }
+.theme-cobrador-island .header-user { color: #c7d3df; }
