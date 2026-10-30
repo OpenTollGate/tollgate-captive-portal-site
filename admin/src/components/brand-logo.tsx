@@ -28,6 +28,18 @@ export default function BrandLogo({
   height: string;
   marginBottom?: string;
 }) {
+  // The opt-in island skin is dark even when the OS asks for the light
+  // palette, so the light-mode dark-ink wordmark would disappear. Force the
+  // white mark on that skin.
+  if (typeof document !== 'undefined' && document.documentElement.classList.contains('theme-cobrador-island')) {
+    return (
+      <img
+        src={withBase(BRAND.logoWhite)}
+        alt={BRAND.name}
+        style={{ height, marginBottom }}
+      />
+    );
+  }
   return (
     <picture>
       {/* Light palette: the dark-ink wordmark, because the white one is

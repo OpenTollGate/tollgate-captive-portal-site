@@ -268,6 +268,8 @@ const mockConfigSchema = {
       { name: 'Margin', json_key: 'margin', type: 'float64', description: 'Margin factor (0.0-1.0)', default: 0.1, required: false, editable: true, min: 0, max: 1 },
       { name: 'ShowSetup', json_key: 'show_setup', type: 'bool', description: 'Show setup wizard', default: true, required: true, editable: true },
       { name: 'ResellerMode', json_key: 'reseller_mode', type: 'bool', description: 'Enable reseller mode', default: false, required: true, editable: true },
+      { name: 'SSIDSuffix', json_key: 'ssid_suffix', type: 'string', description: 'Suffix appended to both the guest and private SSIDs.', default: '', required: false, editable: true, max_length: 12 },
+      { name: 'PrivateSSIDOperator', json_key: 'private_ssid_operator', type: 'string', description: 'Operator token in the private SSID.', default: '', required: false, editable: true, max_length: 32 },
       { name: 'PrivateSSID', json_key: 'private_ssid', type: 'string', description: 'Private network (management) SSID. Empty keeps the SSID the router minted at setup.', default: '', required: false, editable: true },
       { name: 'PrivateKey', json_key: 'private_key', type: 'string', description: 'Private network WPA passphrase (8-63 characters). Empty keeps the passphrase the router already has. Write-only.', default: '', required: false, editable: true, secret: true },
       { name: 'PrivateEncryption', json_key: 'private_encryption', type: 'string', description: 'Private network encryption.', default: 'psk2+ccmp', required: true, editable: true, enum: ['psk2+ccmp', 'psk2+tkip+ccmp', 'psk-mixed+ccmp'] },
@@ -298,7 +300,9 @@ const mockConfigGet = {
       margin: 0.1,
       show_setup: true,
       reseller_mode: false,
-      private_ssid: 'c08r4d0r-MOCK',
+      ssid_suffix: '',
+      private_ssid_operator: 'c08r4d0r',
+      private_ssid: 'Private-c08r4d0r-MOCK',
       private_encryption: 'psk2+ccmp',
       admin_access: 'both',
       accepted_mints: [
@@ -322,6 +326,7 @@ const mockConfigGet = {
         encryption: 'none',
         radio: '',
         manual_pause_seconds: 120,
+        vendor_ie_discovery: true,
       },
     },
     identities: {
@@ -500,6 +505,8 @@ export function mockUbusCall(
       success: true,
       message: 'Found 3 network(s)',
       data: [
+        { ssid: '!TollGate-AB12', signal: -42, encryption: 'none', bssid: 'AA:BB:CC:DD:EE:01', radio: 'radio0', is_tollgate: true, price_per_step: 1, step_size: 22020096, is_reseller: true, has_internet: true, open_network: true, mint_url: 'https://mint.minibits.cash/Bitcoin', pubkey: 'aa'.repeat(32) },
+        { ssid: '!TollGate-CD34', signal: -66, encryption: 'none', bssid: 'AA:BB:CC:DD:EE:02', radio: 'radio0', is_tollgate: true, price_per_step: 2, step_size: 22020096, is_reseller: false, has_internet: true, open_network: true, mint_url: 'https://mint.example.org', pubkey: 'bb'.repeat(32) },
         { ssid: 'UpstreamWiFi', signal: -45, encryption: 'WPA2', bssid: 'AA:BB:CC:DD:EE:FF', radio: 'radio0' },
         { ssid: 'NeighborNet', signal: -72, encryption: 'WPA2', bssid: '11:22:33:44:55:66', radio: 'radio0' },
         { ssid: 'OpenNet', signal: -80, encryption: 'none', bssid: '77:88:99:AA:BB:CC', radio: 'radio1' },
@@ -512,6 +519,41 @@ export function mockUbusCall(
       data: [{ ssid: 'UpstreamWiFi', status: 'ACTIVE', radio: 'radio0', encryption: 'WPA2' }],
     }),
     'tollgate.upstream_remove': () => ({ success: true, message: `Removed upstream '${_params.ssid}'` }),
+    'tollgate.upstream_disconnect': () => ({ success: true, message: "Stopped peering; fell back to 'HomeWiFi'" }),
+    'tollgate.upstream_known': () => ({
+      success: true,
+      message: '2 TollGates discovered across 4 scans',
+      data: {
+        total_scans: 4,
+        tollgate_count: 2,
+        regular_count: 3,
+        known_tollgates: [
+          { ssid: '!TollGate-AB12', bssid: 'AA:BB:CC:DD:EE:01', best_signal: -42, price_per_step: 1, step_size: 22020096, last_seen: new Date().toISOString() },
+          { ssid: '!TollGate-CD34', bssid: 'AA:BB:CC:DD:EE:02', best_signal: -66, price_per_step: 2, step_size: 22020096, last_seen: new Date(Date.now() - 3600000).toISOString() },
+        ],
+      },
+    }),
+    'tollgate.upstream_status': () => ({
+      success: true,
+      message: '1 active peer session(s)',
+      data: [{
+        gateway_ip: '10.0.0.1',
+        interface_name: 'upstream_tollgate_ab12',
+        pubkey: 'aa'.repeat(32),
+        mint_url: 'https://mint.minibits.cash/Bitcoin',
+        metric: 'bytes',
+        price_per_step: 1,
+        price_unit: 'sat',
+        step_size: 22020096,
+        total_allotment: 44040192,
+        total_spent_sats: 2,
+        usage: 12000000,
+        remaining: 32040192,
+        status: 'active',
+        bootstrap_phase: 'complete',
+        bootstrap_active: false,
+      }],
+    }),
   };
 
   const handler = handlers[key];

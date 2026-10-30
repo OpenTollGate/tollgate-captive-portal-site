@@ -9,6 +9,7 @@ import { withBase } from '../lib/paths';
 import { navigate } from '../lib/router';
 import { BRAND } from '../brand';
 import BrandLogo from '../components/brand-logo';
+import LanguageSwitcher from '../components/language-switcher';
 import ParticleBg from '../components/particle-bg';
 
 export default function LoginPage({
@@ -96,6 +97,7 @@ export default function LoginPage({
         >
           <div style={{ textAlign: 'center' }}>
             <BrandLogo height="44px" />
+            <div style={{ marginTop: '0.5rem' }}><LanguageSwitcher /></div>
             <p
               style={{
                 fontSize: 'var(--font-size-xsmall)',

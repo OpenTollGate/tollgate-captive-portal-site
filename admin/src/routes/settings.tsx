@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
 import { ubusCall } from '../lib/ubus';
 import SchemaForm, { type FieldSchema } from '../components/schema-form';
 import { refusalInApplied } from '../lib/module-reply';
+import { BRAND } from '../brand';
 
 type FieldGroup = {
   label: string;
@@ -13,7 +14,8 @@ const FIELD_GROUPS: FieldGroup[] = [
   // The router's own networks (module schema v0.0.9). `private_key` is
   // write-only: the module never returns it, so this card renders it empty and
   // only ever sends a value the operator types here.
-  { label: 'Private Network (management SSID)', keys: ['private_ssid', 'private_key', 'private_encryption'] },
+  { label: 'Private Network (management SSID)', keys: ['private_key', 'private_encryption'] },
+  { label: 'WiFi Names', keys: ['ssid_suffix', 'private_ssid_operator', 'private_ssid'] },
   { label: 'Administration Access', keys: ['admin_access'] },
   { label: 'Accepted Mints', keys: ['accepted_mints'] },
   { label: 'Profit Share', keys: ['profit_share'] },
@@ -51,6 +53,35 @@ function groupFields(schema: FieldSchema[]): { label: string; fields: FieldSchem
   }
 
   return groups;
+}
+
+function deviceCodeFromHostname(hostname: string): string {
+  const match = String(hostname || '').match(/-([A-Za-z0-9]{4})$/);
+  return match ? match[1].toUpperCase() : '';
+}
+
+function SsidPreview({ hostname, suffix, operator }: { hostname: string; suffix: string; operator: string }) {
+  const code = deviceCodeFromHostname(hostname) || 'CODE';
+  const effectiveSuffix = String(suffix || '').trim() || code;
+  const effectiveOperator = String(operator || '').trim() || 'c08r4d0r';
+  const guest = `!${BRAND.name.split(/\s+/)[0]}-${effectiveSuffix}`;
+  const priv = `Private-${effectiveOperator}-${effectiveSuffix}`;
+  return (
+    <div className="card animate-in-delay-2">
+      <div className="card-header">
+        <div className="card-title">Derived WiFi names</div>
+      </div>
+      <div className="flex flex-col gap-sm" style={{ fontSize: 'var(--font-size-small)' }}>
+        <div><span className="text-muted">Guest:</span> <code>{guest}</code></div>
+        <div><span className="text-muted">Private:</span> <code>{priv}</code></div>
+        <p className="text-muted" style={{ margin: 0, fontSize: 'var(--font-size-xsmall)' }}>
+          The suffix is shared by both networks and stays stable across reinstalls.
+          Changing it disconnects current clients; the hostname and TLS identity do not change.
+          The private operator defaults to c08r4d0r — leetspeak for <em>cobrador</em>, Spanish for the person who collects the toll.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export default function Settings() {
@@ -282,6 +313,12 @@ export default function Settings() {
       >
         Settings
       </h2>
+
+      <SsidPreview
+        hostname={currentHostname}
+        suffix={configValues.ssid_suffix}
+        operator={configValues.private_ssid_operator}
+      />
 
       {groups.map((group, gi) => (
         <div key={group.label} className={`card animate-in-delay-${Math.min(gi + 1, 4)}`}>

@@ -425,3 +425,9 @@ select {
     stroke-dashoffset: 0;
   }
 }
+/* Right-to-left layout. The portal sets <html dir="rtl"> from the language
+   helper; these rules keep the flow, the language picker and the header usable
+   without mirroring every icon. */
+[dir="rtl"] body { direction: rtl; text-align: right; }
+[dir="rtl"] .language-switcher { margin-inline-start: auto; margin-inline-end: 0; }
+[dir="rtl"] .language-switcher select { direction: rtl; }

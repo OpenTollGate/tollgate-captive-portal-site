@@ -5,8 +5,11 @@ import type { UiLinks } from '../lib/ui-links';
 import BrandLogo from './brand-logo';
 import ParticleBg from './particle-bg';
 import UiCrossLink from './ui-cross-link';
+import LanguageSwitcher from './language-switcher';
+import CobradorMark from './cobrador-mark';
 import Dashboard from '../routes/dashboard';
 import Wifi from '../routes/wifi';
+import Peering from '../routes/peering';
 import Devices from '../routes/devices';
 import Settings from '../routes/settings';
 import Wallet from '../routes/wallet';
@@ -30,6 +33,17 @@ function IconWifi() {
       <path d="M1.42 9a16 16 0 0 1 21.16 0" />
       <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
       <circle cx="12" cy="20" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconPeering() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="7" cy="8" r="3" />
+      <circle cx="17" cy="16" r="3" />
+      <path d="M9.5 10.2l5 3.6M10.5 16H5a3 3 0 0 1-3-3V7" />
+      <path d="M13.5 8l4.5-3M19 12v1" />
     </svg>
   );
 }
@@ -82,6 +96,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { route: 'dashboard', label: 'Home', icon: IconDashboard },
   { route: 'wifi', label: 'WiFi', icon: IconWifi },
+  { route: 'peering', label: 'Peering', icon: IconPeering },
   { route: 'devices', label: 'Devices', icon: IconDevices },
   { route: 'settings', label: 'Settings', icon: IconSettings },
   { route: 'wallet', label: 'Wallet', icon: IconWallet },
@@ -93,6 +108,8 @@ function RouteContent({ route }: { route: Route }) {
       return <Dashboard />;
     case 'wifi':
       return <Wifi />;
+    case 'peering':
+      return <Peering />;
     case 'devices':
       return <Devices />;
     case 'settings':
@@ -136,9 +153,18 @@ export default function Layout() {
       <header className="app-header">
         <div className="header-brand">
           <BrandLogo height="26px" marginBottom="0" />
+          <span
+            className="cobrador-mark-wrap"
+            role="img"
+            aria-label="What is a Cobrador?"
+            title="Cobrador is Spanish for the person who collects the toll — the operator of a TollGate. Find a fellow operator, peer with them, and stack SATs together."
+          >
+            <CobradorMark size={22} />
+          </span>
           <span className="header-user">{user}</span>
         </div>
         <div className="header-actions">
+          <LanguageSwitcher compact />
           <UiCrossLink payload={uiLinks} />
           <button className="btn-logout" onClick={handleLogout}>
             <IconLogout />

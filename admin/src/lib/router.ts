@@ -4,6 +4,7 @@ export type Route =
   | 'login'
   | 'dashboard'
   | 'wifi'
+  | 'peering'
   | 'devices'
   | 'settings'
   | 'wallet';
@@ -17,6 +18,7 @@ const routeMap: Record<string, Route> = {
   '/login': 'login',
   '/': 'dashboard',
   '/wifi': 'wifi',
+  '/peering': 'peering',
   '/devices': 'devices',
   '/settings': 'settings',
   '/wallet': 'wallet',
@@ -26,6 +28,7 @@ const reverseMap: Record<Route, string> = {
   login: '/login',
   dashboard: '/',
   wifi: '/wifi',
+  peering: '/peering',
   devices: '/devices',
   settings: '/settings',
   wallet: '/wallet',
