@@ -378,6 +378,30 @@ const mockHealth = {
   },
 };
 
+// Owner-setup scenarios use the same daemon response shapes as a real router.
+// The only persisted join fact is the SSID, never its passphrase.
+function ownerScenario(): string {
+  return new URLSearchParams(window.location.search).get('mockInternet') || '';
+}
+
+function joinedSSID(): string {
+  return window.sessionStorage.getItem('tg.mock.joined_ssid') || 'UpstreamWiFi';
+}
+
+function ownerInterfaces() {
+  if (!ownerScenario()) return interfaceDump;
+  const wifi = {
+    interface: 'wwan', up: true, l3_device: 'phy0-sta0', proto: 'dhcp',
+    'ipv4-address': [{ address: '192.0.2.10', mask: 24 }],
+    route: [{ target: '0.0.0.0', mask: 0, nexthop: '192.0.2.1', metric: 20 }],
+  };
+  return {
+    interface: ['wired', 'equal-routes'].includes(ownerScenario())
+      ? [wifi, { ...interfaceDump.interface[1], metric: ownerScenario() === 'equal-routes' ? 20 : 10 }]
+      : [wifi],
+  };
+}
+
 export function mockUbusCall(
   obj: string,
   method: string,
@@ -395,7 +419,7 @@ export function mockUbusCall(
       recordAdminPasswordSet(String(_params?.username ?? 'root'), String(_params?.password ?? ''));
       return {};
     },
-    'network.interface.dump': () => interfaceDump,
+    'network.interface.dump': () => ownerInterfaces(),
     // rpcd exposes the wireless object under the `network.` namespace (see
     // openwrt/rpcd/tollgate_acl.json: "network.wireless": ["status","reload"]).
     // The admin WiFi page calls it that way; keep the short aliases too.
@@ -493,23 +517,35 @@ export function mockUbusCall(
         total_sats: 14250,
       },
     }),
-    'tollgate.status': () => mockStatus,
+    'tollgate.status': async () => {
+      const delay = Number(new URLSearchParams(window.location.search).get('mockStatusDelay'));
+      const result = ownerScenario() === 'unknown'
+        ? { success: false, error: 'Status check unavailable' }
+        : { ...mockStatus, data: { ...mockStatus.data, network_ok: ownerScenario() !== 'offline' } };
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(delay, 1000)));
+      return result;
+    },
     'tollgate.health': () => mockHealth,
     'tollgate.ui_links': () => mockUiLinks(),
     'tollgate.upstream_scan': () => ({
       success: true,
       message: 'Found 3 network(s)',
       data: [
-        { ssid: 'UpstreamWiFi', signal: -45, encryption: 'WPA2', bssid: 'AA:BB:CC:DD:EE:FF', radio: 'radio0' },
+        { ssid: 'UpstreamWiFi', signal: -45, encryption: 'WPA2', bssid: 'AA:BB:CC:DD:EE:FF', radio: 'radio0', band: '2g' },
         { ssid: 'NeighborNet', signal: -72, encryption: 'WPA2', bssid: '11:22:33:44:55:66', radio: 'radio0' },
-        { ssid: 'OpenNet', signal: -80, encryption: 'none', bssid: '77:88:99:AA:BB:CC', radio: 'radio1' },
+        { ssid: 'OpenNet', signal: -80, encryption: 'none', bssid: '77:88:99:AA:BB:CC', radio: 'radio1', band: '5g' },
+        ...(ownerScenario() === 'self-scan' ? [{ ssid: `${BRAND.id}-5g`, signal: -25, encryption: 'none', bssid: '00:00:00:00:00:01', radio: 'radio1' }] : []),
       ],
     }),
-    'tollgate.upstream_connect': () => ({ success: true, message: `Connected to '${_params.ssid}'` }),
+    'tollgate.upstream_connect': () => {
+      if (ownerScenario() === 'join-failed') return { success: false, error: 'Could not join this network' };
+      window.sessionStorage.setItem('tg.mock.joined_ssid', String(_params.ssid));
+      return { success: true, message: `Connected to '${_params.ssid}'` };
+    },
     'tollgate.upstream_list': () => ({
       success: true,
       message: '1 upstream STA(s) configured',
-      data: [{ ssid: 'UpstreamWiFi', status: 'ACTIVE', radio: 'radio0', encryption: 'WPA2' }],
+      data: [{ ssid: joinedSSID(), status: 'ACTIVE', radio: 'radio0', encryption: 'WPA2' }],
     }),
     'tollgate.upstream_remove': () => ({ success: true, message: `Removed upstream '${_params.ssid}'` }),
   };

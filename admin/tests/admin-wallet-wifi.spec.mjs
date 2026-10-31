@@ -60,6 +60,7 @@ test.describe('admin wifi scanning', () => {
     await page.waitForSelector('.app-header', { timeout: 30000 });
     await page.locator('.nav-item', { hasText: 'WiFi' }).click();
     await page.waitForSelector('.card-title', { timeout: 15000 });
+    await page.getByText('Advanced Wi-Fi settings', { exact: true }).click();
   });
 
   test('lists wireless radios and their SSIDs', async ({ page }) => {
@@ -87,7 +88,7 @@ test.describe('admin wifi scanning', () => {
     const upstream = page.locator('.upstream-item');
     await expect(upstream).toHaveCount(1, { timeout: 15000 });
     await expect(upstream.locator('.scan-item-ssid')).toHaveText('UpstreamWiFi');
-    await expect(upstream.getByText('ACTIVE')).toBeVisible();
+    await expect(upstream.getByText('Selected')).toBeVisible();
   });
 
   test('connects to an open scanned network via upstream_connect', async ({ page }) => {
@@ -97,7 +98,7 @@ test.describe('admin wifi scanning', () => {
     await openRow.getByRole('button', { name: 'Connect' }).click();
     await openRow.getByRole('button', { name: 'Connect' }).click();
 
-    await expect(page.getByText('Connected successfully')).toBeVisible({
+    await expect(page.getByRole('status').filter({ hasText: 'Wi-Fi joined: OpenNet' })).toBeVisible({
       timeout: 15000,
     });
   });

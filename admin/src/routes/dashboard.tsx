@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { ubusCall } from '../lib/ubus';
+import InternetConnection from '../components/internet-connection';
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
@@ -54,23 +55,20 @@ export default function Dashboard() {
   const [info, setInfo] = useState<any>(null);
   const [tollgate, setTollgate] = useState<any>(null);
   const [wallet, setWallet] = useState<any>(null);
-  const [network, setNetwork] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const fetchAll = useCallback(async () => {
     try {
-      const [boardData, infoData, netData, statusData, walletData] = await Promise.allSettled([
+      const [boardData, infoData, statusData, walletData] = await Promise.allSettled([
         ubusCall('system', 'board'),
         ubusCall('system', 'info'),
-        ubusCall('network.interface', 'dump'),
         ubusCall('tollgate', 'status'),
         ubusCall('tollgate', 'wallet_balance'),
       ]);
 
       if (boardData.status === 'fulfilled') setBoard(boardData.value);
       if (infoData.status === 'fulfilled') setInfo(infoData.value);
-      if (netData.status === 'fulfilled') setNetwork(netData.value);
 
       if (statusData.status === 'fulfilled' && statusData.value?.success) {
         setTollgate(statusData.value.data);
@@ -115,11 +113,9 @@ export default function Dashboard() {
     );
   }
 
-  const interfaces = network?.interface || [];
-  const wan = interfaces.find((i: any) => i.interface === 'wan' && i.up);
-
   return (
     <div className="flex flex-col gap-md">
+      <InternetConnection showConnect />
       <InfoCard
         title="System"
         className="animate-in"
@@ -170,37 +166,6 @@ export default function Dashboard() {
                 {((info.memory.total - info.memory.free) / info.memory.total * 100).toFixed(0)}% used
               </p>
             </div>
-          </>
-        )}
-      </InfoCard>
-
-      <InfoCard
-        title="Network"
-        className="animate-in-delay-2"
-        icon={
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-          </svg>
-        }
-      >
-        <StatRow
-          label="WAN Status"
-          value={
-            wan ? (
-              <span className="badge badge-success">Connected</span>
-            ) : (
-              <span className="badge badge-error">Disconnected</span>
-            )
-          }
-        />
-        {wan && (
-          <>
-            <StatRow label="WAN IP" value={wan['ipv4-address']?.[0]?.address || '—'} />
-            <StatRow label="Gateway" value={wan.route?.[0]?.target || '—'} />
-            <StatRow label="DNS" value={wan['dns-server']?.length ? wan['dns-server'].join(', ') : '—'} />
-            <StatRow label="Protocol" value={wan.proto || '—'} />
           </>
         )}
       </InfoCard>

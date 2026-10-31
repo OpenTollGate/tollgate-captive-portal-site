@@ -655,3 +655,12 @@ button {
   gap: 0.4rem;
   align-items: flex-end;
 }
+
+/* Owner internet setup stays readable on a phone, including long venue names. */
+.internet-source .stat-value { overflow-wrap: anywhere; min-width: 0; }
+.internet-source .card-body > p { font-size: var(--font-size-small); line-height: 1.5; }
+.internet-source button, .wifi-advanced summary { min-height: 40px; }
+.wifi-advanced summary { cursor: pointer; padding: 0.65rem 0; font-weight: 600; }
+.wifi-advanced summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.scan-item-info { min-width: 0; }
+.scan-item-ssid { overflow-wrap: anywhere; }

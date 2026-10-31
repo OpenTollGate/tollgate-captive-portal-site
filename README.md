@@ -10,6 +10,19 @@ A captive portal website for [Tollgate](https://tollgate.me). This portal allows
 - Pay with BTC Lightning
 - Check your internet balance (a dedicated "Balance" tab shows how much internet access — time or data — a Cashu token grants before you pay)
 
+## Owner Wi-Fi setup
+
+In the router's owner admin, select **Connect to venue Wi-Fi** on Home. Choose
+an available network and enter its password. The existing upstream connection
+service selects the radio; reported bands are shown as 2.4 GHz, 5 GHz or 6 GHz.
+Radio and interface editing remains under **Advanced Wi-Fi settings**.
+
+The **Internet source** card uses the router's internet check, separately from
+the Wi-Fi join result. A selected saved network does not by itself confirm
+internet access. Use **Check internet** to refresh the result. If a venue
+requires a browser sign-in, complete it on a device using TollGate for internet
+and check again; the admin does not automatically sign into venue portals.
+
 ## Contributing
 
 ### Internationalization (i18n)
