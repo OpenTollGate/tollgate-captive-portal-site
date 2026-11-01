@@ -10,6 +10,40 @@ A captive portal website for [Tollgate](https://tollgate.me). This portal allows
 - Pay with BTC Lightning
 - Check your internet balance (a dedicated "Balance" tab shows how much internet access — time or data — a Cashu token grants before you pay)
 
+## Owner Wi-Fi setup
+
+In the router's owner admin, select **Connect to venue Wi-Fi** on Home. Choose
+an available network and enter its password. The existing upstream connection
+service selects the radio; reported bands are shown as 2.4 GHz, 5 GHz or 6 GHz.
+Radio and interface editing remains under **Advanced Wi-Fi settings**.
+
+The **Internet source** card uses the router's internet check, separately from
+the Wi-Fi join result. A selected saved network does not by itself confirm
+internet access. Use **Check internet** to refresh the result. If a venue
+requires a browser sign-in, complete it on a device using TollGate for internet
+and check again; the admin does not automatically sign into venue portals.
+
+## Profit Share controls
+
+Open **Settings → Profit Share** in the owner admin to edit existing Lightning
+destinations and saved percentages. Sliders redistribute other shares to keep
+the total at 100%; number fields allow exact edits. Review each destination
+save separately from an allocation save because they take effect at different
+times. Existing recipient names and signing keys are preserved.
+
+Destination changes are selected by a subsequent payout pass; an in-progress
+payout may keep the previous address. Saved percentages load at service startup.
+Use **Restart TollGate to apply** and read its confirmation: restarting ends
+active paid sessions, and guests may need to pay again. **Check service status**
+is read-only. An unknown restart outcome is never retried automatically.
+
+The restart control requires the matching management plugin and authenticated
+write ACL. Older plugins leave it disabled. An uncertain save can already have
+changed the router's in-memory settings; the editor re-reads them and reports
+uncertainty rather than promising a rollback. Changes are checked against fresh
+reads, but the existing backend does not provide atomic compare-and-swap for
+concurrent administrators.
+
 ## Contributing
 
 ### Internationalization (i18n)
@@ -160,3 +194,123 @@ fund-loss class on paid melts (fixed upstream #1081; v4 backport #1083
 pending release as of 2026-09-05 — 4.10.1 does NOT contain it). v5 is at
 RC — expect migration-5.0.0.md before any 5.x adoption. Details:
 hackathon-tooling patterns/cashu/client-gotchas.md.
+
+
+### Owner administration coverage
+
+The admin has a **Maintenance** page for service start/stop/restart, diagnostics
+and private-network controls. Every service action has a separate review. Stop
+prevents new purchases; restarting ends active paid sessions and guests may need
+to pay again. The page distinguishes a completed command from a responding API.
+Status/health do not establish purchase readiness or the running payout allocation.
+Lost or failed mutation replies stay uncertain and are never retried automatically.
+
+| Owner task | Dashboard workflow |
+| --- | --- |
+| Connect to venue Wi-Fi; saved uplinks; radio settings | WiFi |
+| Pricing, accepted mints, payout intervals and thresholds | Settings, with step units and pricing preview |
+| Existing payout addresses and allocation | Settings → Profit Share; explicit review, separate apply timing |
+| Private SSID, password, encryption and admin-access scope | Settings; secret fields remain write-only |
+| Private Wi-Fi on/off | Maintenance; wired management acknowledgement and wireless-interruption review |
+| Pin management IPv4 address | Maintenance; usable host on /24, review/reconnect guidance; requires CLI support |
+| Root password and persisted hostname | Settings; password uses root username and shared policy; hostname readback distinguishes stored from active |
+| Start, stop, restart and diagnostic facts | Maintenance; authenticated fixed RPC methods |
+| Balance, funding, withdrawal and connected DHCP clients | Wallet and Devices; failed reads show unavailable |
+| Firmware, backups, reboot, firewall, DHCP, full logs, advanced HTTPS | Maintenance → router-reported HTTPS LuCI link; settings remain in LuCI |
+
+Private metadata reads only address and configured interface enablement. It never
+forwards `network private status`, whose CLI response contains the Wi-Fi password.
+Address pinning calls `network private set-address` so both the interface and
+TollGate’s durable setup store change together. A completed save may still need
+a network reload; it does not prove that the new address is reachable.
+
+The schema editor supports strings, numeric bounds, exact integer values,
+booleans, nested objects, object lists, primitive lists and durations (shown in
+seconds, stored as numeric nanoseconds). Empty lists remain `[]`; read-only
+parents lock their children. Containers without item/field metadata display
+read-only JSON so editing cannot silently convert their types. Validation checks
+changed leaves, preserving untouched legacy values. Secret fields are cleared
+recursively after saving and are not replayed by a later form save.
+
+Signing keys, seed recovery, creating new public payout identities, TollGate TLS
+apply/remove and wholesale identity replacement still need dedicated protected
+workflows. They are visible as specialist operations in Maintenance, not exposed
+as a shell or arbitrary file editor. LuCI certificate editing does not implement
+TollGate’s persistent TLS opt-out semantics. Saved upstream history and manual
+configuration convergence remain specialist CLI operations; the existing WiFi
+page manages configured uplinks. No sales-pause command exists in the audited
+runtime: `manual_pause_seconds` pauses upstream scanning.
+
+
+### Ethernet-first internet with venue Wi-Fi backup
+
+The Home/WiFi Internet source card separates **Preferred: Ethernet WAN**,
+**Backup: venue Wi-Fi**, independent health, and the applied route for new
+connections. The owner can review enabling or disabling automatic fallback in
+the card. Status refreshes without overlapping requests; failed reads clear
+readiness claims. Existing connections can keep their previous uplink until they
+reconnect. Changing public IP can interrupt connections; this is not MPTCP.
+
+IPv4 prefers healthy WAN, falls back to healthy WWAN, and returns after stable
+recovery. Wi-Fi fallback uses IPv4. IPv6 uses checked WAN6 or is blocked when no
+healthy WAN6 exists; this implementation does not promise cross-provider IPv6
+prefix translation. Both families are shown separately.
+
+The fixed profile uses the official OpenWrt mwan3 2.12 engine, with a narrowly
+reviewed tracker extension and a static Go DNS/HTTP probe. The router's existing
+iptables-nft compatibility stack is required; this is not the unofficial native
+nftables mwan3 fork. Do not equate the runtime's experimental multi_wan config
+with this working controller. Its objective renderer remains separate.
+
+Each probe binds DNS and HTTP to the tested interface, source address and bypass
+mark. It uses that interface's usable advertised DNS servers; public resolvers
+are fallback only when none are advertised. Two fixed HTTP endpoints must return
+204 without a body or redirect; either can satisfy a round. A four-second probe
+budget, five-second intervals and three down/up thresholds bound attempts and
+reduce flapping. Probe time adds to the interval; exact fifteen-second handover
+is not guaranteed. Global network_ok, association and ICMP alone do not establish
+backup readiness.
+
+Installation and command contracts:
+
+- [Probe source/build](openwrt/failover-probe/README.md): build for the actual router
+  architecture and install as /usr/libexec/tollgate/uplink-probe.
+- [Profile/controller](openwrt/failover/README.md): install the signed official
+  dependencies, preserve existing routing ownership, place the disabled owned
+  template before first package installation, and install the fixed controller.
+- Use packaging/patch-mwan3-track.py only with a freshly reviewed original tracker
+  SHA-256; it refuses unknown layouts/hashes and never weakens a missing HTTP
+  probe to ping. Do not overwrite another routing controller's configuration.
+- The driver changes only its owned profile and engine lifecycle, never ordinary
+  network configuration. Existing WAN/WWAN main metrics must already be distinct
+  (an unset metric counts as zero); use LuCI's interface routing settings if this
+  prerequisite is not met. Member priorities select Ethernet regardless of which
+  ordinary main metric is lower. Disable returns to unchanged ordinary routing.
+- internet_policy_get is authenticated read access; internet_policy_set takes a
+  real Boolean enabled and is authenticated write access. No interface, URL,
+  command, key or file path comes from the caller. Unknown outcomes never retry.
+
+Preserve the controller's root-only recovery receipts. The exact tracker marker,
+owned profile hash, PBR/bonding conflicts, reserved packet marks, low routing
+tables and verified native IPv6 guards are checked. Applied policy is read from
+engine/kernel evidence, never guessed from main-route metrics; a missing empty
+policy RPC key needs independent kernel unreachable evidence.
+
+Disable this feature before firmware or mwan3 package upgrades, then requalify
+the tracker integration before enabling it again. A stock tracker replacement
+invalidates support. If its helpers are damaged, use LuCI System → Startup to
+stop/disable mwan3 and recover ordinary routing; do not restore an entire old
+network configuration over unrelated edits. This source contribution does not
+provide an automatic firmware-upgrade migration.
+
+For venue sign-in, use the card's **Prepare Wi-Fi backup at a venue** help. With
+health-based routing active, unverified paths are blocked; temporarily disable
+fallback and unplug WAN, then sign in through a device actually using TollGate's
+private network for internet. Reconnect WAN and re-enable once setup is complete.
+This does not automatically log into arbitrary venue captive portals.
+
+Tests cover bound probe behavior, controller ownership/partial errors, RPC
+permissions and UI state/review flows. Kernel and hardware acceptance, an actual
+WAN cable/outage/recovery cycle, venue login and IPv6 delegation remain separate
+from command-fixture/browser tests. No engine action explicitly restarts
+TollGate, NoDogSplash or firewall/netifd, and no conntrack flush is performed.

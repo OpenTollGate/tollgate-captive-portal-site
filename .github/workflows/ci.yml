@@ -89,6 +89,11 @@ jobs:
         # identity covers this router, explicit in both directions, and dropped
         # again (fail open) when :8443 never came up.
         run: sh packaging/tests/test-92-admin-board-tls.sh
+      - name: Failover controller and tracker guards
+        # Offline fixtures only; no host/router routes or interfaces are changed.
+        run: |
+          python3 -B packaging/tests/test-failover-controller.py
+          python3 -B packaging/tests/test-patch-mwan3-track.py
       - run: npm test
       - name: Packaging guard (foreign-skin cleanup)
         run: sh tests/packaging/foreign-skins-guard.sh .
@@ -136,6 +141,13 @@ jobs:
         # instead of raw `uci set`, which the module's applier would revert.
         run: npx playwright test --config admin/playwright.config.mjs admin-settings-network
 
+      - name: Run complete owner administration regression suite
+        # Includes Wi-Fi setup, payout review, maintenance, schema controls and
+        # failed-read states in addition to the credential/network gates above.
+        run: npm run test:admin
+      - name: Typecheck owner administration
+        run: npx tsc -p admin/tsconfig.json --noEmit
+
       - name: Run functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop
 
@@ -180,3 +192,21 @@ jobs:
               repo: context.repo.repo,
               body: `## 📸 Test results\n\nPlaywright e2e tests + visual snapshots completed.\n\n**[Download screenshots →](${runUrl})**\n\nLook for the \`${artifactName}\` artifact at the bottom of the run page.\n\n${status}`
             });
+
+  failover-probe:
+    name: Interface-bound DNS and HTTP probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: openwrt/failover-probe/go.mod
+          cache: false
+      - name: Test socket binding, DNS, HTTP and deadlines
+        working-directory: openwrt/failover-probe
+        run: |
+          go test -race ./...
+          go vet ./...
+      - name: Cross-compile the static arm64 probe
+        working-directory: openwrt/failover-probe
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/uplink-probe-arm64 .

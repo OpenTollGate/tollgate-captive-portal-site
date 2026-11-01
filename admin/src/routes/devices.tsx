@@ -18,13 +18,15 @@ export default function Devices() {
     // the leases file first; keep the ubus call as a fallback for older builds.
     const fromFile = async (): Promise<DhcpLease[]> => {
       const raw = await ubusCall('file', 'read', { path: '/tmp/dhcp.leases' });
-      const text = raw && typeof raw.data === 'string' ? raw.data : '';
+      if (!raw || typeof raw.data !== 'string') throw new Error('Lease file response unavailable');
+      const text: string = raw.data;
       return text
         .trim()
         .split('\n')
         .filter(Boolean)
         .map((line) => {
           const parts = line.split(/\s+/);
+          if (parts.length < 4 || !Number.isFinite(Number(parts[0]))) throw new Error('Invalid lease file response');
           return {
             expires: parts[0]
               ? Math.max(0, parseInt(parts[0]) - Math.floor(Date.now() / 1000))
@@ -38,10 +40,12 @@ export default function Devices() {
     const fromUbus = async (): Promise<DhcpLease[]> => {
       const data = await ubusCall('dhcp', 'ipv4leases');
       const out: DhcpLease[] = [];
-      if (data && data.device) {
-        for (const dev of Object.values(data.device) as any[]) {
-          if (dev.leases) out.push(...dev.leases);
-        }
+      if (!data?.device || typeof data.device !== 'object' || Array.isArray(data.device)) {
+        throw new Error('Lease response unavailable');
+      }
+      for (const dev of Object.values(data.device) as any[]) {
+        if (!Array.isArray(dev?.leases)) throw new Error('Invalid lease response');
+        out.push(...dev.leases);
       }
       return out;
     };
@@ -56,12 +60,10 @@ export default function Devices() {
       setLeases(leases);
       setError('');
     } catch {
-      // "No leases" is a normal state: no DHCP clients, or an empty/absent
-      // leases file (rpcd reports reading a 0-byte file as an error). Show the
-      // empty state instead of a raw error; a genuine expired session is
-      // redirected by the global handler in ubus.ts.
+      // Both read paths failed: this does not establish that no clients exist.
+      // A genuine expired session is redirected by the global ubus handler.
       setLeases([]);
-      setError('');
+      setError('Device list unavailable. Try again; the router did not return DHCP leases.');
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,7 @@ export default function Devices() {
   if (error) {
     return (
       <div className="loading-page flex-col gap-sm">
-        <p className="error-text">{error}</p>
+        <p className="error-text" role="alert">{error}</p>
         <button className="btn btn-secondary btn-sm" onClick={fetchLeases}>
           Retry
         </button>

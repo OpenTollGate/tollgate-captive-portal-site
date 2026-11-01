@@ -1,0 +1,312 @@
+#!/bin/sh
+# Fixed owner failover policy. No shell/RPC inputs besides status|enable|disable.
+# TOLLGATE_FAILOVER_ROOT is a non-setuid offline-test seam; RPC supplies no env.
+set -f
+umask 077
+ROOT=${TOLLGATE_FAILOVER_ROOT:-}
+STORE="$ROOT/etc/tollgate/failover"
+MWAN="$ROOT/etc/config/mwan3"
+NETWORK="$ROOT/etc/config/network"
+INIT="$ROOT/etc/init.d/mwan3"
+LOCK="$ROOT/var/lock/tollgate-failover.lock"
+PROBE="$ROOT/usr/libexec/tollgate/uplink-probe"
+TRACKER="$ROOT/usr/sbin/mwan3track"
+ERROR=''
+
+json_string() { printf '"'; printf '%s' "$1" | sed 's/\\/\\\\/g;s/"/\\"/g'; printf '"'; }
+get_json() { printf '%s' "$1" | jsonfilter -e "$2" 2>/dev/null; }
+uci_get() { uci -q get "$1" 2>/dev/null; }
+bool() { case "$1" in 1|true) printf true ;; *) printf false ;; esac; }
+owned() { [ -f "$MWAN" ] && [ "$(head -n 1 "$MWAN")" = '# TollGate owner failover v1' ] && [ "$(uci_get mwan3.globals.tg_owned)" = 1 ] && [ "$(uci_get mwan3.globals.tg_version)" = 1 ]; }
+configured() { owned && [ "$(uci_get mwan3.globals.tg_enabled)" = 1 ]; }
+compatible() {
+    ERROR=''
+    for tool in uci ubus jsonfilter ip iptables ip6tables ipset sha256sum; do
+        command -v "$tool" >/dev/null 2>&1 || { ERROR='Required failover tools are not installed'; return 1; }
+    done
+    [ -x "$INIT" ] && [ -f "$ROOT/lib/mwan3/mwan3.sh" ] || { ERROR='A compatible mwan3 engine is not installed'; return 1; }
+    [ -x "$PROBE" ] && grep -q '^# TollGate bound DNS/HTTP tracker extension v1$' "$TRACKER" 2>/dev/null && grep -q 'tollgate-http' "$TRACKER" 2>/dev/null || { ERROR='The bound DNS/HTTP tracker integration is not installed'; return 1; }
+    owned || { ERROR='The existing mwan3 configuration is not owned by TollGate'; return 1; }
+    if [ -f "$STORE/profile.sha256" ] && [ "$(sha256sum "$MWAN" | cut -d ' ' -f 1)" != "$(cat "$STORE/profile.sha256")" ]; then
+        ERROR='Failover settings changed outside this dashboard; the fixed policy is not confirmed'; return 1
+    fi
+    return 0
+}
+
+running() {
+    local service
+    service=$(ubus call service list '{"name":"mwan3"}' 2>/dev/null) || return 1
+    [ "$(get_json "$service" '@.mwan3.instances.rtmon_ipv4.running')" = true ]
+}
+interface_json() {
+    local name="$1" link health tracking state reason netstatus
+    netstatus=$(ubus call "network.interface.$name" status '{}' 2>/dev/null) || netstatus='{}'
+    link=$(get_json "$netstatus" '@.up')
+    case "$link" in true|false) ;; *) link=null ;; esac
+    health=unavailable; reason=not-checked
+    if ! uci_get "network.$name" >/dev/null; then
+        reason=not-configured; link=null
+    elif [ "$name" = wwan6 ]; then
+        reason=ipv6-backup-unsupported
+    elif [ "$ENABLED" = false ]; then
+        reason=not-enabled
+    elif [ "$SUPPORTED" != true ]; then
+        reason=unsupported-controller
+    elif [ "$RUNNING" != true ]; then
+        reason=controller-not-running
+    elif [ "$link" = false ]; then
+        health=offline; reason=link-down
+    else
+        tracking=$(get_json "$INTERFACES" "@.interfaces.$name.tracking")
+        state=$(get_json "$INTERFACES" "@.interfaces.$name.status")
+        if [ "$tracking" = active ] && [ "$(get_json "$INTERFACES" "@.interfaces.$name.running")" = true ]; then
+            case "$state" in online|offline) health="$state"; reason=engine-health ;; connecting|disconnecting) health=checking; reason=health-transition ;; esac
+        fi
+    fi
+    printf '{"interface":"%s","link_up":%s,"health":"%s","reason":"%s"}' "$name" "$link" "$health" "$reason"
+}
+kernel_unreachable() {
+    local tool="$1" policy="$2" chain output
+    chain="mwan3_policy_$policy"
+    output=$("$tool" -t mangle -S "$chain" 2>/dev/null) || return 1
+    # rpcd's mwan3 policy parser skips unquoted unreachable comments. Verify
+    # the actual kernel chain independently, rather than treating missing JSON
+    # as either an active uplink or proof that IPv6 is blocked.
+    printf '%s\n' "$output" | awk -v chain="$chain" '
+        $0 == "-N " chain { headers++; next }
+        $0 ~ ("^-A " chain " -m mark --mark (0|0x0)/0x3[fF]00 -m comment --comment (\"unreachable\"|unreachable) -j MARK --set-xmark 0x3[eE]00/0x3[fF]00$") { count++; next }
+        NF { bad=1 }
+        END { exit (bad || count!=1 || headers>1) }
+    '
+}
+active_policy() {
+    local family="$1" tool="$2" primary="$3" backup="$4" policy array first percent second rules
+    [ "$ENABLED" = true ] && [ "$RUNNING" = true ] && [ "$SUPPORTED" = true ] || { printf unknown; return; }
+    policy="tg_failover$family"
+    rules=$("$tool" -t mangle -S mwan3_rules 2>/dev/null) || { printf unknown; return; }
+    # A policy chain alone is not evidence the active catch-all selects it.
+    printf '%s\n' "$rules" | grep -Eq "^-A mwan3_rules( -p all)? -m mark --mark (0|0x0)/0x3[fF]00 -j mwan3_policy_$policy$" || { printf unknown; return; }
+    array=$(get_json "$POLICIES" "@.policies.ipv$family.$policy" | tr -d '[:space:]')
+    if [ -z "$array" ] || [ "$array" = '[]' ]; then
+        if kernel_unreachable "$tool" "$policy"; then printf none; else printf unknown; fi
+        return
+    fi
+    first=$(get_json "$POLICIES" "@.policies.ipv$family.$policy[0].interface")
+    percent=$(get_json "$POLICIES" "@.policies.ipv$family.$policy[0].percent")
+    second=$(get_json "$POLICIES" "@.policies.ipv$family.$policy[1].interface")
+    [ -z "$second" ] && { [ "$percent" = 100 ] || [ "$percent" = 100.0 ]; } || { printf unknown; return; }
+    case "$first" in "$primary"|"$backup") printf '%s' "$first" ;; *) printf unknown ;; esac
+}
+status_json() {
+    local success="$1" message="${2:-}"
+    if compatible; then SUPPORTED=true; else SUPPORTED=false; [ -n "$message" ] || message="$ERROR"; fi
+    if [ -f "$STORE/pending" ] && [ -z "$message" ]; then message='A previous failover action was not confirmed; review current state before repeating a change'; fi
+    ENABLED=false; configured && ENABLED=true
+    RUNNING=false; running && RUNNING=true
+    INTERFACES=$(ubus call mwan3 status '{"section":"interfaces"}' 2>/dev/null) || INTERFACES='{}'
+    POLICIES=$(ubus call mwan3 status '{"section":"policies"}' 2>/dev/null) || POLICIES='{}'
+    printf '{"success":%s,"supported":%s,"enabled":%s,"controller_running":%s,"policy":"ethernet-first","check_method":"bound-dns-http","check_interval_seconds":5,"down_checks":3,"up_checks":3,' "$success" "$SUPPORTED" "$ENABLED" "$RUNNING"
+    printf '"ipv4":{"active":"%s","primary":' "$(active_policy 4 iptables wan wwan)"; interface_json wan; printf ',"backup":'; interface_json wwan; printf '},'
+    printf '"ipv6":{"active":"%s","backup_supported":false,"primary":' "$(active_policy 6 ip6tables wan6 unsupported)"; interface_json wan6; printf ',"backup":'; interface_json wwan6; printf '}'
+    if [ -n "$message" ]; then printf ',"error":'; json_string "$message"; fi
+    printf '}\n'
+}
+fail() { status_json false "$1"; exit 0; }
+
+numeric() { printf '%s\n' "$1" | grep -Eq '^(0[xX][0-9a-fA-F]+|[0-9]+)$'; }
+mark_conflicts() {
+    local tool line token next value mask op marks
+    for tool in iptables ip6tables; do
+        marks=$("$tool" -t mangle -S 2>/dev/null) || { ERROR='Cannot inspect packet mark ownership'; return 0; }
+        while IFS= read -r line; do
+            case "$line" in '-A mwan3_'*) continue ;; esac
+            op=''
+            for token in $line; do
+                if [ -n "$op" ]; then
+                    value=${token%%/*}; mask=${token#*/}
+                    numeric "$value" || return 0
+                    case "$op" in
+                        --set-mark|--set-xmark)
+                            [ "$mask" != "$token" ] || mask=0xffffffff
+                            numeric "$mask" || return 0
+                            [ $((mask & 0x3f00)) -eq 0 ] || return 0
+                            ;;
+                        --and-mark) [ $(((~value) & 0x3f00)) -eq 0 ] || return 0 ;;
+                        --or-mark|--xor-mark) [ $((value & 0x3f00)) -eq 0 ] || return 0 ;;
+                    esac
+                    op=''
+                fi
+                case "$token" in --set-mark|--set-xmark|--and-mark|--or-mark|--xor-mark) op="$token" ;; esac
+                # Unscoped CONNMARK copies can overwrite the reserved bits.
+                case "$token" in --save-mark|--restore-mark)
+                    case "$line" in *'--nfmask 0x20000 --ctmask 0x20000'*) ;; *) return 0 ;; esac ;;
+                esac
+            done
+        done <<EOF
+$marks
+EOF
+    done
+    return 1
+}
+filter_native_rules() {
+    local family="$1" line priority device ifindex source
+    while IFS= read -r line; do
+        if [ "$family" = -6 ]; then
+            set -- $line
+            if [ "$#" = 6 ] && [ "$2" = from ] && [ "$4" = iif ]; then
+                priority=${1%:}; source=$3; device=$5
+                if [ "$1" = "$priority:" ] && printf '%s\n' "$priority" | grep -Eq '^[0-9]{10}$' && printf '%s\n' "$device" | grep -Eq '^[A-Za-z0-9_.:-]{1,15}$'; then
+                    ifindex=$(cat "$ROOT/sys/class/net/$device/ifindex" 2>/dev/null)
+                    if [ "$source" = all ] && { [ "$6" = failed_policy ] || [ "$6" = 12 ]; } && awk -v p="$priority" -v n="$ifindex" 'BEGIN {exit !(n ~ /^[0-9]+$/ && n>0 && p>4200000000 && p<=4294967295 && p==4200000000+n)}'; then
+                        # netifd's per-device IPv6 guard. It cannot select a
+                        # routing table and lies outside mwan3 cleanup ranges.
+                        continue
+                    fi
+                    if [ "$priority" = 4200000000 ] && { [ "$6" = unreachable ] || [ "$6" = 7 ]; } && printf '%s\n' "$source" | grep -Eq '^[0-9a-fA-F:]+(/[0-9]{1,3})?$' && printf '%s\n' "$ifindex" | grep -Eq '^[0-9]+$'; then
+                        # interface_set_prefix_address() adds this delegated-
+                        # prefix reject guard. No mark/table/goto or extra
+                        # selector is accepted. Kernel output already validates
+                        # the IPv6 source; require an existing kernel device.
+                        continue
+                    fi
+                fi
+            fi
+        fi
+        printf '%s\n' "$line"
+    done
+}
+foreign_routes() {
+    local family rules routes owned_running owned_ids
+    owned_running=false; configured && [ -f "$STORE/profile.sha256" ] && [ "$(sha256sum "$MWAN" | cut -d ' ' -f 1)" = "$(cat "$STORE/profile.sha256")" ] && owned_running=true
+    for family in -4 -6; do
+        owned_ids="1 2"
+        if [ "$family" = -6 ]; then owned_ids=""; [ "$(uci_get mwan3.wan6)" = interface ] && owned_ids=3; fi
+        rules=$(ip -N "$family" rule show 2>/dev/null) || return 0
+        rules=$(printf '%s\n' "$rules" | filter_native_rules "$family")
+        if [ "$owned_running" = false ]; then
+            printf '%s\n' "$rules" | awk 'NF && $1 != "0:" && $1 != "32766:" && $1 != "32767:" {bad=1} END {exit !bad}' && return 0
+        else
+            # Only the fixed family-specific interface IDs and reserved outcomes.
+            printf '%s\n' "$rules" | awk -v ids="$owned_ids" '
+                function allowed(n) { return index(" " ids " ", " " n " ") > 0 }
+                NF && $1 != "0:" && $1 != "32766:" && $1 != "32767:" {
+                    p=$1+0; n=p%1000
+                    if (p>=1001 && p<=1003 && allowed(n) && / iif / && / lookup [1-3]$/ && $NF+0==n) next
+                    if (p>=2001 && p<=2003 && allowed(n) && $0 ~ (" fwmark 0x" n "00/0x3f00 lookup " n "$")) next
+                    if (p>=3001 && p<=3003 && allowed(n) && $0 ~ (" fwmark 0x" n "00/0x3f00 (unreachable|7)$")) next
+                    if (p==2061 && / fwmark 0x3[dD]00\/0x3f00 (blackhole|6)$/) next
+                    if (p==2062 && / fwmark 0x3[eE]00\/0x3f00 (unreachable|7)$/) next
+                    bad=1
+                } END {exit !bad}' && return 0
+        fi
+        routes=$(ip -N "$family" route show table all 2>/dev/null) || return 0
+        printf '%s\n' "$routes" | awk -v own="$owned_running" -v ids="$owned_ids" '{for(i=1;i<=NF;i++) if($i=="table" && $(i+1) ~ /^[0-9]+$/) {n=$(i+1)+0;if(n>=1 && n<=250 && !(own=="true" && index(" " ids " "," " n " ")>0)) bad=1}} END {exit !bad}' && return 0
+    done
+    return 1
+}
+preflight() {
+    local action="$1"
+    compatible || return 1
+    local network_changes mwan_changes
+    network_changes=$(uci -q changes network 2>/dev/null) && mwan_changes=$(uci -q changes mwan3 2>/dev/null) || { ERROR='Cannot inspect pending network edits; no change was attempted'; return 1; }
+    [ -z "$network_changes" ] && [ -z "$mwan_changes" ] || { ERROR='Unsaved network settings exist; finish or discard them before changing failover'; return 1; }
+    if [ "$action" = enable ]; then
+        [ "$(uci_get network.wan)" = interface ] && [ "$(uci_get network.wwan)" = interface ] || { ERROR='Both WAN and venue Wi-Fi network interfaces must exist'; return 1; }
+        local wan_metric wwan_metric
+        wan_metric=$(uci_get network.wan.metric) || wan_metric=0
+        wwan_metric=$(uci_get network.wwan.metric) || wwan_metric=0
+        [ -n "$wan_metric" ] || wan_metric=0
+        [ -n "$wwan_metric" ] || wwan_metric=0
+        if ! awk -v wan="$wan_metric" -v wifi="$wwan_metric" 'BEGIN {exit !(wan ~ /^[0-9]+$/ && wifi ~ /^[0-9]+$/ && wan+0<=4294967295 && wifi+0<=4294967295 && wan+0!=wifi+0)}'; then
+            ERROR='Set distinct numeric WAN and venue Wi-Fi route metrics in LuCI before enabling failover; an unset metric counts as zero'; return 1
+        fi
+    fi
+    [ "$(uci_get pbr.config.enabled)" != 1 ] || { ERROR='An existing policy-routing controller owns this router'; return 1; }
+    if [ -f "$ROOT/etc/tollgate/config.json" ]; then
+        local setting
+        for setting in mptcp_bonding multi_wan; do
+            [ "$(jsonfilter -e "@.$setting.enabled" < "$ROOT/etc/tollgate/config.json" 2>/dev/null)" != true ] || { ERROR='An existing bonding or multi-WAN policy is enabled'; return 1; }
+        done
+    fi
+    if foreign_routes; then ERROR='Existing policy rules or routing tables conflict with the failover engine'; return 1; fi
+    if mark_conflicts; then [ -n "$ERROR" ] || ERROR='Existing packet marks overlap the failover engine mask'; return 1; fi
+    if [ -f "$STORE/profile.sha256" ]; then
+        [ "$(sha256sum "$MWAN" | cut -d ' ' -f 1)" = "$(cat "$STORE/profile.sha256")" ] || { ERROR='Failover settings changed outside this dashboard; review them before changing ownership'; return 1; }
+    fi
+    return 0
+}
+
+write_header() {
+    printf "# TollGate owner failover v1\nconfig globals 'globals'\n\toption mmx_mask '0x3f00'\n\toption tg_owned '1'\n\toption tg_version '1'\n\toption tg_enabled '%s'\n" "$1"
+}
+write_interface() {
+    local name="$1" family="$2"
+    printf "\nconfig interface '%s'\n\toption enabled '1'\n\toption family '%s'\n\toption track_method 'tollgate-http'\n\tlist track_ip '1'\n\tlist track_ip '2'\n\toption reliability '1'\n\toption count '1'\n\toption timeout '5'\n\toption interval '5'\n\toption failure_interval '5'\n\toption recovery_interval '5'\n\toption down '3'\n\toption up '3'\n\toption initial_state 'offline'\n\toption check_quality '0'\n\toption flush_conntrack 'never'\n" "$name" "$family"
+}
+write_member() { printf "\nconfig member 'tg_%s'\n\toption interface '%s'\n\toption metric '%s'\n\toption weight '1'\n" "$1" "$1" "$2"; }
+render_enabled() {
+    local name family primary backup
+    write_header 1
+    for name in wan wwan wan6; do
+        [ "$(uci_get "network.$name")" = interface ] || continue
+        family=ipv4; case "$name" in *6) family=ipv6 ;; esac
+        write_interface "$name" "$family"
+        case "$name" in wan|wan6) write_member "$name" 10 ;; *) write_member "$name" 20 ;; esac
+    done
+    for family in 4 6; do
+        primary=wan; backup=wwan; [ "$family" = 6 ] && { primary=wan6; backup=wwan6; }
+        printf "\nconfig policy 'tg_failover%s'\n\toption last_resort 'unreachable'\n" "$family"
+        [ "$(uci_get "network.$primary")" = interface ] && printf "\tlist use_member 'tg_%s'\n" "$primary"
+        [ "$family" = 4 ] && [ "$(uci_get "network.$backup")" = interface ] && printf "\tlist use_member 'tg_%s'\n" "$backup"
+        printf "\nconfig rule 'tg_default%s'\n\toption family 'ipv%s'\n\toption proto 'all'\n\toption sticky '0'\n\toption use_policy 'tg_failover%s'\n" "$family" "$family" "$family"
+    done
+}
+record_hash() { sha256sum "$MWAN" | cut -d ' ' -f 1 > "$STORE/profile.sha256.tmp" && mv "$STORE/profile.sha256.tmp" "$STORE/profile.sha256"; }
+backup_initial() {
+    if [ ! -e "$STORE/network.before" ]; then
+        cp "$NETWORK" "$STORE/network.before.tmp" && chmod 600 "$STORE/network.before.tmp" && mv "$STORE/network.before.tmp" "$STORE/network.before" || return 1
+        sha256sum "$STORE/network.before" | cut -d ' ' -f 1 > "$STORE/network.before.sha256" || return 1
+    else
+        [ -f "$STORE/network.before.sha256" ] && [ "$(sha256sum "$STORE/network.before" | cut -d ' ' -f 1)" = "$(cat "$STORE/network.before.sha256")" ] || { ERROR='The initial exact network backup is incomplete or changed'; return 1; }
+    fi
+    # Audit-only backup. No action writes or restores netifd network state.
+}
+apply_enable() {
+    preflight enable || fail "$ERROR"
+    if configured; then
+        running || fail 'The saved failover profile is enabled but the controller is stopped; disable and review it before enabling again'
+        status_json true; return
+    fi
+    [ ! -f "$STORE/pending" ] || fail 'A partial enable needs review before another enable can replace its recovery profile'
+    mkdir -p "$STORE" && chmod 700 "$STORE" || fail 'Cannot create the private failover backup directory'
+    backup_initial || fail "${ERROR:-Cannot preserve the original network configuration}"
+    printf 'enable\n' > "$STORE/pending"
+    render_enabled > "$MWAN.tollgate-stage" && chmod 600 "$MWAN.tollgate-stage" && mv "$MWAN.tollgate-stage" "$MWAN" && record_hash || fail 'A partial enable may have changed the failover profile; inspect settings before retrying'
+    "$INIT" enable >/dev/null 2>&1 && "$INIT" start >/dev/null 2>&1 || fail 'A partial enable may have applied; the failover engine did not confirm startup'
+    running || fail 'A partial enable may have applied; the failover controller is not confirmed running'
+    rm -f "$STORE/pending"
+    status_json true
+}
+apply_disable() {
+    preflight disable || fail "$ERROR"
+    if ! configured; then
+        [ ! -f "$STORE/pending" ] || fail 'A partial change needs review; disabled configuration alone does not prove engine cleanup completed'
+        status_json true; return
+    fi
+    printf 'disable\n' > "$STORE/pending"
+    "$INIT" stop >/dev/null 2>&1 || fail 'A partial disable may have applied; engine stop was not confirmed'
+    running && fail 'A partial disable may have applied; the controller still reports running'
+    "$INIT" disable >/dev/null 2>&1 || fail 'A partial disable stopped the engine but boot disable was not confirmed'
+    write_header 0 > "$MWAN.tollgate-stage" && chmod 600 "$MWAN.tollgate-stage" && mv "$MWAN.tollgate-stage" "$MWAN" && record_hash || fail 'A partial disable may have changed the profile; inspect settings before retrying'
+    rm -f "$STORE/pending"
+    status_json true
+}
+
+[ "$#" = 1 ] || fail 'Choose one supported failover action'
+case "$1" in status) status_json true; exit 0 ;; enable|disable) ;; *) fail 'Unsupported failover action' ;; esac
+[ -n "$ROOT" ] || [ "$(id -u)" = 0 ] || fail 'Failover changes require the router administrator'
+mkdir -p "${LOCK%/*}" || fail 'Cannot access the failover action lock'
+mkdir "$LOCK" 2>/dev/null || fail 'Failover controller is busy; no duplicate action was sent'
+trap 'rmdir "$LOCK" 2>/dev/null || :' EXIT
+trap 'exit 1' HUP INT TERM
+case "$1" in enable) apply_enable ;; disable) apply_disable ;; esac

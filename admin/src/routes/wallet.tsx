@@ -13,7 +13,7 @@ interface DrainToken {
 }
 
 export default function Wallet() {
-  const [balance, setBalance] = useState<number>(0);
+  const [balance, setBalance] = useState<number | null>(null);
   const [mints, setMints] = useState<MintBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -31,20 +31,21 @@ export default function Wallet() {
   const fetchWallet = useCallback(async () => {
     try {
       const res = await ubusCall('tollgate', 'wallet_info');
-      if (res.success && res.data) {
-        setBalance(res.data.total_balance || 0);
-        const mintBalances = res.data.mint_balances || {};
-        setMints(
-          Object.entries(mintBalances).map(([url, balance]) => ({
-            url,
-            balance: balance as number,
-          }))
-        );
+      const total = res?.data?.total_balance;
+      const mintBalances = res?.data?.mint_balances;
+      if (res?.success !== true || typeof total !== 'number' || !Number.isFinite(total) || total < 0 ||
+          !mintBalances || typeof mintBalances !== 'object' || Array.isArray(mintBalances) ||
+          Object.values(mintBalances).some(value => typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
+        throw new Error('Wallet response unavailable');
       }
+      setBalance(total);
+      setMints(Object.entries(mintBalances).map(([url, balance]) => ({ url, balance: balance as number })));
       setError('');
     } catch {
-      setBalance(0);
+      setBalance(null);
       setMints([]);
+      setDrainConfirm(false);
+      setError('Wallet balance unavailable. Try again; the router did not return a current balance.');
     } finally {
       setLoading(false);
     }
@@ -110,15 +111,6 @@ export default function Wallet() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="loading-page flex-col gap-sm">
-        <p className="error-text">{error}</p>
-        <button className="btn btn-secondary btn-sm" onClick={fetchWallet}>Retry</button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-md">
       <h2
@@ -133,9 +125,10 @@ export default function Wallet() {
           <div className="card-title">Balance</div>
           <button className="btn btn-secondary btn-sm" onClick={fetchWallet}>Refresh</button>
         </div>
-        <div style={{ fontSize: 'var(--font-size-large)', fontWeight: 700, color: 'var(--accent)' }}>
+        {error && <p className="error-text" role="alert">{error}</p>}
+        {balance !== null && <div style={{ fontSize: 'var(--font-size-large)', fontWeight: 700, color: 'var(--accent)' }}>
           {balance.toLocaleString()} sats
-        </div>
+        </div>}
         {mints.length > 0 && (
           <div style={{ marginTop: '0.5rem' }}>
             {mints.map((mint) => (
@@ -194,7 +187,7 @@ export default function Wallet() {
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => setDrainConfirm(true)}
-            disabled={balance === 0 || drainLoading}
+            disabled={balance === null || balance === 0 || drainLoading}
           >
             Drain All Funds
           </button>

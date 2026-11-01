@@ -27,6 +27,7 @@
 # '!' / '*' is a LOCKED account: crypt() can never match it, so it is not
 # credential-less and nothing here refuses on it.
 SHADOW_FILE="${TOLLGATE_SHADOW_FILE:-/etc/shadow}"
+FAILOVER_HELPER="${TOLLGATE_FAILOVER_HELPER:-/usr/libexec/tollgate/failover}"
 
 # The install-time markers the module's packaging/files/etc/uci-defaults/
 # 99-tollgate-setup drops when it installed a FIXED DEFAULT credential rather
@@ -104,6 +105,15 @@ case "$1" in
       "wallet_drain_cashu":{},
       "status":{},
       "health":{},
+      "internet_policy_get":{},
+      "internet_policy_set":{"enabled":false},
+      "service_restart":{},
+      "service_start":{},
+      "service_stop":{},
+      "private_network_get":{},
+      "private_enable":{},
+      "private_disable":{},
+      "private_set_address":{"address":"string"},
       "ui_links":{},
       "upstream_scan":{},
       "upstream_connect":{"ssid":"string","passphrase":"string"},
@@ -124,6 +134,21 @@ case "$1" in
         json_init
         json_add_string "username" "root"
         json_add_string "state" "$CRED_STATE"
+        # Capability only. Execution still requires an authenticated write ACL
+        # and the credential guard below; older plugins omit this flag.
+        json_add_boolean "service_restart_supported" 1
+        json_add_boolean "service_controls_supported" 1
+        if [ -x "$FAILOVER_HELPER" ]; then
+            json_add_boolean "internet_policy_supported" 1
+        else
+            json_add_boolean "internet_policy_supported" 0
+        fi
+        json_add_boolean "private_network_supported" 1
+        if tollgate network private --help 2>/dev/null | grep -q 'set-address'; then
+            json_add_boolean "private_address_supported" 1
+        else
+            json_add_boolean "private_address_supported" 0
+        fi
         if [ "$CRED_STATE" = "set" ]; then
             json_add_boolean "password_set" 1
         else
@@ -330,6 +355,100 @@ case "$1" in
         ;;
       health)
         tollgate --json health 2>/dev/null
+        ;;
+      internet_policy_get|internet_policy_set)
+        if [ ! -x "$FAILOVER_HELPER" ]; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_boolean "supported" 0
+            json_add_string "error" "Internet failover support is not installed on this router"
+            json_dump
+            exit 0
+        fi
+        if [ "$2" = internet_policy_get ]; then
+            "$FAILOVER_HELPER" status
+        else
+            INPUT=$(cat)
+            if ! json_load "$INPUT"; then
+                json_init
+                json_add_boolean "success" 0
+                json_add_string "error" "enabled must be a boolean"
+                json_dump
+                exit 0
+            fi
+            json_get_type ENABLED_TYPE enabled
+            if [ "$ENABLED_TYPE" != boolean ]; then
+                json_init
+                json_add_boolean "success" 0
+                json_add_string "error" "enabled must be a boolean"
+                json_dump
+                exit 0
+            fi
+            json_get_var ENABLED enabled
+            if [ "$ENABLED" = 1 ]; then
+                "$FAILOVER_HELPER" enable
+            else
+                "$FAILOVER_HELPER" disable
+            fi
+        fi
+        ;;
+      private_network_get)
+        # Read ONLY non-secret metadata. The CLI's private status includes its
+        # plaintext password and must never be forwarded to the browser.
+        json_init
+        if uci -q get network.private >/dev/null 2>&1; then
+            json_add_boolean "success" 1
+            json_add_string "address" "$(uci -q get network.private.ipaddr)"
+            json_add_string "pinned_address" "$(uci -q get tollgate.private.ipaddr)"
+        else
+            json_add_boolean "success" 0
+        fi
+        for index in 0 1; do
+            if uci -q get "wireless.private_radio$index" >/dev/null 2>&1; then
+                if [ "$(uci -q get "wireless.private_radio$index.disabled")" = 1 ]; then
+                    state="Configured disabled"
+                else
+                    state="Configured enabled"
+                fi
+            else
+                state="Not configured"
+            fi
+            json_add_string "radio$index" "$state"
+        done
+        json_dump
+        ;;
+      private_enable)
+        tollgate --json network private enable 2>/dev/null
+        ;;
+      private_disable)
+        tollgate --json network private disable 2>/dev/null
+        ;;
+      private_set_address)
+        INPUT=$(cat)
+        ADDRESS=$(printf '%s' "$INPUT" | jsonfilter -e '@.address' 2>/dev/null)
+        # Reject shell syntax/oversized input here; the CLI checks IPv4 octets,
+        # host address and /24 policy. Quoting preserves one literal argument.
+        case "$ADDRESS" in *[!0-9./]*) ADDRESS="" ;; esac
+        if [ "${#ADDRESS}" -gt 18 ] || ! printf '%s\n' "$ADDRESS" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/24)?$'; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_string "error" "a router IPv4 address with optional /24 is required"
+            json_dump
+            exit 0
+        fi
+        tollgate --json network private set-address "$ADDRESS" 2>/dev/null
+        ;;
+      service_start)
+        tollgate --json start 2>/dev/null
+        ;;
+      service_stop)
+        tollgate --json stop 2>/dev/null
+        ;;
+      service_restart)
+        # Keep the CLI's structured success/failure result. Its process exit
+        # status alone does not prove that both init-script restarts succeeded.
+        # No caller input is executed and no generic shell privilege is added.
+        tollgate --json restart 2>/dev/null
         ;;
       ui_links)
         # The router's answer for the board's cross-link to the OTHER admin UI

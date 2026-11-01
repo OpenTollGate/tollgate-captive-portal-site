@@ -381,6 +381,159 @@ MJS
     fi
 fi
 
+# Scoped owner restart: no generic file.exec grant and no success inferred from exit status.
+shadow_empty
+run_method service_restart
+if ! cli_ran && printf '%s' "$OUT" | grep -q 'no-admin-credential'; then
+    ok '(j1) restart is refused before CLI execution with an empty credential'
+else bad '(j1) restart credential refusal'; fi
+shadow_set
+run_method service_restart
+if grep -qx -- '--json restart' "$CALLS"; then
+    ok '(j2) restart invokes exactly the structured CLI restart command'
+else bad '(j2) restart must invoke only tollgate --json restart'; fi
+cat > "$BIN/tollgate" <<'RESTART_CLI'
+#!/bin/sh
+printf '%s\n' "$*" >> "$TOLLGATE_CALLS"
+echo '{"success":false,"error":"partial restart"}'
+exit 0
+RESTART_CLI
+run_method service_restart
+if printf '%s' "$OUT" | grep -q '"success":false'; then
+    ok '(j3) a failed JSON result remains failed even with CLI exit zero'
+else bad '(j3) restart failure must not become success'; fi
+run_method auth_status
+if printf '%s' "$OUT" | grep -q 'b service_restart_supported=1'; then
+    ok '(j4) the capability probe advertises scoped restart support'
+else bad '(j4) missing restart capability'; fi
+if node -e 'const a=require(process.argv[1]); const w=a.tollgate.write.ubus.tollgate; const u=a.unauthenticated; if (!w.includes("service_restart") || [...(u.read.ubus.tollgate||[]),...(u.write.ubus.tollgate||[])].includes("service_restart")) process.exit(1)' "$ACL"; then
+    ok '(j5) restart is authenticated write-only'
+else bad '(j5) restart ACL scope'; fi
+
+# Fixed start/stop commands remain behind the same fail-closed guard.
+for action in start stop; do
+    shadow_empty
+    run_method "service_$action"
+    if ! cli_ran && printf '%s' "$OUT" | grep -q 'no-admin-credential'; then
+        ok "(k) $action refuses empty root credential"
+    else bad "(k) $action credential refusal"; fi
+    shadow_set
+    run_method "service_$action" '{"command":"echo injected"}'
+    if grep -qx -- "--json $action" "$CALLS" && printf '%s' "$OUT" | grep -q '"success":false'; then
+        ok "(k) $action invokes fixed CLI arguments and retains failure"
+    else bad "(k) $action fixed command/failure"; fi
+done
+run_method auth_status
+if printf '%s' "$OUT" | grep -q 'b service_controls_supported=1'; then
+    ok '(k) capability probe advertises start and stop'
+else bad '(k) missing service controls capability'; fi
+if node -e 'const a=require(process.argv[1]); const w=a.tollgate.write.ubus.tollgate; const r=a.tollgate.read.ubus.tollgate; const u=a.unauthenticated; const p=[...u.read.ubus.tollgate,...u.write.ubus.tollgate]; if (["service_start","service_stop"].some(x=>!w.includes(x)||r.includes(x)||p.includes(x))) process.exit(1)' "$ACL"; then
+    ok '(k) start/stop are authenticated write-only'
+else bad '(k) start/stop ACL scope'; fi
+
+# Private power and address changes use fixed CLI verbs. Metadata never reads a PSK.
+cat > "$BIN/uci" <<'UCI'
+#!/bin/sh
+case "$*" in
+  '-q get network.private') echo interface ;;
+  '-q get network.private.ipaddr') echo 10.9.8.1 ;;
+  '-q get tollgate.private.ipaddr') echo 10.9.8.1 ;;
+  '-q get wireless.private_radio0'|'-q get wireless.private_radio1') echo wifi-iface ;;
+  *disabled) echo 0 ;;
+  *key*) echo SHOULD_NEVER_LEAK_PRIVATE_PASSWORD ;;
+  *) exit 1 ;;
+esac
+UCI
+cat > "$BIN/jsonfilter" <<'FILTER'
+#!/usr/bin/env node
+let text=''; for await (const chunk of process.stdin) text+=chunk;
+try { process.stdout.write(JSON.parse(text).address || ''); } catch {}
+FILTER
+chmod +x "$BIN/uci" "$BIN/jsonfilter"
+shadow_set
+run_method private_network_get
+if ! cli_ran && printf '%s' "$OUT" | grep -q 's address=10.9.8.1' && ! printf '%s' "$OUT" | grep -q 'SHOULD_NEVER_LEAK'; then
+    ok '(l) private metadata is local and contains no password'
+else bad '(l) private metadata contract'; fi
+for action in enable disable; do
+    shadow_empty
+    run_method "private_$action"
+    if ! cli_ran && printf '%s' "$OUT" | grep -q 'no-admin-credential'; then
+        ok "(l) private $action refuses unset credential"
+    else bad "(l) private $action credential refusal"; fi
+    shadow_set
+    run_method "private_$action"
+    if grep -qx -- "--json network private $action" "$CALLS"; then
+        ok "(l) private $action invokes only fixed CLI verb"
+    else bad "(l) private $action command"; fi
+done
+shadow_empty
+run_method private_set_address '{"address":"10.9.8.1/24"}'
+if ! cli_ran; then ok '(l) private address refuses unset credential'; else bad '(l) private address credential guard'; fi
+shadow_set
+run_method private_set_address '{"address":"10.9.8.1/24"}'
+if grep -qx -- '--json network private set-address 10.9.8.1/24' "$CALLS"; then
+    ok '(l) address is one literal CLI argument'
+else bad '(l) private address command'; fi
+run_method private_set_address '{"address":"10.9.8.1;echo injected"}'
+if ! cli_ran; then ok '(l) shell syntax in address is rejected'; else bad '(l) address injection refusal'; fi
+run_method private_set_address '{"address":"10.9.8.1/24\necho injected"}'
+if ! cli_ran; then ok '(l) multiline address is rejected'; else bad '(l) multiline address refusal'; fi
+if node -e 'const a=require(process.argv[1]); const r=a.tollgate.read.ubus.tollgate,w=a.tollgate.write.ubus.tollgate,u=a.unauthenticated; const p=[...u.read.ubus.tollgate,...u.write.ubus.tollgate]; if (!r.includes("private_network_get")||["private_enable","private_disable","private_set_address"].some(x=>!w.includes(x)||r.includes(x)||p.includes(x))||p.includes("private_network_get")) process.exit(1)' "$ACL"; then
+    ok '(l) private metadata read and mutation write ACLs are authenticated'
+else bad '(l) private network ACL scope'; fi
+
+# Capabilities follow the installed CLI, rather than the source tree version.
+cat > "$BIN/tollgate" <<'HELP'
+#!/bin/sh
+printf '%s\n' "$TOLLGATE_TEST_PRIVATE_HELP"
+HELP
+chmod +x "$BIN/tollgate"
+export TOLLGATE_TEST_PRIVATE_HELP='enable disable status'
+run_method auth_status
+if printf '%s' "$OUT" | grep -q 'b private_address_supported=0'; then
+    ok '(l) address control is unavailable on an older CLI'
+else bad '(l) older CLI capability'; fi
+export TOLLGATE_TEST_PRIVATE_HELP='set-address Pin management address'
+run_method auth_status
+if printf '%s' "$OUT" | grep -q 'b private_address_supported=1'; then
+    ok '(l) address control is advertised when CLI supports it'
+else bad '(l) supported CLI capability'; fi
+
+# Internet policy is a bounded helper, read versus write ACL and typed boolean.
+export TOLLGATE_FAILOVER_HELPER="$BIN/failover"
+cat > "$BIN/failover" <<'FAILOVER'
+#!/bin/sh
+printf '%s\n' "$*" >> "$TOLLGATE_CALLS"
+echo '{"success":false,"error":"fixture unconfirmed"}'
+FAILOVER
+chmod +x "$BIN/failover"
+cat >> "$TMP/jshn.sh" <<'JSON_BOOL'
+json_load() { _test_json=$1; }
+json_get_type() { _type=$(printf '%s' "$_test_json" | node -e 'let s="";for await(const c of process.stdin)s+=c;try{console.log(typeof JSON.parse(s).enabled)}catch{console.log("invalid")}'); eval "$1=\$_type"; }
+json_get_var() { _value=$(printf '%s' "$_test_json" | node -e 'let s="";for await(const c of process.stdin)s+=c;try{console.log(JSON.parse(s).enabled===true?1:0)}catch{console.log(0)}'); eval "$1=\$_value"; }
+JSON_BOOL
+shadow_empty
+for method in internet_policy_get internet_policy_set; do
+    run_method "$method" '{"enabled":true}'
+    if ! cli_ran && printf '%s' "$OUT" | grep -q no-admin-credential; then ok "(m) $method credential guard"; else bad "(m) $method credential guard"; fi
+done
+shadow_set
+run_method internet_policy_get
+if grep -qx status "$CALLS" && printf '%s' "$OUT" | grep -q '"success":false'; then ok '(m) policy reads fixed status and preserves failure'; else bad '(m) policy status adapter'; fi
+for enabled in true false; do
+    run_method internet_policy_set "{\"enabled\":$enabled}"
+    verb=disable; [ "$enabled" = true ] && verb=enable
+    if grep -qx "$verb" "$CALLS" && printf '%s' "$OUT" | grep -q '"success":false'; then ok "(m) $enabled invokes fixed $verb and preserves failure"; else bad "(m) fixed $verb"; fi
+done
+for input in '{}' '{"enabled":"true"}' '{"enabled":1}' '{"enabled":"enable; echo injected"}'; do
+    run_method internet_policy_set "$input"
+    if ! cli_ran; then ok '(m) non-boolean/missing enabled is refused'; else bad '(m) invalid enabled reached helper'; fi
+done
+LIST=$(sh "$TMP/plugin.sh" list)
+if printf '%s' "$LIST" | node -e 'let s="";for await(const c of process.stdin)s+=c;const p=JSON.parse(s);if(typeof p.internet_policy_set?.enabled!=="boolean"||!p.internet_policy_get)process.exit(1)'; then ok '(m) policy list uses real Boolean signature'; else bad '(m) policy signature'; fi
+if node -e 'const a=require(process.argv[1]);const r=a.tollgate.read.ubus.tollgate,w=a.tollgate.write.ubus.tollgate,u=a.unauthenticated,p=[...u.read.ubus.tollgate,...u.write.ubus.tollgate];if(!r.includes("internet_policy_get")||!w.includes("internet_policy_set")||r.includes("internet_policy_set")||p.some(x=>x.startsWith("internet_policy_")))process.exit(1)' "$ACL"; then ok '(m) policy read/write ACLs stay authenticated'; else bad '(m) policy ACL'; fi
+
 echo
 echo "-- $pass passed, $fail failed --"
 [ "$fail" = 0 ] || exit 1

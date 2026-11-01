@@ -11,6 +11,7 @@ import Wifi from '../routes/wifi';
 import Devices from '../routes/devices';
 import Settings from '../routes/settings';
 import Wallet from '../routes/wallet';
+import Maintenance from '../routes/maintenance';
 
 
 function IconDashboard() {
@@ -86,6 +87,7 @@ const NAV_ITEMS: NavItem[] = [
   { route: 'devices', label: 'Devices', icon: IconDevices },
   { route: 'settings', label: 'Settings', icon: IconSettings },
   { route: 'wallet', label: 'Wallet', icon: IconWallet },
+  { route: 'maintenance', label: 'Maintain', icon: IconSettings },
 ];
 
 function RouteContent({ route }: { route: Route }) {
@@ -100,6 +102,8 @@ function RouteContent({ route }: { route: Route }) {
       return <Settings />;
     case 'wallet':
       return <Wallet />;
+    case 'maintenance':
+      return <Maintenance />;
     default:
       return <Dashboard />;
   }

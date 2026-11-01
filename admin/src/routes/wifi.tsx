@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { ubusCall } from '../lib/ubus';
+import InternetConnection from '../components/internet-connection';
 import { isPrivateRadioIface } from '../lib/private-radio';
 import { refusalInApplied } from '../lib/module-reply';
 
@@ -21,6 +22,7 @@ interface WifiRadio {
     hwmode: string;
     htmode: string;
     country?: string;
+    band?: string;
   };
   interfaces: WifiIface[];
 }
@@ -32,6 +34,7 @@ interface ScannedNetwork {
   bssid: string;
   radio: string;
   channel: string;
+  band?: string;
 }
 
 interface ConfiguredUpstream {
@@ -46,6 +49,17 @@ function signalQuality(dbm: number): { label: string; color: string } {
   if (dbm >= -60) return { label: 'Good', color: '#4da6ff' };
   if (dbm >= -70) return { label: 'Fair', color: '#e88a3a' };
   return { label: 'Weak', color: 'var(--error)' };
+}
+
+function networkBand(network: ScannedNetwork, radio?: WifiRadio): string {
+  const band = ['2g', '5g', '6g'].includes(network.band || '') ? network.band : radio?.config?.band;
+  if (band === '2g') return '2.4 GHz';
+  if (band === '5g') return '5 GHz';
+  if (band === '6g') return '6 GHz';
+  const hwmode = radio?.config?.hwmode;
+  if (hwmode === '11g' || hwmode === '11b') return '2.4 GHz';
+  if (hwmode === '11a') return '5 GHz';
+  return 'Band not reported';
 }
 
 function shortEncryption(enc: string): string {
@@ -97,13 +111,15 @@ export default function Wifi() {
   const [removing, setRemoving] = useState(false);
 
   const [upstreamMsg, setUpstreamMsg] = useState('');
+  const [joinedSsid, setJoinedSsid] = useState('');
+  const [connectionRevision, setConnectionRevision] = useState(0);
 
   function getOwnSSIDs(): Set<string> {
     const ssids = new Set<string>();
     Object.values(radios).forEach((r) => {
       r.interfaces?.forEach((i) => {
         const cfg = i.config || i;
-        if (cfg.ssid) ssids.add(cfg.ssid);
+        if (cfg.ssid && cfg.mode !== 'sta' && cfg.mode !== 'Managed') ssids.add(cfg.ssid);
       });
     });
     return ssids;
@@ -129,6 +145,7 @@ export default function Wifi() {
                   hwmode: s.hwmode || '',
                   htmode: s.htmode || '',
                   country: s.country,
+                  band: s.band,
                 },
                 interfaces: [],
               };
@@ -177,11 +194,10 @@ export default function Wifi() {
     try {
       const data = await ubusCall('tollgate', 'upstream_scan');
       if (data?.success) {
-        const ownSSIDs = getOwnSSIDs();
         const filtered = (data.data || [])
           .filter(
             (n: ScannedNetwork) =>
-              n.ssid !== '(hidden)' && !ownSSIDs.has(n.ssid)
+              n.ssid !== '(hidden)'
           )
           .sort((a: ScannedNetwork, b: ScannedNetwork) => b.signal - a.signal);
         setScanResults(filtered);
@@ -199,22 +215,24 @@ export default function Wifi() {
     if (!connectTarget) return;
     setConnecting(true);
     setUpstreamMsg('');
+    setJoinedSsid('');
     try {
       const params: Record<string, string> = { ssid: connectTarget.ssid };
       if (connectPass) params.passphrase = connectPass;
       const data = await ubusCall('tollgate', 'upstream_connect', params);
       if (data?.success) {
+        setJoinedSsid(connectTarget.ssid);
         setConnectTarget(null);
         setConnectPass('');
         setUpstreamMsg('connected');
         fetchUpstreams();
-        setTimeout(() => setUpstreamMsg(''), 3000);
       } else {
         setUpstreamMsg(data?.error || 'Connection failed');
       }
     } catch (err: any) {
       setUpstreamMsg(err.message || 'Connection failed');
     } finally {
+      setConnectionRevision((value) => value + 1);
       setConnecting(false);
     }
   }
@@ -377,6 +395,10 @@ export default function Wifi() {
   }
 
   const radioEntries = Object.entries(radios);
+  // Radio status and scanning arrive independently. Filter using the current
+  // AP status at render time, not the empty state captured by the initial scan.
+  const ownSSIDs = getOwnSSIDs();
+  const visibleNetworks = scanResults.filter((net) => !ownSSIDs.has(net.ssid));
 
   return (
     <div className="flex flex-col gap-md">
@@ -397,6 +419,199 @@ export default function Wifi() {
         </button>
       </div>
 
+      <InternetConnection refreshKey={connectionRevision} connecting={connecting} />
+      <p className="text-dim">Choose the venue’s Wi-Fi below and enter its password. Your guest Wi-Fi keeps its own name. Switching networks may briefly interrupt Wi-Fi; keep a management cable connected when possible.</p>
+
+      {/* ── Available Networks (scan results) ─────────────────── */}
+
+      <div className="card animate-in-delay-4">
+        <div className="card-header">
+          <div className="card-title">Available Networks</div>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => { fetchUpstreams(); doScan(); }}
+            disabled={scanning}
+          >
+            {scanning ? 'Scanning...' : 'Rescan'}
+          </button>
+
+        </div>
+        <div className="card-body">
+          {scanning && (
+            <div className="flex items-center justify-center gap-sm" style={{ padding: '1.5rem 0' }}>
+              <div className="loading-spinner" />
+              <span className="text-dim">Scanning...</span>
+            </div>
+          )}
+
+          {scanError && !scanning && (
+            <div className="flex flex-col gap-sm">
+              <p className="error-text">{scanError}</p>
+              <button className="btn btn-secondary btn-sm" onClick={doScan} style={{ alignSelf: 'flex-start' }}>
+                Retry Scan
+              </button>
+            </div>
+          )}
+
+          {!scanning && !scanError && visibleNetworks.length === 0 && (
+            <p className="text-dim" style={{ fontSize: 'var(--font-size-small)' }}>
+              No networks found
+            </p>
+          )}
+
+          {!scanning && visibleNetworks.map((net) => {
+            const sq = signalQuality(net.signal);
+            const isEnc = net.encryption && net.encryption !== 'none';
+            const isOpen = connectTarget?.bssid === net.bssid;
+
+            return (
+              <div key={net.bssid + net.radio} className="scan-item">
+                <div className="scan-item-info">
+                  <span className="scan-item-ssid">{net.ssid}</span>
+                  <span className="signal-strength" style={{ color: sq.color }}>
+                    <span className="signal-dot" style={{ background: sq.color }} />
+                    {sq.label}
+                  </span>
+                  <span className="badge badge-muted">{shortEncryption(net.encryption)}</span>
+                </div>
+
+                <div className="scan-item-meta">
+                  <span className="text-dim">{networkBand(net, radios[net.radio])}</span>
+
+                  {isOpen ? (
+                    <div className="connect-form">
+                      {isEnc && (
+                        <input
+                          type="password"
+                          className="input"
+                          aria-label="Wi-Fi password"
+                          autoComplete="off"
+                          placeholder="Password"
+                          value={connectPass}
+                          onInput={(e) =>
+                            setConnectPass((e.target as HTMLInputElement).value)
+                          }
+                          disabled={connecting}
+                        />
+                      )}
+                      <div className="connect-form-row">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          onClick={doConnect}
+                          disabled={Boolean(connecting || (isEnc && !connectPass))}
+                        >
+                          {connecting ? 'Connecting...' : 'Connect'}
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setConnectTarget(null); setConnectPass(''); }}
+                          disabled={connecting}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setConnectTarget(net);
+                        setConnectPass('');
+                        setUpstreamMsg('');
+                      }}
+                      disabled={scanning || connecting}
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* ── Connected Upstream ────────────────────────────────── */}
+
+      <div className="card animate-in-delay-3">
+        <div className="card-header">
+          <div className="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+              <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+              <circle cx="12" cy="20" r="1" fill="var(--accent)" />
+            </svg>
+            Saved Wi-Fi networks
+          </div>
+        </div>
+        <div className="card-body">
+          {upstreams.length === 0 && (
+            <p className="text-dim" style={{ fontSize: 'var(--font-size-small)' }}>
+              No saved Wi-Fi networks
+            </p>
+          )}
+
+          {upstreams.map((up) => (
+            <div key={up.ssid} className="upstream-item">
+              <div className="scan-item-info">
+                <span className="scan-item-ssid">{up.ssid}</span>
+                <span className={`badge ${up.status === 'ACTIVE' ? 'badge-success' : 'badge-muted'}`}>
+                  {up.status === 'ACTIVE' ? 'Selected' : 'Saved'}
+                </span>
+              </div>
+              <div className="scan-item-meta">
+                {removeTarget === up.ssid ? (
+                  <div className="remove-confirm-inline">
+                    <span className="text-dim" style={{ fontSize: 'var(--font-size-xsmall)' }}>
+                      {up.status === 'ACTIVE'
+                        ? 'This will disconnect your internet.'
+                        : `Remove ${up.ssid}?`}
+                    </span>
+                    <div className="flex gap-xs">
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={doRemove}
+                        disabled={removing}
+                      >
+                        {removing ? 'Removing...' : 'Remove'}
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setRemoveTarget(null)}
+                        disabled={removing}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setRemoveTarget(up.ssid)}
+                    disabled={scanning || connecting || up.status === 'ACTIVE'}
+                    title={up.status === 'ACTIVE' ? 'Switch networks before removing this one' : undefined}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {upstreamMsg && upstreamMsg !== 'connected' && upstreamMsg !== 'removed' && (
+            <p role="alert" className="error-text" style={{ marginTop: '0.5rem' }}>{upstreamMsg}</p>
+          )}
+          {upstreamMsg === 'connected' && (
+            <p role="status" className="success-text" style={{ marginTop: '0.5rem' }}>Wi-Fi joined: {joinedSsid}. Check the internet result above before sharing access.</p>
+          )}
+          {upstreamMsg === 'removed' && (
+            <p className="success-text" style={{ marginTop: '0.5rem' }}>Upstream removed</p>
+          )}
+        </div>
+      </div>
+
+      <details className="wifi-advanced">
+        <summary>Advanced Wi-Fi settings</summary>
+        <div className="flex flex-col gap-md" style={{ marginTop: '1rem' }}>
       {radioEntries.length === 0 && (
         <div className="card animate-in-delay-1">
           <p className="text-dim" style={{ fontSize: 'var(--font-size-small)' }}>
@@ -558,190 +773,8 @@ export default function Wifi() {
         </div>
       ))}
 
-      {/* ── Connected Upstream ────────────────────────────────── */}
-
-      <div className="card animate-in-delay-3">
-        <div className="card-header">
-          <div className="card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
-              <path d="M5 12.55a11 11 0 0 1 14.08 0" />
-              <path d="M1.42 9a16 16 0 0 1 21.16 0" />
-              <circle cx="12" cy="20" r="1" fill="var(--accent)" />
-            </svg>
-            Connected Upstream
-          </div>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => { fetchUpstreams(); doScan(); }}
-            disabled={scanning}
-          >
-            {scanning ? 'Scanning...' : 'Rescan'}
-          </button>
         </div>
-        <div className="card-body">
-          {upstreams.length === 0 && (
-            <p className="text-dim" style={{ fontSize: 'var(--font-size-small)' }}>
-              No upstream configured
-            </p>
-          )}
-
-          {upstreams.map((up) => (
-            <div key={up.ssid} className="upstream-item">
-              <div className="scan-item-info">
-                <span className="scan-item-ssid">{up.ssid}</span>
-                <span className={`badge ${up.status === 'ACTIVE' ? 'badge-success' : 'badge-muted'}`}>
-                  {up.status}
-                </span>
-              </div>
-              <div className="scan-item-meta">
-                <span className="text-dim text-mono">{up.radio}</span>
-                {removeTarget === up.ssid ? (
-                  <div className="remove-confirm-inline">
-                    <span className="text-dim" style={{ fontSize: 'var(--font-size-xsmall)' }}>
-                      {up.status === 'ACTIVE'
-                        ? 'This will disconnect your internet.'
-                        : `Remove ${up.ssid}?`}
-                    </span>
-                    <div className="flex gap-xs">
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={doRemove}
-                        disabled={removing}
-                      >
-                        {removing ? 'Removing...' : 'Remove'}
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setRemoveTarget(null)}
-                        disabled={removing}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setRemoveTarget(up.ssid)}
-                    disabled={scanning || connecting}
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {upstreamMsg && upstreamMsg !== 'connected' && upstreamMsg !== 'removed' && (
-            <p className="error-text" style={{ marginTop: '0.5rem' }}>{upstreamMsg}</p>
-          )}
-          {upstreamMsg === 'connected' && (
-            <p className="success-text" style={{ marginTop: '0.5rem' }}>Connected successfully</p>
-          )}
-          {upstreamMsg === 'removed' && (
-            <p className="success-text" style={{ marginTop: '0.5rem' }}>Upstream removed</p>
-          )}
-        </div>
-      </div>
-
-      {/* ── Available Networks (scan results) ─────────────────── */}
-
-      <div className="card animate-in-delay-4">
-        <div className="card-header">
-          <div className="card-title">Available Networks</div>
-        </div>
-        <div className="card-body">
-          {scanning && (
-            <div className="flex items-center justify-center gap-sm" style={{ padding: '1.5rem 0' }}>
-              <div className="loading-spinner" />
-              <span className="text-dim">Scanning...</span>
-            </div>
-          )}
-
-          {scanError && !scanning && (
-            <div className="flex flex-col gap-sm">
-              <p className="error-text">{scanError}</p>
-              <button className="btn btn-secondary btn-sm" onClick={doScan} style={{ alignSelf: 'flex-start' }}>
-                Retry Scan
-              </button>
-            </div>
-          )}
-
-          {!scanning && !scanError && scanResults.length === 0 && (
-            <p className="text-dim" style={{ fontSize: 'var(--font-size-small)' }}>
-              No networks found
-            </p>
-          )}
-
-          {!scanning && scanResults.map((net) => {
-            const sq = signalQuality(net.signal);
-            const isEnc = net.encryption && net.encryption !== 'none';
-            const isOpen = connectTarget?.bssid === net.bssid;
-
-            return (
-              <div key={net.bssid + net.radio} className="scan-item">
-                <div className="scan-item-info">
-                  <span className="scan-item-ssid">{net.ssid}</span>
-                  <span className="signal-strength" style={{ color: sq.color }}>
-                    <span className="signal-dot" style={{ background: sq.color }} />
-                    {sq.label}
-                  </span>
-                  <span className="badge badge-muted">{shortEncryption(net.encryption)}</span>
-                </div>
-
-                <div className="scan-item-meta">
-                  <span className="text-dim text-mono">{net.radio}</span>
-
-                  {isOpen ? (
-                    <div className="connect-form">
-                      {isEnc && (
-                        <input
-                          type="password"
-                          className="input"
-                          placeholder="Password"
-                          value={connectPass}
-                          onInput={(e) =>
-                            setConnectPass((e.target as HTMLInputElement).value)
-                          }
-                          disabled={connecting}
-                        />
-                      )}
-                      <div className="connect-form-row">
-                        <button
-                          className="btn btn-primary btn-sm"
-                          onClick={doConnect}
-                          disabled={Boolean(connecting || (isEnc && !connectPass))}
-                        >
-                          {connecting ? 'Connecting...' : 'Connect'}
-                        </button>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => { setConnectTarget(null); setConnectPass(''); }}
-                          disabled={connecting}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setConnectTarget(net);
-                        setConnectPass('');
-                        setUpstreamMsg('');
-                      }}
-                      disabled={scanning || connecting}
-                    >
-                      Connect
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      </details>
     </div>
   );
 }
