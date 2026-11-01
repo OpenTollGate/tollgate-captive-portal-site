@@ -702,3 +702,23 @@ button {
 .maintenance details > .btn { margin-top: 0.7rem; }
 
 .maintenance .text-dim, .maintenance .text-muted, .maintenance .ui-crosslink, .maintenance .ui-crosslink-reason { color: #b5b5b5; opacity: 1; }
+
+/* Internet preference and independently checked backup readiness. */
+.internet-policy { border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 0.4rem; }
+.policy-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.policy-heading h3 { font-size: var(--font-size-small); margin: 0; }
+.internet-policy p { margin-top: 0.7rem; line-height: 1.55; }
+.internet-policy .policy-note { color: #b5b5b5; font-size: var(--font-size-small); }
+.policy-family { margin-top: 0.85rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.policy-family .stat-row { margin-bottom: 0.5rem; }
+.policy-uplink { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; margin-top: 0.45rem; font-size: var(--font-size-small); }
+.policy-state { color: #c7c7c7; text-align: right; overflow-wrap: anywhere; }
+.policy-fallback { color: var(--accent); }
+.internet-policy .stat-value { overflow-wrap: anywhere; }
+@media (max-width: 420px) { .policy-heading { flex-direction: column; } }
+
+.policy-preparation { margin-top: 0.8rem; font-size: var(--font-size-small); line-height: 1.55; }
+.policy-preparation summary { cursor: pointer; color: #d4d4d4; }
+.policy-preparation ol { padding-left: 1.4rem; }
+.policy-preparation li + li { margin-top: 0.65rem; }
+.internet-policy-guidance { color: #b5b5b5; line-height: 1.5; }

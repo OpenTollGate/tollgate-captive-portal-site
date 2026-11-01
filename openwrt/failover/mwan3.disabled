@@ -1,0 +1,6 @@
+# TollGate owner failover v1
+config globals 'globals'
+	option mmx_mask '0x3f00'
+	option tg_owned '1'
+	option tg_version '1'
+	option tg_enabled '0'

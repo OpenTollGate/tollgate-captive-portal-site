@@ -240,3 +240,77 @@ TollGate’s persistent TLS opt-out semantics. Saved upstream history and manual
 configuration convergence remain specialist CLI operations; the existing WiFi
 page manages configured uplinks. No sales-pause command exists in the audited
 runtime: `manual_pause_seconds` pauses upstream scanning.
+
+
+### Ethernet-first internet with venue Wi-Fi backup
+
+The Home/WiFi Internet source card separates **Preferred: Ethernet WAN**,
+**Backup: venue Wi-Fi**, independent health, and the applied route for new
+connections. The owner can review enabling or disabling automatic fallback in
+the card. Status refreshes without overlapping requests; failed reads clear
+readiness claims. Existing connections can keep their previous uplink until they
+reconnect. Changing public IP can interrupt connections; this is not MPTCP.
+
+IPv4 prefers healthy WAN, falls back to healthy WWAN, and returns after stable
+recovery. Wi-Fi fallback uses IPv4. IPv6 uses checked WAN6 or is blocked when no
+healthy WAN6 exists; this implementation does not promise cross-provider IPv6
+prefix translation. Both families are shown separately.
+
+The fixed profile uses the official OpenWrt mwan3 2.12 engine, with a narrowly
+reviewed tracker extension and a static Go DNS/HTTP probe. The router's existing
+iptables-nft compatibility stack is required; this is not the unofficial native
+nftables mwan3 fork. Do not equate the runtime's experimental multi_wan config
+with this working controller. Its objective renderer remains separate.
+
+Each probe binds DNS and HTTP to the tested interface, source address and bypass
+mark. It uses that interface's usable advertised DNS servers; public resolvers
+are fallback only when none are advertised. Two fixed HTTP endpoints must return
+204 without a body or redirect; either can satisfy a round. A four-second probe
+budget, five-second intervals and three down/up thresholds bound attempts and
+reduce flapping. Probe time adds to the interval; exact fifteen-second handover
+is not guaranteed. Global network_ok, association and ICMP alone do not establish
+backup readiness.
+
+Installation and command contracts:
+
+- [Probe source/build](openwrt/failover-probe/README.md): build for the actual router
+  architecture and install as /usr/libexec/tollgate/uplink-probe.
+- [Profile/controller](openwrt/failover/README.md): install the signed official
+  dependencies, preserve existing routing ownership, place the disabled owned
+  template before first package installation, and install the fixed controller.
+- Use packaging/patch-mwan3-track.py only with a freshly reviewed original tracker
+  SHA-256; it refuses unknown layouts/hashes and never weakens a missing HTTP
+  probe to ping. Do not overwrite another routing controller's configuration.
+- The driver changes only its owned profile and engine lifecycle, never ordinary
+  network configuration. Existing WAN/WWAN main metrics must already be distinct
+  (an unset metric counts as zero); use LuCI's interface routing settings if this
+  prerequisite is not met. Member priorities select Ethernet regardless of which
+  ordinary main metric is lower. Disable returns to unchanged ordinary routing.
+- internet_policy_get is authenticated read access; internet_policy_set takes a
+  real Boolean enabled and is authenticated write access. No interface, URL,
+  command, key or file path comes from the caller. Unknown outcomes never retry.
+
+Preserve the controller's root-only recovery receipts. The exact tracker marker,
+owned profile hash, PBR/bonding conflicts, reserved packet marks, low routing
+tables and verified native IPv6 guards are checked. Applied policy is read from
+engine/kernel evidence, never guessed from main-route metrics; a missing empty
+policy RPC key needs independent kernel unreachable evidence.
+
+Disable this feature before firmware or mwan3 package upgrades, then requalify
+the tracker integration before enabling it again. A stock tracker replacement
+invalidates support. If its helpers are damaged, use LuCI System → Startup to
+stop/disable mwan3 and recover ordinary routing; do not restore an entire old
+network configuration over unrelated edits. This source contribution does not
+provide an automatic firmware-upgrade migration.
+
+For venue sign-in, use the card's **Prepare Wi-Fi backup at a venue** help. With
+health-based routing active, unverified paths are blocked; temporarily disable
+fallback and unplug WAN, then sign in through a device actually using TollGate's
+private network for internet. Reconnect WAN and re-enable once setup is complete.
+This does not automatically log into arbitrary venue captive portals.
+
+Tests cover bound probe behavior, controller ownership/partial errors, RPC
+permissions and UI state/review flows. Kernel and hardware acceptance, an actual
+WAN cable/outage/recovery cycle, venue login and IPv6 delegation remain separate
+from command-fixture/browser tests. No engine action explicitly restarts
+TollGate, NoDogSplash or firewall/netifd, and no conntrack flush is performed.

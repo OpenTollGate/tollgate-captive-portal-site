@@ -472,6 +472,46 @@ function maintenanceAction(action: string) {
   return { success: true };
 }
 
+function policyMode(): string { return new URLSearchParams(location.search).get('mockPolicy') || ''; }
+function mockInternetPolicy() {
+  const mode = policyMode();
+  if (mode === 'old-plugin') throw new Error('method not found');
+  if (mode === 'unavailable') throw new Error('status unavailable');
+  const reads = Number(sessionStorage.getItem('tg.mock.policy_reads') || '0') + 1;
+  sessionStorage.setItem('tg.mock.policy_reads', String(reads));
+  const saved = sessionStorage.getItem('tg.mock.policy_enabled');
+  const enabled = saved === null ? !['', 'disabled', 'uncertain', 'conflict'].includes(mode) : saved === '1';
+  const state = (name: string, health = 'online', reason = '') => ({ interface: name, link_up: true, health, reason });
+  const profile = {
+    success: true, supported: true, enabled: mode === 'conflict' && reads >= 2 ? true : enabled,
+    controller_running: enabled && mode !== 'stopped', policy: 'ethernet-first', check_method: 'bound-dns-http',
+    ipv4: { active: mode === 'wifi' ? 'wwan' : 'wan', primary: state('wan'), backup: state('wwan') },
+    ipv6: { active: mode === 'split' ? 'wwan6' : 'none', primary: state('wan6', 'offline'), backup: state('wwan6', 'offline', 'not-configured') },
+  };
+  if (mode === 'wifi') profile.ipv4.primary = state('wan', 'offline', 'no-http');
+  if (mode === 'backup-blocked') profile.ipv4.backup = state('wwan', 'offline', 'captive-or-blocked');
+  if (mode === 'checking') profile.ipv4.backup = state('wwan', 'checking');
+  if (mode === 'backup-unknown') profile.ipv4.backup = state('wwan', 'unavailable');
+  if (mode === 'split') profile.ipv6.backup = state('wwan6');
+  if (mode === 'ipv4-backup') {
+    profile.ipv4.active = 'wwan'; profile.ipv4.primary = state('wan', 'offline', 'no-http');
+    profile.ipv6.backup = state('wwan6', 'unavailable', 'ipv6-backup-unsupported');
+    Object.assign(profile.ipv6, { backup_supported: false });
+  }
+  if (mode === 'profile-issue') Object.assign(profile, { error: 'Profile changed outside TollGate; review it before another change.' });
+  if (mode === 'unsupported-issue') Object.assign(profile, { supported: false, enabled: false, controller_running: false, error: 'Previous change is unconfirmed. Inspect the protected backup before another action.' });
+  return profile;
+}
+function mockSetInternetPolicy(params: Record<string, any>) {
+  if (typeof params.enabled !== 'boolean') return { success: false, error: 'enabled must be boolean' };
+  const calls = JSON.parse(sessionStorage.getItem('tg.mock.policy_writes') || '[]');
+  calls.push({ enabled: params.enabled });
+  sessionStorage.setItem('tg.mock.policy_writes', JSON.stringify(calls));
+  if (policyMode() === 'uncertain') throw new Error('connection reset');
+  sessionStorage.setItem('tg.mock.policy_enabled', params.enabled ? '1' : '0');
+  return { success: true };
+}
+
 export function mockUbusCall(
   obj: string,
   method: string,
@@ -514,7 +554,14 @@ export function mockUbusCall(
     'uci.commit': () => ({}),
 
     // tollgate --json methods
-    'tollgate.auth_status': () => ({ ...mockCredentialStatus(), service_restart_supported: profitMode() !== 'old-plugin' && maintenanceMode() !== 'old-plugin', service_controls_supported: maintenanceMode() !== 'old-plugin', private_network_supported: maintenanceMode() !== 'old-plugin', private_address_supported: maintenanceMode() !== 'old-plugin' }),
+    'tollgate.internet_policy_get': async () => {
+      sessionStorage.setItem('tg.mock.policy_requests', String(Number(sessionStorage.getItem('tg.mock.policy_requests') || '0') + 1));
+      const delay = Number(new URLSearchParams(location.search).get('mockPolicyDelay'));
+      if (delay > 0) await new Promise(resolve => setTimeout(resolve, Math.min(delay, 25000)));
+      return mockInternetPolicy();
+    },
+    'tollgate.internet_policy_set': () => mockSetInternetPolicy(_params),
+    'tollgate.auth_status': () => ({ internet_policy_supported: policyMode() !== 'old-plugin', ...mockCredentialStatus(), service_restart_supported: profitMode() !== 'old-plugin' && maintenanceMode() !== 'old-plugin', service_controls_supported: maintenanceMode() !== 'old-plugin', private_network_supported: maintenanceMode() !== 'old-plugin', private_address_supported: maintenanceMode() !== 'old-plugin' }),
     'tollgate.admin_credential_claim': () => {
       // The board finished the forced password choice: the marker is the last
       // thing to drop. `?mockClaimFail=1` models a router that will not let go

@@ -27,6 +27,7 @@
 # '!' / '*' is a LOCKED account: crypt() can never match it, so it is not
 # credential-less and nothing here refuses on it.
 SHADOW_FILE="${TOLLGATE_SHADOW_FILE:-/etc/shadow}"
+FAILOVER_HELPER="${TOLLGATE_FAILOVER_HELPER:-/usr/libexec/tollgate/failover}"
 
 # The install-time markers the module's packaging/files/etc/uci-defaults/
 # 99-tollgate-setup drops when it installed a FIXED DEFAULT credential rather
@@ -104,6 +105,8 @@ case "$1" in
       "wallet_drain_cashu":{},
       "status":{},
       "health":{},
+      "internet_policy_get":{},
+      "internet_policy_set":{"enabled":false},
       "service_restart":{},
       "service_start":{},
       "service_stop":{},
@@ -135,6 +138,11 @@ case "$1" in
         # and the credential guard below; older plugins omit this flag.
         json_add_boolean "service_restart_supported" 1
         json_add_boolean "service_controls_supported" 1
+        if [ -x "$FAILOVER_HELPER" ]; then
+            json_add_boolean "internet_policy_supported" 1
+        else
+            json_add_boolean "internet_policy_supported" 0
+        fi
         json_add_boolean "private_network_supported" 1
         if tollgate network private --help 2>/dev/null | grep -q 'set-address'; then
             json_add_boolean "private_address_supported" 1
@@ -347,6 +355,42 @@ case "$1" in
         ;;
       health)
         tollgate --json health 2>/dev/null
+        ;;
+      internet_policy_get|internet_policy_set)
+        if [ ! -x "$FAILOVER_HELPER" ]; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_boolean "supported" 0
+            json_add_string "error" "Internet failover support is not installed on this router"
+            json_dump
+            exit 0
+        fi
+        if [ "$2" = internet_policy_get ]; then
+            "$FAILOVER_HELPER" status
+        else
+            INPUT=$(cat)
+            if ! json_load "$INPUT"; then
+                json_init
+                json_add_boolean "success" 0
+                json_add_string "error" "enabled must be a boolean"
+                json_dump
+                exit 0
+            fi
+            json_get_type ENABLED_TYPE enabled
+            if [ "$ENABLED_TYPE" != boolean ]; then
+                json_init
+                json_add_boolean "success" 0
+                json_add_string "error" "enabled must be a boolean"
+                json_dump
+                exit 0
+            fi
+            json_get_var ENABLED enabled
+            if [ "$ENABLED" = 1 ]; then
+                "$FAILOVER_HELPER" enable
+            else
+                "$FAILOVER_HELPER" disable
+            fi
+        fi
         ;;
       private_network_get)
         # Read ONLY non-secret metadata. The CLI's private status includes its

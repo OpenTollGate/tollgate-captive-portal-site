@@ -500,6 +500,40 @@ if printf '%s' "$OUT" | grep -q 'b private_address_supported=1'; then
     ok '(l) address control is advertised when CLI supports it'
 else bad '(l) supported CLI capability'; fi
 
+# Internet policy is a bounded helper, read versus write ACL and typed boolean.
+export TOLLGATE_FAILOVER_HELPER="$BIN/failover"
+cat > "$BIN/failover" <<'FAILOVER'
+#!/bin/sh
+printf '%s\n' "$*" >> "$TOLLGATE_CALLS"
+echo '{"success":false,"error":"fixture unconfirmed"}'
+FAILOVER
+chmod +x "$BIN/failover"
+cat >> "$TMP/jshn.sh" <<'JSON_BOOL'
+json_load() { _test_json=$1; }
+json_get_type() { _type=$(printf '%s' "$_test_json" | node -e 'let s="";for await(const c of process.stdin)s+=c;try{console.log(typeof JSON.parse(s).enabled)}catch{console.log("invalid")}'); eval "$1=\$_type"; }
+json_get_var() { _value=$(printf '%s' "$_test_json" | node -e 'let s="";for await(const c of process.stdin)s+=c;try{console.log(JSON.parse(s).enabled===true?1:0)}catch{console.log(0)}'); eval "$1=\$_value"; }
+JSON_BOOL
+shadow_empty
+for method in internet_policy_get internet_policy_set; do
+    run_method "$method" '{"enabled":true}'
+    if ! cli_ran && printf '%s' "$OUT" | grep -q no-admin-credential; then ok "(m) $method credential guard"; else bad "(m) $method credential guard"; fi
+done
+shadow_set
+run_method internet_policy_get
+if grep -qx status "$CALLS" && printf '%s' "$OUT" | grep -q '"success":false'; then ok '(m) policy reads fixed status and preserves failure'; else bad '(m) policy status adapter'; fi
+for enabled in true false; do
+    run_method internet_policy_set "{\"enabled\":$enabled}"
+    verb=disable; [ "$enabled" = true ] && verb=enable
+    if grep -qx "$verb" "$CALLS" && printf '%s' "$OUT" | grep -q '"success":false'; then ok "(m) $enabled invokes fixed $verb and preserves failure"; else bad "(m) fixed $verb"; fi
+done
+for input in '{}' '{"enabled":"true"}' '{"enabled":1}' '{"enabled":"enable; echo injected"}'; do
+    run_method internet_policy_set "$input"
+    if ! cli_ran; then ok '(m) non-boolean/missing enabled is refused'; else bad '(m) invalid enabled reached helper'; fi
+done
+LIST=$(sh "$TMP/plugin.sh" list)
+if printf '%s' "$LIST" | node -e 'let s="";for await(const c of process.stdin)s+=c;const p=JSON.parse(s);if(typeof p.internet_policy_set?.enabled!=="boolean"||!p.internet_policy_get)process.exit(1)'; then ok '(m) policy list uses real Boolean signature'; else bad '(m) policy signature'; fi
+if node -e 'const a=require(process.argv[1]);const r=a.tollgate.read.ubus.tollgate,w=a.tollgate.write.ubus.tollgate,u=a.unauthenticated,p=[...u.read.ubus.tollgate,...u.write.ubus.tollgate];if(!r.includes("internet_policy_get")||!w.includes("internet_policy_set")||r.includes("internet_policy_set")||p.some(x=>x.startsWith("internet_policy_")))process.exit(1)' "$ACL"; then ok '(m) policy read/write ACLs stay authenticated'; else bad '(m) policy ACL'; fi
+
 echo
 echo "-- $pass passed, $fail failed --"
 [ "$fail" = 0 ] || exit 1
