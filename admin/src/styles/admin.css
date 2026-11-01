@@ -655,3 +655,50 @@ button {
   gap: 0.4rem;
   align-items: flex-end;
 }
+
+/* Owner internet setup stays readable on a phone, including long venue names. */
+.internet-source .stat-value { overflow-wrap: anywhere; min-width: 0; }
+.internet-source .card-body > p { font-size: var(--font-size-small); line-height: 1.5; }
+.internet-source button, .wifi-advanced summary { min-height: 40px; }
+.wifi-advanced summary { cursor: pointer; padding: 0.65rem 0; font-weight: 600; }
+.wifi-advanced summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.scan-item-info { min-width: 0; }
+.scan-item-ssid { overflow-wrap: anywhere; }
+
+/* Payout drafts and reviewed actions are separate from generic settings saves. */
+.profit-share { --profit-0: var(--accent); --profit-1: #5fa8f5; --profit-2: #9b8ce8; --profit-3: #56bfa5; }
+.profit-share > p { margin: 0.75rem 0; line-height: 1.5; font-size: var(--font-size-small); }
+.profit-share .text-dim { color: var(--text-muted); }
+.profit-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--border); margin-top: 1rem; }
+.profit-bar span { min-width: 0; }
+.profit-recipient { display: flex; flex-direction: column; gap: 0.65rem; border-top: 1px solid var(--border); padding: 1rem 0; }
+.profit-recipient-title { display: flex; justify-content: space-between; gap: 1rem; overflow-wrap: anywhere; }
+.profit-share-inputs { display: grid; grid-template-columns: 1fr 90px; align-items: center; gap: 0.5rem; }
+.profit-share-inputs input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); min-height: 40px; }
+.profit-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin-top: 1rem; }
+.profit-share button, .profit-share summary { min-height: 40px; }
+.profit-add { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 1rem; }
+.profit-apply { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+.profit-apply summary { cursor: pointer; padding-top: 0.65rem; }
+.profit-apply details p { line-height: 1.5; font-size: var(--font-size-small); }
+.profit-dialog { background: var(--card-bg, var(--bg)); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); width: min(480px, calc(100% - 2rem)); max-height: calc(100% - 2rem); padding: 1.25rem; margin: auto; overflow: auto; }
+.profit-dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+.profit-dialog p, .profit-dialog li { margin-top: 0.85rem; line-height: 1.5; }
+.profit-address { overflow-wrap: anywhere; }
+.profit-share summary:focus-visible { outline: 2px solid var(--accent); }
+
+/* Owner maintenance uses the same compact cards as Settings. */
+.maintenance-facts { margin: 0; }
+.maintenance-facts > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.maintenance-facts dd { margin: 0; text-align: right; }
+.maintenance-links { display: grid; gap: 0.8rem; margin-top: 0.8rem; }
+.maintenance-coverage { padding-left: 1.2rem; line-height: 1.6; }
+.maintenance-coverage li + li { margin-top: 0.8rem; }
+.maintenance details { margin-top: 1rem; }
+.maintenance summary { cursor: pointer; }
+@media (max-width: 480px) { .app-nav { gap: 0; } .nav-item { padding-left: 0.25rem; padding-right: 0.25rem; min-width: 0; } }
+
+.maintenance-confirm { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; }
+.maintenance details > .btn { margin-top: 0.7rem; }
+
+.maintenance .text-dim, .maintenance .text-muted, .maintenance .ui-crosslink, .maintenance .ui-crosslink-reason { color: #b5b5b5; opacity: 1; }

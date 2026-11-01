@@ -104,6 +104,13 @@ case "$1" in
       "wallet_drain_cashu":{},
       "status":{},
       "health":{},
+      "service_restart":{},
+      "service_start":{},
+      "service_stop":{},
+      "private_network_get":{},
+      "private_enable":{},
+      "private_disable":{},
+      "private_set_address":{"address":"string"},
       "ui_links":{},
       "upstream_scan":{},
       "upstream_connect":{"ssid":"string","passphrase":"string"},
@@ -124,6 +131,16 @@ case "$1" in
         json_init
         json_add_string "username" "root"
         json_add_string "state" "$CRED_STATE"
+        # Capability only. Execution still requires an authenticated write ACL
+        # and the credential guard below; older plugins omit this flag.
+        json_add_boolean "service_restart_supported" 1
+        json_add_boolean "service_controls_supported" 1
+        json_add_boolean "private_network_supported" 1
+        if tollgate network private --help 2>/dev/null | grep -q 'set-address'; then
+            json_add_boolean "private_address_supported" 1
+        else
+            json_add_boolean "private_address_supported" 0
+        fi
         if [ "$CRED_STATE" = "set" ]; then
             json_add_boolean "password_set" 1
         else
@@ -330,6 +347,64 @@ case "$1" in
         ;;
       health)
         tollgate --json health 2>/dev/null
+        ;;
+      private_network_get)
+        # Read ONLY non-secret metadata. The CLI's private status includes its
+        # plaintext password and must never be forwarded to the browser.
+        json_init
+        if uci -q get network.private >/dev/null 2>&1; then
+            json_add_boolean "success" 1
+            json_add_string "address" "$(uci -q get network.private.ipaddr)"
+            json_add_string "pinned_address" "$(uci -q get tollgate.private.ipaddr)"
+        else
+            json_add_boolean "success" 0
+        fi
+        for index in 0 1; do
+            if uci -q get "wireless.private_radio$index" >/dev/null 2>&1; then
+                if [ "$(uci -q get "wireless.private_radio$index.disabled")" = 1 ]; then
+                    state="Configured disabled"
+                else
+                    state="Configured enabled"
+                fi
+            else
+                state="Not configured"
+            fi
+            json_add_string "radio$index" "$state"
+        done
+        json_dump
+        ;;
+      private_enable)
+        tollgate --json network private enable 2>/dev/null
+        ;;
+      private_disable)
+        tollgate --json network private disable 2>/dev/null
+        ;;
+      private_set_address)
+        INPUT=$(cat)
+        ADDRESS=$(printf '%s' "$INPUT" | jsonfilter -e '@.address' 2>/dev/null)
+        # Reject shell syntax/oversized input here; the CLI checks IPv4 octets,
+        # host address and /24 policy. Quoting preserves one literal argument.
+        case "$ADDRESS" in *[!0-9./]*) ADDRESS="" ;; esac
+        if [ "${#ADDRESS}" -gt 18 ] || ! printf '%s\n' "$ADDRESS" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}(/24)?$'; then
+            json_init
+            json_add_boolean "success" 0
+            json_add_string "error" "a router IPv4 address with optional /24 is required"
+            json_dump
+            exit 0
+        fi
+        tollgate --json network private set-address "$ADDRESS" 2>/dev/null
+        ;;
+      service_start)
+        tollgate --json start 2>/dev/null
+        ;;
+      service_stop)
+        tollgate --json stop 2>/dev/null
+        ;;
+      service_restart)
+        # Keep the CLI's structured success/failure result. Its process exit
+        # status alone does not prove that both init-script restarts succeeded.
+        # No caller input is executed and no generic shell privilege is added.
+        tollgate --json restart 2>/dev/null
         ;;
       ui_links)
         # The router's answer for the board's cross-link to the OTHER admin UI

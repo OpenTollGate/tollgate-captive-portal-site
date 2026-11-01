@@ -147,6 +147,7 @@ test.describe('admin board: private network + administration access', () => {
     page,
   }) => {
     await page.goto(WIFI);
+    await page.getByText('Advanced Wi-Fi settings', { exact: true }).click();
 
     // The private SSID is the interface whose UCI section is private_radio0;
     // its card is the one carrying the -private SSID.
@@ -188,6 +189,7 @@ test.describe('admin board: private network + administration access', () => {
     page,
   }) => {
     await page.goto(WIFI);
+    await page.getByText('Advanced Wi-Fi settings', { exact: true }).click();
 
     const privateCards = page
       .locator('.card-body > div')
@@ -212,6 +214,7 @@ test.describe('admin board: private network + administration access', () => {
   // private-radio detection ever overreached, this is the spec that says so.
   test('a guest radio edit stays on raw uci', async ({ page }) => {
     await page.goto(WIFI);
+    await page.getByText('Advanced Wi-Fi settings', { exact: true }).click();
 
     const guestCard = page
       .locator('.card-body > div')
@@ -241,6 +244,7 @@ test.describe('admin board: private network + administration access', () => {
     page,
   }) => {
     await page.goto('./?mockCredentialState=set&mockRefuse=private_key#/wifi');
+    await page.getByText('Advanced Wi-Fi settings', { exact: true }).click();
 
     const privateCard = page
       .locator('.card-body > div')
@@ -276,6 +280,7 @@ test.describe('admin board: private network + administration access', () => {
     page,
   }) => {
     await page.goto('./?mockCredentialState=set&mockRefuse=private_ssid#/wifi');
+    await page.getByText('Advanced Wi-Fi settings', { exact: true }).click();
 
     const privateCard = page
       .locator('.card-body > div')
@@ -313,6 +318,7 @@ test.describe('admin board: private network + administration access', () => {
     page,
   }) => {
     await page.goto('./?mockCredentialState=set&mockThrow=private_ssid#/wifi');
+    await page.getByText('Advanced Wi-Fi settings', { exact: true }).click();
 
     const privateCard = page
       .locator('.card-body > div')
@@ -377,6 +383,7 @@ test.describe('admin board: private network + administration access', () => {
     // wholesale path), which inspects `applied` on the same terms as the
     // per-key path — the branch that used to ignore it entirely.
     await page.getByRole('button', { name: /Add AcceptedMints/ }).click();
+    await page.locator('#field-accepted_mints-1-url').fill('https://mint.example.com');
     await page.getByRole('button', { name: 'Save All Changes' }).click();
 
     const message = page.locator('#schema-message');

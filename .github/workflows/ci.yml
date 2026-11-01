@@ -136,6 +136,13 @@ jobs:
         # instead of raw `uci set`, which the module's applier would revert.
         run: npx playwright test --config admin/playwright.config.mjs admin-settings-network
 
+      - name: Run complete owner administration regression suite
+        # Includes Wi-Fi setup, payout review, maintenance, schema controls and
+        # failed-read states in addition to the credential/network gates above.
+        run: npm run test:admin
+      - name: Typecheck owner administration
+        run: npx tsc -p admin/tsconfig.json --noEmit
+
       - name: Run functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop
 
