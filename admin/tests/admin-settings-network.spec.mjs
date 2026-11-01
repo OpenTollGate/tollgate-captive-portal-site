@@ -383,6 +383,7 @@ test.describe('admin board: private network + administration access', () => {
     // wholesale path), which inspects `applied` on the same terms as the
     // per-key path — the branch that used to ignore it entirely.
     await page.getByRole('button', { name: /Add AcceptedMints/ }).click();
+    await page.locator('#field-accepted_mints-1-url').fill('https://mint.example.com');
     await page.getByRole('button', { name: 'Save All Changes' }).click();
 
     const message = page.locator('#schema-message');

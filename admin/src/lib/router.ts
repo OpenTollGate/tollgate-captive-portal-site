@@ -6,7 +6,8 @@ export type Route =
   | 'wifi'
   | 'devices'
   | 'settings'
-  | 'wallet';
+  | 'wallet'
+  | 'maintenance';
 
 type Listener = () => void;
 
@@ -20,6 +21,7 @@ const routeMap: Record<string, Route> = {
   '/devices': 'devices',
   '/settings': 'settings',
   '/wallet': 'wallet',
+  '/maintenance': 'maintenance',
 };
 
 const reverseMap: Record<Route, string> = {
@@ -29,6 +31,7 @@ const reverseMap: Record<Route, string> = {
   devices: '/devices',
   settings: '/settings',
   wallet: '/wallet',
+  maintenance: '/maintenance',
 };
 
 function parseHash(): Route {

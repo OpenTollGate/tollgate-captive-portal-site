@@ -276,6 +276,25 @@ const mockConfigSchema = {
         { name: 'URL', json_key: 'url', type: 'string', description: 'Mint URL', required: true, editable: true },
         { name: 'PricePerStep', json_key: 'price_per_step', type: 'uint64', description: 'Price per step in sats', default: 1, required: true, editable: true },
         { name: 'MinBalance', json_key: 'min_balance', type: 'uint64', description: 'Minimum balance (sats)', default: 64, required: true, editable: true },
+        { name: 'BalanceTolerancePercent', json_key: 'balance_tolerance_percent', type: 'uint64', description: 'Tolerance percentage for balance checks', default: 10, required: true, editable: true },
+        { name: 'PayoutIntervalSeconds', json_key: 'payout_interval_seconds', type: 'uint64', description: 'Seconds between payout rounds', default: 60, required: true, editable: true },
+        { name: 'MinPayoutAmount', json_key: 'min_payout_amount', type: 'uint64', description: 'Minimum payout amount in sats', default: 128, required: true, editable: true },
+        { name: 'PriceUnit', json_key: 'price_unit', type: 'string', description: 'Price unit', default: 'sat', required: true, editable: true },
+        { name: 'MinPurchaseSteps', json_key: 'purchase_min_steps', type: 'uint64', description: 'Minimum purchase steps', default: 1, required: true, editable: true, min: 1 },
+      ]},
+      { name: 'UpstreamDetector', json_key: 'upstream_detector', type: 'object', description: 'Upstream gateway detector', required: true, editable: true, children: [
+        { name: 'ProbeTimeout', json_key: 'probe_timeout', type: 'duration', description: 'Timeout for each probe', default: '10s', required: true, editable: true },
+        { name: 'ProbeRetryCount', json_key: 'probe_retry_count', type: 'int', description: 'Number of probe retries', default: 3, required: true, editable: true },
+        { name: 'ProbeRetryDelay', json_key: 'probe_retry_delay', type: 'duration', description: 'Delay between retries', default: '2s', required: true, editable: true },
+        { name: 'RequireValidSignature', json_key: 'require_valid_signature', type: 'bool', description: 'Require valid NIP-70 signature', default: true, required: true, editable: true },
+        { name: 'IgnoreInterfaces', json_key: 'ignore_interfaces', type: 'array', description: 'Interfaces to ignore', default: ['lo', 'docker0', 'br-lan', 'hostap0'], required: false, editable: true, children: [{ type: 'string' }] },
+        { name: 'OnlyInterfaces', json_key: 'only_interfaces', type: 'array', description: 'Only probe these interfaces (empty = all)', default: [], required: false, editable: true, children: [{ type: 'string' }] },
+        { name: 'DiscoveryTimeout', json_key: 'discovery_timeout', type: 'duration', description: 'Deduplication window', default: '5m0s', required: true, editable: true },
+      ]},
+      { name: 'UpstreamWifi', json_key: 'upstream_wifi', type: 'object', description: 'Upstream Wi-Fi scanning', required: true, editable: true, children: [
+        { name: 'ScanIntervalSeconds', json_key: 'scan_interval_seconds', type: 'int', description: 'Seconds between full Wi-Fi scans', default: 300, required: true, editable: true, min: 10, max: 3600 },
+        { name: 'FastCheckSeconds', json_key: 'fast_check_seconds', type: 'int', description: 'Seconds between signal checks', default: 30, required: true, editable: true, min: 5, max: 300 },
+        { name: 'ManualPauseSeconds', json_key: 'manual_pause_seconds', type: 'int', description: 'Seconds to pause scanning after manual changes', default: 120, required: true, editable: true, min: 10, max: 600 },
       ]},
       { name: 'ProfitShare', json_key: 'profit_share', type: 'array', description: 'Profit sharing config', required: true, editable: true, children: [
         { name: 'Factor', json_key: 'factor', type: 'float64', description: 'Share ratio (0.0-1.0)', required: true, editable: true, min: 0, max: 1 },
@@ -305,7 +324,7 @@ const mockConfigGet = {
         { url: 'https://testnut-compat.mints.orangesync.tech', min_balance: 64, balance_tolerance_percent: 10, payout_interval_seconds: 60, min_payout_amount: 128, price_per_step: 1, price_unit: 'sats', purchase_min_steps: 0 },
       ],
       profit_share: [
-        { factor: 0.8, identity: 'operator' },
+        { factor: 0.8, identity: 'owner' },
         { factor: 0.2, identity: 'treasury' },
       ],
       upstream_detector: {
@@ -325,9 +344,12 @@ const mockConfigGet = {
       },
     },
     identities: {
-      identities: [
-        { name: 'operator', nsec: 'nsec1...', pubkey: 'npub1...' },
-        { name: 'treasury', nsec: 'nsec1...', pubkey: 'npub1...' },
+      config_version: 'v0.0.1',
+      owned_identities: [{ name: 'router', privatekey: '' }],
+      public_identities: [
+        { name: 'owner', lightning_address: 'owner@example.com', pubkey: 'synthetic-owner-pubkey' },
+        { name: 'treasury', lightning_address: 'treasury@example.com', pubkey: 'synthetic-treasury-pubkey' },
+        { name: 'venue', lightning_address: 'venue@example.com' },
       ],
     },
     // Which write-only fields have a stored value. The module reports this
@@ -402,6 +424,54 @@ function ownerInterfaces() {
   };
 }
 
+function profitMode(): string {
+  return new URLSearchParams(window.location.search).get('mockProfit') || '';
+}
+function redactMockSecrets(value: any): any {
+  if (Array.isArray(value)) return value.map(redactMockSecrets);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+    /^(password|privatekey|private_key|passphrase|token)$/.test(key) && typeof item === 'string' && item ? '[withheld]' : redactMockSecrets(item)]));
+}
+function profitRecord(call: Record<string, unknown>) {
+  const calls = JSON.parse(sessionStorage.getItem('tg.mock.profit_writes') || '[]');
+  calls.push(redactMockSecrets(call));
+  sessionStorage.setItem('tg.mock.profit_writes', JSON.stringify(calls));
+}
+function currentMockConfig() {
+  return JSON.parse(sessionStorage.getItem('tg.mock.profit_config') || JSON.stringify(mockConfigGet));
+}
+function saveMockConfig(config: any) {
+  const clean = JSON.parse(JSON.stringify(config));
+  function clear(value: any) { if (!value || typeof value !== 'object') return; for (const key of Object.keys(value)) { if (/^(password|privatekey|private_key|passphrase|token)$/.test(key) && typeof value[key] === 'string') value[key] = ''; else clear(value[key]); } }
+  clear(clean); sessionStorage.setItem('tg.mock.profit_config', JSON.stringify(clean));
+}
+function readMockConfig() {
+  const next = currentMockConfig();
+  const reads = Number(sessionStorage.getItem('tg.mock.profit_reads') || '0') + 1;
+  sessionStorage.setItem('tg.mock.profit_reads', String(reads));
+  if (profitMode() === 'address-conflict' && reads >= 3) next.data.identities.public_identities[0].lightning_address = 'changed-elsewhere@example.com';
+  return next;
+}
+
+function privateAction(action: string, address?: string) {
+  const calls = JSON.parse(sessionStorage.getItem('tg.mock.maintenance_writes') || '[]');
+  calls.push(action === 'address' ? { method: 'private_set_address', address } : `private_${action}`);
+  sessionStorage.setItem('tg.mock.maintenance_writes', JSON.stringify(calls));
+  if (maintenanceMode() === 'uncertain') throw new Error('connection reset');
+  return { success: true, message: action === 'address' ? 'Address pinned; reconnect.' : 'Wireless command completed' };
+}
+function maintenanceMode() { return new URLSearchParams(location.search).get('mockMaintenance') || ''; }
+function maintenanceAction(action: string) {
+  const calls = JSON.parse(sessionStorage.getItem('tg.mock.maintenance_writes') || '[]');
+  calls.push(`service_${action}`);
+  sessionStorage.setItem('tg.mock.maintenance_writes', JSON.stringify(calls));
+  if (maintenanceMode() === 'uncertain') throw new Error('connection reset');
+  if (maintenanceMode() === 'refused') return { success: false, error: 'partial service failure' };
+  sessionStorage.setItem('tg.mock.service_stopped', action === 'stop' ? '1' : '0');
+  return { success: true };
+}
+
 export function mockUbusCall(
   obj: string,
   method: string,
@@ -416,7 +486,8 @@ export function mockUbusCall(
     'system.password_set': () => {
       // The admin board's forced password choice goes through here. Record the
       // call (username + length only) and answer like rpcd does.
-      recordAdminPasswordSet(String(_params?.username ?? 'root'), String(_params?.password ?? ''));
+      if (_params?.username !== 'root') throw new Error('username is required');
+      recordAdminPasswordSet(String(_params.username), String(_params?.password ?? ''));
       return {};
     },
     'network.interface.dump': () => ownerInterfaces(),
@@ -432,16 +503,18 @@ export function mockUbusCall(
       if (_params?.config === 'tollgate' && _params?.section === 'lnurl') {
         return { value: { lnurl: `lnurlp://pay.${BRAND.id}.com/.well-known/lnurlp/root` } };
       }
+      if (_params?.config === 'system') return { values: { cfgSystem: { '.name': 'cfgSystem', '.type': 'system', hostname: sessionStorage.getItem('tg.mock.hostname') || board.hostname } } };
       return {};
     },
     'uci.set': () => {
       recordUciSet(_params?.config, _params?.section);
+      if (_params?.config === 'system' && _params?.values?.hostname) sessionStorage.setItem('tg.mock.hostname', _params.values.hostname);
       return {};
     },
     'uci.commit': () => ({}),
 
     // tollgate --json methods
-    'tollgate.auth_status': () => mockCredentialStatus(),
+    'tollgate.auth_status': () => ({ ...mockCredentialStatus(), service_restart_supported: profitMode() !== 'old-plugin' && maintenanceMode() !== 'old-plugin', service_controls_supported: maintenanceMode() !== 'old-plugin', private_network_supported: maintenanceMode() !== 'old-plugin', private_address_supported: maintenanceMode() !== 'old-plugin' }),
     'tollgate.admin_credential_claim': () => {
       // The board finished the forced password choice: the marker is the last
       // thing to drop. `?mockClaimFail=1` models a router that will not let go
@@ -462,7 +535,7 @@ export function mockUbusCall(
       };
     },
     'tollgate.config_schema': () => mockConfigSchema,
-    'tollgate.config_get': () => mockConfigGet,
+    'tollgate.config_get': () => readMockConfig(),
     'tollgate.config_set': () => {
       const key = String(_params?.key ?? '');
       const value = String(_params?.value ?? '');
@@ -473,6 +546,15 @@ export function mockUbusCall(
       // so a browser test can prove the board SENT it without the secret ever
       // being rendered into the page.
       recordConfigSet(key, value);
+      if (key.startsWith('identities.public_identities.')) {
+        profitRecord({ method: 'config_set', key, value });
+        const index = Number(key.split('.')[2]);
+        const current = currentMockConfig();
+        current.data.identities.public_identities[index].lightning_address = value;
+        saveMockConfig(current);
+        if (profitMode() === 'address-uncertain') return { success: false, error: 'Persistence failed after memory changed' };
+      }
+
       if (mockThrowKey() === key) {
         throw new Error('ubus: call failed (connection reset by peer)');
       }
@@ -493,13 +575,26 @@ export function mockUbusCall(
     // The wholesale save reports per setting what happened, exactly like
     // `config_set` (see the module's `data.applied`): the board renders a
     // declined or failed step from this array, so the mock mirrors its shape.
-    'tollgate.config_save': () => (mockRefusedKey() === 'config_save'
-      ? refusedReply('admin_access', 'br-mgmt', true)
-      : {
-          success: true,
-          message: 'Configuration saved; runtime: 1 applied',
-          data: { applied: [{ setting: 'configuration', status: 'applied' }] },
-        }),
+    'tollgate.config_save': () => {
+      if (mockRefusedKey() === 'config_save') return refusedReply('admin_access', 'br-mgmt', true);
+      const config = JSON.parse(String(_params.json));
+      profitRecord({ method: 'config_save', config });
+      const current = currentMockConfig(); current.data.config = config; saveMockConfig(current);
+      return { success: true, message: 'Configuration saved', data: { applied: [{ setting: 'configuration', status: 'applied' }] } };
+    },
+    'tollgate.private_network_get': () => ({ success: true, address: '10.9.8.1', pinned_address: '', radio0: 'Configured enabled', radio1: 'Configured enabled' }),
+    'tollgate.private_enable': () => privateAction('enable'),
+    'tollgate.private_disable': () => privateAction('disable'),
+    'tollgate.private_set_address': () => privateAction('address', String(_params.address)),
+    'tollgate.service_start': () => maintenanceAction('start'),
+    'tollgate.service_stop': () => maintenanceAction('stop'),
+    'tollgate.service_restart': () => {
+      if (new URLSearchParams(location.search).has('mockMaintenance')) return maintenanceAction('restart');
+      profitRecord({ method: 'service_restart' });
+      if (profitMode() === 'restart-uncertain') throw new Error('connection reset');
+      if (profitMode() === 'restart-failed') return { success: false, error: 'Partial restart' };
+      return { success: true, message: 'Restart commands completed' };
+    },
     'tollgate.config_save_identities': () => ({ success: true, message: 'Identities saved (restart tollgate-wrt to apply)' }),
     'tollgate.wallet_balance': () => mockWalletBalance,
     'tollgate.wallet_info': () => mockWalletInfo,
@@ -518,6 +613,7 @@ export function mockUbusCall(
       },
     }),
     'tollgate.status': async () => {
+      if (sessionStorage.getItem('tg.mock.service_stopped') === '1') return { success: false, error: 'service unavailable' };
       const delay = Number(new URLSearchParams(window.location.search).get('mockStatusDelay'));
       const result = ownerScenario() === 'unknown'
         ? { success: false, error: 'Status check unavailable' }
@@ -525,7 +621,7 @@ export function mockUbusCall(
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(delay, 1000)));
       return result;
     },
-    'tollgate.health': () => mockHealth,
+    'tollgate.health': () => sessionStorage.getItem('tg.mock.service_stopped') === '1' ? { success: false } : mockHealth,
     'tollgate.ui_links': () => mockUiLinks(),
     'tollgate.upstream_scan': () => ({
       success: true,

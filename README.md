@@ -23,6 +23,27 @@ internet access. Use **Check internet** to refresh the result. If a venue
 requires a browser sign-in, complete it on a device using TollGate for internet
 and check again; the admin does not automatically sign into venue portals.
 
+## Profit Share controls
+
+Open **Settings → Profit Share** in the owner admin to edit existing Lightning
+destinations and saved percentages. Sliders redistribute other shares to keep
+the total at 100%; number fields allow exact edits. Review each destination
+save separately from an allocation save because they take effect at different
+times. Existing recipient names and signing keys are preserved.
+
+Destination changes are selected by a subsequent payout pass; an in-progress
+payout may keep the previous address. Saved percentages load at service startup.
+Use **Restart TollGate to apply** and read its confirmation: restarting ends
+active paid sessions, and guests may need to pay again. **Check service status**
+is read-only. An unknown restart outcome is never retried automatically.
+
+The restart control requires the matching management plugin and authenticated
+write ACL. Older plugins leave it disabled. An uncertain save can already have
+changed the router's in-memory settings; the editor re-reads them and reports
+uncertainty rather than promising a rollback. Changes are checked against fresh
+reads, but the existing backend does not provide atomic compare-and-swap for
+concurrent administrators.
+
 ## Contributing
 
 ### Internationalization (i18n)
@@ -173,3 +194,49 @@ fund-loss class on paid melts (fixed upstream #1081; v4 backport #1083
 pending release as of 2026-09-05 — 4.10.1 does NOT contain it). v5 is at
 RC — expect migration-5.0.0.md before any 5.x adoption. Details:
 hackathon-tooling patterns/cashu/client-gotchas.md.
+
+
+### Owner administration coverage
+
+The admin has a **Maintenance** page for service start/stop/restart, diagnostics
+and private-network controls. Every service action has a separate review. Stop
+prevents new purchases; restarting ends active paid sessions and guests may need
+to pay again. The page distinguishes a completed command from a responding API.
+Status/health do not establish purchase readiness or the running payout allocation.
+Lost or failed mutation replies stay uncertain and are never retried automatically.
+
+| Owner task | Dashboard workflow |
+| --- | --- |
+| Connect to venue Wi-Fi; saved uplinks; radio settings | WiFi |
+| Pricing, accepted mints, payout intervals and thresholds | Settings, with step units and pricing preview |
+| Existing payout addresses and allocation | Settings → Profit Share; explicit review, separate apply timing |
+| Private SSID, password, encryption and admin-access scope | Settings; secret fields remain write-only |
+| Private Wi-Fi on/off | Maintenance; wired management acknowledgement and wireless-interruption review |
+| Pin management IPv4 address | Maintenance; usable host on /24, review/reconnect guidance; requires CLI support |
+| Root password and persisted hostname | Settings; password uses root username and shared policy; hostname readback distinguishes stored from active |
+| Start, stop, restart and diagnostic facts | Maintenance; authenticated fixed RPC methods |
+| Balance, funding, withdrawal and connected DHCP clients | Wallet and Devices; failed reads show unavailable |
+| Firmware, backups, reboot, firewall, DHCP, full logs, advanced HTTPS | Maintenance → router-reported HTTPS LuCI link; settings remain in LuCI |
+
+Private metadata reads only address and configured interface enablement. It never
+forwards `network private status`, whose CLI response contains the Wi-Fi password.
+Address pinning calls `network private set-address` so both the interface and
+TollGate’s durable setup store change together. A completed save may still need
+a network reload; it does not prove that the new address is reachable.
+
+The schema editor supports strings, numeric bounds, exact integer values,
+booleans, nested objects, object lists, primitive lists and durations (shown in
+seconds, stored as numeric nanoseconds). Empty lists remain `[]`; read-only
+parents lock their children. Containers without item/field metadata display
+read-only JSON so editing cannot silently convert their types. Validation checks
+changed leaves, preserving untouched legacy values. Secret fields are cleared
+recursively after saving and are not replayed by a later form save.
+
+Signing keys, seed recovery, creating new public payout identities, TollGate TLS
+apply/remove and wholesale identity replacement still need dedicated protected
+workflows. They are visible as specialist operations in Maintenance, not exposed
+as a shell or arbitrary file editor. LuCI certificate editing does not implement
+TollGate’s persistent TLS opt-out semantics. Saved upstream history and manual
+configuration convergence remain specialist CLI operations; the existing WiFi
+page manages configured uplinks. No sales-pause command exists in the audited
+runtime: `manual_pause_seconds` pauses upstream scanning.

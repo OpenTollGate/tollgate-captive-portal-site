@@ -67,19 +67,29 @@ export default function Dashboard() {
         ubusCall('tollgate', 'wallet_balance'),
       ]);
 
-      if (boardData.status === 'fulfilled') setBoard(boardData.value);
-      if (infoData.status === 'fulfilled') setInfo(infoData.value);
+      setBoard(boardData.status === 'fulfilled' ? boardData.value : null);
+      setInfo(infoData.status === 'fulfilled' ? infoData.value : null);
 
-      if (statusData.status === 'fulfilled' && statusData.value?.success) {
+      if (statusData.status === 'fulfilled' && statusData.value?.success === true &&
+          ['running', 'config_ok', 'wallet_ok', 'network_ok'].every(key => typeof statusData.value.data?.[key] === 'boolean')) {
         setTollgate(statusData.value.data);
-      }
+      } else setTollgate(null);
 
-      if (walletData.status === 'fulfilled' && walletData.value?.success) {
-        setWallet(walletData.value.data);
-      }
+      const walletReply = walletData.status === 'fulfilled' ? walletData.value : null;
+      // Current runtimes return balance_sats; retain the older balance shape.
+      const reportedBalance = walletReply?.data?.balance_sats !== undefined
+        ? walletReply.data.balance_sats : walletReply?.data?.balance;
+      if (walletReply?.success === true && typeof reportedBalance === 'number' &&
+          Number.isFinite(reportedBalance) && reportedBalance >= 0) {
+        setWallet({ balance: reportedBalance });
+      } else setWallet(null);
 
       setError('');
     } catch (err: any) {
+      setBoard(null);
+      setInfo(null);
+      setTollgate(null);
+      setWallet(null);
       if (err.message === 'SESSION_EXPIRED') {
         setError('Session expired. Please log in again.');
       } else {
@@ -104,18 +114,10 @@ export default function Dashboard() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="loading-page flex-col gap-sm">
-        <p className="error-text">{error}</p>
-        <button className="btn btn-secondary btn-sm" onClick={fetchAll}>Retry</button>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-md">
       <InternetConnection showConnect />
+      {error && <div role="alert"><p className="error-text">{error}</p><button className="btn btn-secondary btn-sm" onClick={fetchAll}>Retry</button></div>}
       <InfoCard
         title="System"
         className="animate-in"
@@ -144,7 +146,7 @@ export default function Dashboard() {
           </svg>
         }
       >
-        {info?.memory && (
+        {info?.memory ? (
           <>
             <StatRow label="Total" value={formatBytes(info.memory.total)} />
             <StatRow label="Free" value={formatBytes(info.memory.free)} />
@@ -167,7 +169,7 @@ export default function Dashboard() {
               </p>
             </div>
           </>
-        )}
+        ) : <p className="text-dim">Memory information unavailable.</p>}
       </InfoCard>
 
       <InfoCard
@@ -199,37 +201,37 @@ export default function Dashboard() {
               tollgate.config_ok ? <span className="badge badge-success">OK</span> : <span className="badge badge-error">Error</span>
             } />
             <StatRow label="Wallet" value={
-              tollgate.wallet_ok ? <span className="badge badge-success">OK</span> : <span className="badge badge-error">Error</span>
+              tollgate.wallet_degraded === true ? <span className="badge badge-error">Degraded</span>
+                : tollgate.wallet_ok ? <span className="badge badge-success">OK</span> : <span className="badge badge-error">Error</span>
             } />
+            {tollgate.wallet_degraded === true && <p className="error-text" role="status">{typeof tollgate.wallet_reason === 'string' && tollgate.wallet_reason || 'Wallet is degraded; payment readiness is not confirmed.'}</p>}
             <StatRow label="Network" value={
               tollgate.network_ok ? <span className="badge badge-success">OK</span> : <span className="badge badge-error">Error</span>
             } />
           </>
         ) : (
           <p className="text-dim" style={{ fontSize: 'var(--font-size-small)' }}>
-            Tollgate service not available
+            TollGate status unavailable. Try again; service readiness is not confirmed.
           </p>
         )}
       </InfoCard>
 
-      {wallet && wallet.balance !== undefined && (
-        <InfoCard
-          title="Wallet"
-          className="animate-in-delay-4"
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
-              <rect x="2" y="5" width="20" height="14" rx="2" />
-              <path d="M16 12h.01" />
-              <path d="M2 10h20" />
-            </svg>
-          }
-        >
-          <StatRow
-            label="Balance"
-            value={<span style={{ fontWeight: 700, color: 'var(--accent)' }}>{wallet.balance.toLocaleString()} sats</span>}
-          />
-        </InfoCard>
-      )}
+      <InfoCard
+        title="Wallet"
+        className="animate-in-delay-4"
+        icon={
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
+            <rect x="2" y="5" width="20" height="14" rx="2" />
+            <path d="M16 12h.01" />
+            <path d="M2 10h20" />
+          </svg>
+        }
+      >
+        {wallet ? <StatRow
+          label="Balance"
+          value={<span style={{ fontWeight: 700, color: 'var(--accent)' }}>{wallet.balance.toLocaleString()} sats</span>}
+        /> : <p className="text-dim">Wallet balance unavailable. Try again.</p>}
+      </InfoCard>
     </div>
   );
 }
