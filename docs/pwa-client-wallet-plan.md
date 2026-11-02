@@ -110,6 +110,13 @@ meantime.
 
 ## 9. Open questions
 
+- ~~Is `walle.cashu.me` a usable reference/baseline?~~ **Closed — NOT
+  VALIDATABLE**, measured repeatedly, most recently 2026-11-02: Traefik's
+  default self-signed certificate and `404 page not found` on every path. See
+  `docs/analysis/walle-objective-verdict.md` and the re-runnable probe
+  `scripts/probe-walle-objective.mjs` (`npm run probe:walle`). The design does
+  not depend on that host; if it ever starts serving a trusted wallet UI the
+  probe flips to `VALIDATED` and the question re-opens on that record.
 - Is a client-held balance desirable at all before channels land, given it is
   explicitly *not* the loss-bounding mechanism?
 - Where do SW updates get versioned relative to the feed's portal pin?
