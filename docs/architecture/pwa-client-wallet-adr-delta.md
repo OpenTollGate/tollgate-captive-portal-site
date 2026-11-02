@@ -1202,7 +1202,7 @@ walk-up BYOD device. Both stay in §5.6.1 as ranked options.
 | **"The most you can lose is T" is the load-bearing promise** | `enforceRestingCap` returns `ok` / `export-due` / `over-cap` / `unknown` with `maxLossSats`, and an UNKNOWN balance is never `ok`; `lastExportAt` counts only as a **positive finite** timestamp, so a caller's falsy default cannot promote unexported funds to `ok` | 7 cases; `over-cap` reports that the promise is *already broken*, not that it is fine, `unknown` forces an export, and `0`/`NaN`/a string are treated as "no export". **Classified here, enforced by WS-2** — this module has no funding path, so a caller that never reads the verdict is unaffected |
 | The forbidden sentences cannot reach user-facing text | all four disclosure levels carry a locale key; the catalog is asserted against the §5.6.6 forbidden list | "never claims safety, custody, a keychain, or that encryption protects the money" over every key |
 
-**Three implementation choices this adds to the record, each deliberate:**
+**Four implementation choices this adds to the record, each deliberate:**
 
 1. **The export uses pure-JS `@noble` + `@scure/bip39`, not WebCrypto.** `crypto.subtle`
    is secure-context-gated (§3.2), so an AES-GCM export would work on the vendor
@@ -1232,6 +1232,31 @@ walk-up BYOD device. Both stay in §5.6.1 as ranked options.
 
 **Still open, and unchanged by this section:** the concrete value of `T` (§11(7)),
 and the iOS field check on what the Home Screen install actually protects (§11(10)).
+
+**Two claims a reviewer could not check from the diff, now measured on a
+non-loopback plain-HTTP origin** (`http://192.168.2.5:<port>`, `isSecureContext:
+false` — loopback was deliberately avoided because it counts as trustworthy and
+would have proved nothing):
+
+- **`bip39.generateMnemonic` needs only `crypto.getRandomValues`, which is NOT
+  secure-context-gated.** On that origin `crypto.subtle` was `undefined`
+  (`TypeError` on `.digest`), while `crypto.getRandomValues` existed and produced
+  distinct non-zero bytes across calls. Importing `@scure/bip39` through Vite's
+  real module graph and calling the exact function `randomSeedPhrase()` calls
+  returned a 12-word phrase that `validateMnemonic` accepts, and two consecutive
+  calls differed. So seed generation works on the captive portal, which is the
+  only origin where a user is first funded. This is the same gating distinction
+  choice 1 above relies on, measured in a browser rather than inferred from spec
+  text.
+- **`fake-indexeddb` really does fire `blocked`**, which is what makes the
+  blocked-wipe case load-bearing rather than vacuous. A raw `IDBFactory` probe
+  with a connection held open resolved as `blocked` (not `success`, not
+  `error`, not a timeout). Independently, replacing the module's `onblocked`
+  rejection with a no-op makes that case fail by 5 s timeout, so the assertion
+  is not passing on an event that never arrives.
+
+Both probes were throwaway and are not in the tree; the command and result are
+recorded here so the claim is checkable rather than asserted.
 
 ---
 
