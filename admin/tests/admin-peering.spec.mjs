@@ -46,4 +46,36 @@ test.describe('admin board: peering', () => {
     await page.getByRole('button', { name: 'Stop and fall back' }).click();
     await expect(page.getByText(/Stopped peering/)).toBeVisible();
   });
+
+  test('lists other upstream networks strongest-signal first', async ({ page }) => {
+    await page.goto(PEERING);
+    await page.waitForSelector('.card-title', { timeout: 30000 });
+
+    const other = page.locator('.card', { hasText: 'Other upstream WiFi' });
+    const rows = other.locator('.peer-row');
+    await expect(rows).toHaveCount(3, { timeout: 15000 });
+    await expect(rows.nth(0).locator('.scan-item-ssid')).toHaveText('UpstreamWiFi');
+    await expect(rows.nth(1).locator('.scan-item-ssid')).toHaveText('NeighborNet');
+    await expect(rows.nth(2).locator('.scan-item-ssid')).toHaveText('OpenNet');
+    // -45 = Excellent, -72 / -80 = Weak (see signalQuality in peering.tsx).
+    await expect(rows.nth(0).locator('.signal-strength')).toHaveText('Excellent');
+    await expect(rows.nth(1).locator('.signal-strength')).toHaveText('Weak');
+    await expect(rows.nth(2).locator('.signal-strength')).toHaveText('Weak');
+  });
+
+  test('connects to an open scanned network via upstream_connect', async ({ page }) => {
+    await page.goto(PEERING);
+    await page.waitForSelector('.card-title', { timeout: 30000 });
+
+    const other = page.locator('.card', { hasText: 'Other upstream WiFi' });
+    const openRow = other.locator('.peer-row', { hasText: 'OpenNet' });
+    await expect(openRow).toBeVisible({ timeout: 15000 });
+    // First click expands the inline connect form; the second submits it.
+    await openRow.getByRole('button', { name: 'Use as upstream' }).click();
+    await openRow.getByRole('button', { name: 'Connect' }).click();
+
+    await expect(page.getByText("Peered with OpenNet")).toBeVisible({
+      timeout: 15000,
+    });
+  });
 });

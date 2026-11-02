@@ -67,6 +67,7 @@ describe('credential state probe (pre-auth)', () => {
       passwordSet: true,
       username: 'root',
       provisional: false,
+      privateWifiProvisional: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
@@ -156,11 +157,12 @@ describe('credential state probe (pre-auth)', () => {
 
     const status = await fetchCredentialStatus();
 
-    // `provisional` is the /etc/tollgate/admin-credential-provisional marker
-    // state (a generated credential the owner must replace); it is a fact about
-    // the credential, still never a value.
+    // `provisional` and `privateWifiProvisional` are the two install-time
+    // marker states (generated credentials the owner must replace); they are
+    // facts about the credential, still never values.
     expect(Object.keys(status).sort()).toEqual([
       'passwordSet',
+      'privateWifiProvisional',
       'provisional',
       'state',
       'username',
