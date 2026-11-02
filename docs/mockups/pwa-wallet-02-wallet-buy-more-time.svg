@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Panel 2 of 3 — wallet + "buy more time".
+  Mockup only. Placeholder values; no real token, no real mint URL, no real balance.
+  See docs/architecture/pwa-client-wallet-adr-delta.md §7.2.
+  Design point: held balance is visually SEPARATE from session allowance, and the
+  R3 disclosure (rotation ends the purchase, the unspent balance is still yours)
+  is the load-bearing sentence — not fine print.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 760" width="420" height="760"
+     font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" role="img"
+     aria-label="Panel 2: wallet with buy more time">
+  <rect width="420" height="760" rx="26" fill="#0b0b0d"/>
+  <rect x="1" y="1" width="418" height="758" rx="25" fill="none" stroke="#2a2a30"/>
+
+  <text x="26" y="34" fill="#7d7d88" font-size="12">9:41</text>
+  <text x="394" y="34" fill="#7d7d88" font-size="12" text-anchor="end">&#9679;&#9679;&#9679;</text>
+
+  <!-- header -->
+  <text x="26" y="72" fill="#f2f2f5" font-size="18" font-weight="600">Your wallet</text>
+  <rect x="330" y="54" width="64" height="26" rx="13" fill="#1d2b1d" stroke="#2f4a2f"/>
+  <circle cx="344" cy="67" r="4" fill="#5cc46a"/>
+  <text x="354" y="71" fill="#8fd39a" font-size="11.5">Online</text>
+
+  <!-- two numbers, deliberately NOT conflated -->
+  <rect x="24" y="94" width="180" height="104" rx="14" fill="#15151a" stroke="#26262e"/>
+  <text x="42" y="120" fill="#9a9aa6" font-size="11.5">Held balance</text>
+  <text x="42" y="150" fill="#f2f2f5" font-size="24" font-weight="700">2,150 <tspan font-size="12" font-weight="400" fill="#9a9aa6">sat</tspan></text>
+  <text x="42" y="176" fill="#8a8a96" font-size="10.5">ecash you hold</text>
+  <text x="42" y="191" fill="#8a8a96" font-size="10.5">yours, at the mint</text>
+
+  <rect x="216" y="94" width="180" height="104" rx="14" fill="#15151a" stroke="#26262e"/>
+  <text x="234" y="120" fill="#9a9aa6" font-size="11.5">Access left</text>
+  <text x="234" y="150" fill="#f2f2f5" font-size="24" font-weight="700">17 <tspan font-size="12" font-weight="400" fill="#9a9aa6">min</tspan></text>
+  <text x="234" y="176" fill="#8a8a96" font-size="10.5">this purchase only</text>
+  <text x="234" y="191" fill="#8a8a96" font-size="10.5">ends when it runs out</text>
+
+  <!-- progress of the current granule -->
+  <rect x="24" y="212" width="372" height="8" rx="4" fill="#20202a"/>
+  <rect x="24" y="212" width="238" height="8" rx="4" fill="#f7931a"/>
+  <text x="24" y="240" fill="#8a8a96" font-size="11">Granule: 30 min for 1,000 sat &#183; 17 min remaining</text>
+
+  <!-- buy more time -->
+  <rect x="24" y="260" width="372" height="150" rx="14" fill="#15151a" stroke="#26262e"/>
+  <text x="44" y="288" fill="#f2f2f5" font-size="14.5" font-weight="600">Buy more time</text>
+  <text x="44" y="310" fill="#a8a8b4" font-size="12">One small top-up. 1,000 sat for 30 minutes.</text>
+
+  <rect x="44" y="328" width="332" height="44" rx="11" fill="#20202a" stroke="#33333f"/>
+  <text x="62" y="356" fill="#e6e6ee" font-size="13.5" font-weight="600">Buy 30 more minutes</text>
+  <text x="358" y="356" fill="#f7931a" font-size="13.5" font-weight="700" text-anchor="end">1,000 sat</text>
+
+  <text x="44" y="394" fill="#7d7d88" font-size="11">Pays from your held balance. No Lightning invoice.</text>
+
+  <!-- the load-bearing disclosure (ADR R3) -->
+  <rect x="24" y="426" width="372" height="126" rx="14" fill="#141a20" stroke="#26333d"/>
+  <rect x="24" y="426" width="4" height="126" rx="2" fill="#5aa8d8"/>
+  <text x="44" y="454" fill="#9ecbe8" font-size="12.5" font-weight="600">If your device changes address</text>
+  <text x="44" y="478" fill="#a8b4bc" font-size="12">Internet access is tied to this device's</text>
+  <text x="44" y="496" fill="#a8b4bc" font-size="12">current address. If you switch network or</text>
+  <text x="44" y="514" fill="#a8b4bc" font-size="12">change address, the remaining time of THIS</text>
+  <text x="44" y="532" fill="#a8b4bc" font-size="12">purchase ends. Your unspent balance is not</text>
+  <text x="44" y="550" fill="#a8b4bc" font-size="12">affected &#8212; it stays yours, and you can buy again.</text>
+
+  <!-- history -->
+  <text x="24" y="586" fill="#9a9aa6" font-size="11.5">Recent</text>
+  <rect x="24" y="598" width="372" height="40" rx="10" fill="#121217"/>
+  <text x="40" y="623" fill="#c8c8d2" font-size="12">Bought 30 min</text>
+  <text x="380" y="623" fill="#8a8a96" font-size="12" text-anchor="end">1,000 sat</text>
+  <rect x="24" y="644" width="372" height="40" rx="10" fill="#121217"/>
+  <text x="40" y="669" fill="#c8c8d2" font-size="12">Bought 30 min</text>
+  <text x="380" y="669" fill="#8a8a96" font-size="12" text-anchor="end">1,000 sat</text>
+
+  <!-- the honesty line, not fine print -->
+  <text x="210" y="712" fill="#c9a267" font-size="11" text-anchor="middle">This device is the wallet. Clearing site data loses it.</text>
+  <text x="210" y="734" fill="#6d6d78" font-size="10.5" text-anchor="middle">Convenience, not custody. Not an account.</text>
+</svg>

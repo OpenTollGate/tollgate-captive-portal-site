@@ -109,7 +109,6 @@
   "CU110_message": "This token is {{amount}} sat, but the mint charges a {{fee}} sat swap fee — there is nothing left to spend. Use a larger token, or a mint without fees.",
   "CU111_label": "Mint unavailable",
   "CU111_message": "The mint is temporarily unavailable. Please try again, or use a token from another mint.",
-
   "LN001_label": "No access options available",
   "LN001_message": "Could not parse TollGate access options.",
   "LN002_label": "Not enough funds",
@@ -149,5 +148,24 @@
   "gateway.current": "Current gateway",
   "gateway.unavailable": "Gateway choice is not available on this router.",
   "gateway.choice_locked": "Locked by this router",
-  "gateway.use_for_next_session": "Use for next session"
+  "gateway.use_for_next_session": "Use for next session",
+  "secret_disclosure_none": "No wallet is stored on this device. If you had one here before, it has been erased — a cleared browser, a private window, or the browser reclaiming space all look the same to us. There is no account to recover it from.",
+  "secret_disclosure_evictable": "Your balance is kept on this device only. Clearing this site's data, resetting the browser, or a private window closing will erase it. Save a backup to keep it.",
+  "secret_disclosure_exported": "Your balance is kept on this device, and you have a backup file you can restore from on another device.",
+  "secret_loss_cap": "The most you can lose on this device is {{cap}} sats. That limit is deliberate — it is what makes it reasonable to use without writing anything down.",
+  "secret_loss_over_cap": "This device is holding more than {{cap}} sats, so the usual limit no longer holds: if the browser data is cleared you lose that whole balance. Save a backup now, and spend down to {{cap}}.",
+  "secret_export_action": "Save an encrypted backup",
+  "secret_export_passphrase_label": "Choose a passphrase for the backup",
+  "secret_export_warning": "You will need this passphrase to restore the backup. We cannot reset it and cannot recover the backup without it.",
+  "secret_restore_action": "Restore from a backup file",
+  "secret_restore_passphrase_label": "Enter the passphrase for this backup",
+  "secret_backup_shared": "Backup ready — choose where to save it.",
+  "secret_backup_downloaded": "Backup handed to your browser's downloads. Check the file is there and keep it somewhere you can reach from another device.",
+  "secret_backup_unavailable": "This browser cannot hand the backup to your file storage. Copy the backup text somewhere safe manually.",
+  "secret_backup_cancelled": "Backup cancelled — nothing was saved.",
+  "secret_restore_failed": "That passphrase does not open this backup, or the file was modified.",
+  "secret_restore_incomplete": "This backup is missing the keyset counters or the mint address, so it cannot restore a balance. Take a new backup from the device that still has the wallet.",
+  "secret_persist_granted": "This browser has agreed to keep the wallet on this device through storage pressure. It still goes if you clear site data, reset the browser, or lose the device.",
+  "secret_persist_denied": "This browser may discard your balance to free up space.",
+  "secret_persist_unavailable": "This page cannot ask the browser to keep your balance — save a backup to be sure of keeping it."
 }
