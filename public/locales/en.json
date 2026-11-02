@@ -151,7 +151,7 @@
   "secret_restore_action": "Restore from a backup file",
   "secret_restore_passphrase_label": "Enter the passphrase for this backup",
   "secret_backup_shared": "Backup ready — choose where to save it.",
-  "secret_backup_downloaded": "Backup downloaded. Keep the file somewhere you can reach from another device.",
+  "secret_backup_downloaded": "Backup handed to your browser's downloads. Check the file is there and keep it somewhere you can reach from another device.",
   "secret_backup_unavailable": "This browser cannot hand the backup to your file storage. Copy the backup text somewhere safe manually.",
   "secret_backup_cancelled": "Backup cancelled — nothing was saved.",
   "secret_restore_failed": "That passphrase does not open this backup, or the file was modified.",

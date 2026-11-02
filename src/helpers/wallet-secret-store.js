@@ -94,11 +94,23 @@ export const KDF_FALLBACK_PARAMS = Object.freeze({ N: 2 ** 15, r: 8, p: 1, dkLen
 // backup envelope carries its own scrypt parameters so old backups keep
 // working, which means a hostile file can ask us to allocate 128·N·r bytes.
 // These bounds are what stop `N: 2**30` from being a memory-exhaustion gadget.
+//
+// Individual bounds are NOT enough: the cost is the PRODUCT. `N: 2**20` with
+// `r: 16` passes both of the numbers below and still asks for 2 GiB in one
+// allocation, which on a low-end Android tab is a crash of the whole tab, not a
+// catchable RangeError. So the product is bounded too, at the highest cost this
+// module ever ships (128 MiB, `KDF_PARAMS` at N=2^17, r=8): a backup may ask for
+// less than the shipped cost, never more. That also bounds CPU — work ≈ N·r·p,
+// so with r·N ≤ 2^20 and p ≤ 4 the worst accepted envelope costs at most 4x the
+// shipped derivation. The AAD cannot help here: the tag is only checked AFTER
+// the derivation runs, so a parametric bomb has to be refused before it starts.
 export const KDF_BOUNDS = Object.freeze({
   minN: 2 ** 10,
   maxN: 2 ** 20,
   maxR: 16,
   maxP: 4,
+  // 128 MiB = 128 * 2**17 * 8, the shipped KDF_PARAMS allocation.
+  maxMemoryBytes: 128 * 2 ** 17 * 8,
 });
 
 export const SALT_BYTES = 16;
@@ -355,14 +367,23 @@ export async function openSecretStore(opts = {}) {
       await withStore('readwrite', (s) => s.put(record, RECORD_KEY));
       return record;
     },
-    /** @returns {Promise<object|null>} */
+    /**
+     * Read the stored record.
+     *
+     * A record that fails validation is NOT returned as a usable wallet and is
+     * not silently reported as "no wallet either": it throws `E_CORRUPT_RECORD`,
+     * because "this device's wallet is damaged" and "this device has never had a
+     * wallet" need different words in front of a user who may have funds.
+     * Callers that only want a boolean should catch and branch on `code`.
+     *
+     * @returns {Promise<object|null>} null only when nothing is stored at all
+     */
     async load() {
       const value = await withStore('readonly', (s) => wrapRequest(s.get(RECORD_KEY)));
       if (value === undefined || value === null) return null;
       // Re-validate on READ as well as on write. A record written by a future
       // version, or edited through devtools, must not be handed to the caller as
-      // a usable wallet: the same check that guards `save` also guards `load`,
-      // and a bad one degrades to "no wallet here" instead of a half-usable one.
+      // a usable wallet: the same check that guards `save` also guards `load`.
       const verdict = validateRecoveryRecord(value);
       if (!verdict.ok) {
         throw new SecretStoreError(ERR.CORRUPT_RECORD, `stored record is not usable: ${verdict.message}`);
@@ -457,15 +478,22 @@ function randomBytes(env, n) {
 }
 
 /**
- * The authenticated header.
+ * The header bound into the AEAD's associated data.
  *
- * Every field here is covered by the Poly1305 tag, so it cannot be edited
- * without the passphrase. That matters most for `kdf`: the parameters travel in
- * the file (so old backups keep working), and an unauthenticated `kdf` would let
- * whoever supplied the file claim `N: 2` and hand us a backup that opens with a
- * weak derivation, or claim `N: 2**30` and turn restore into a memory bomb.
- * `salt` and `nonce` are in here too — a swapped salt is a different key, and a
- * swapped nonce with a reused key would be a nonce-reuse bug.
+ * MEASURED SCOPE — do not upgrade this comment without re-running the mutation:
+ * for today's fields the AAD is REDUNDANT. `kdf` and `salt` feed the derived
+ * key and `nonce` feeds the stream, so editing any of them already fails the
+ * Poly1305 tag; `magic`, `v` and `aead` are rejected by explicit checks before
+ * any decryption or derivation. Replacing `canonicalHeader` with a constant
+ * leaves the whole tampering test green.
+ *
+ * It is kept for one reason, and it is not any of the attacks an earlier draft
+ * of this comment named (changing `kdf` cannot make a backup "open with a weak
+ * derivation" — the tag fails first — and it CANNOT stop a parametric bomb,
+ * because the key has to be derived before the tag can be checked; only
+ * `assertSafeKdfParams` bounds in front of the derivation do that). The reason
+ * is ergonomics with a security default: a future header field gets
+ * authenticated by being added here, instead of by a maintainer remembering.
  *
  * Serialised by hand in a FIXED order rather than via JSON.stringify of the
  * parsed object, so a field order change in a future writer cannot silently
@@ -498,6 +526,17 @@ function assertSafeKdfParams(kdf) {
   if (kdf.r < 1 || kdf.r > KDF_BOUNDS.maxR) throw bad(`r ${kdf.r} is outside 1..${KDF_BOUNDS.maxR}`);
   if (kdf.p < 1 || kdf.p > KDF_BOUNDS.maxP) throw bad(`p ${kdf.p} is outside 1..${KDF_BOUNDS.maxP}`);
   if (kdf.dkLen !== 32) throw bad(`dkLen ${kdf.dkLen} is not 32`);
+  // The PRODUCT is the real cost: 128·N·r bytes of one allocation and ~N·r·p
+  // units of work. Bounding each field separately lets `N: 2**20, r: 16` through,
+  // which is a 2 GiB allocation — a crashed tab, not a catchable error, and the
+  // tag that would have caught a tampered header is only checked AFTER this
+  // derivation returns. So refuse it here, before any work starts.
+  const memoryBytes = 128 * kdf.N * kdf.r;
+  if (memoryBytes > KDF_BOUNDS.maxMemoryBytes) {
+    throw bad(
+      `128·N·r = ${memoryBytes} bytes exceeds the ${KDF_BOUNDS.maxMemoryBytes}-byte ceiling (a backup may cost less than the shipped derivation, never more)`
+    );
+  }
   return kdf;
 }
 
@@ -563,23 +602,27 @@ export async function encryptRecoveryRecord(record, passphrase, env = {}) {
 
   // Two attempts, not one: the shipped cost allocates a 128 MiB buffer, which a
   // low-end phone with other tabs open can refuse. The fallback is only used
-  // when the FIRST attempt fails to allocate, and the parameters of whichever
-  // one succeeded are recorded in the envelope — so a backup made on the
-  // fallback restores on any device. A failure at both costs is a typed error,
-  // because "the export button does nothing" is the worst possible outcome here.
+  // when the FIRST attempt cannot be derived (allocation/CPU refusal), and the
+  // parameters of whichever one succeeded are recorded in the envelope — so a
+  // backup made on the fallback restores on any device. A failure at both costs
+  // is a typed error, because "the export button does nothing" is the worst
+  // possible outcome here.
   const attempts = env.kdfParams ? [wanted] : [wanted, { ...KDF_FALLBACK_PARAMS }];
   let kdf = null;
   let key = null;
   const failures = [];
   for (const candidate of attempts) {
     const params = { name: 'scrypt', ...candidate };
+    // A header this module refuses is a CALLER bug, not a device limit: retrying
+    // it at the fallback cost would report "the derivation failed" for what is
+    // really "your parameters were rejected", and hide the real reason.
+    assertSafeKdfParams(params);
     try {
-      assertSafeKdfParams(params);
       key = await deriveKey(passphrase, salt, params, env);
       kdf = params;
       break;
     } catch (error) {
-      failures.push(params.N);
+      failures.push(`${params.N} (${String((error && error.code) || error)})`);
     }
   }
   if (!key) {
@@ -722,6 +765,17 @@ export function buildBackupFile(envelopeText, opts = {}) {
  * sheet. That distinction is the difference between a disclosure that is true
  * and one that lies to a user about their only copy.
  *
+ * What `exportedAt` means, precisely, per state — do not widen this:
+ *   'shared'      the OS share sheet completed. The user picked a destination.
+ *   'downloaded'  the blob URL was handed to the download manager. This is the
+ *                 strongest signal a page can get, and it is NOT proof of a
+ *                 file: where the browser asks for a location and the user
+ *                 cancels, no page-observable event says so. Treat it as "the
+ *                 file was offered to the OS", which is why the copy says "save
+ *                 a backup" rather than "your backup is saved".
+ *   'cancelled' / 'unavailable'  exportedAt is null and no durability may be
+ *                 claimed.
+ *
  * @returns {Promise<{state: 'shared'|'cancelled'|'downloaded'|'unavailable', exportedAt: number|null, reason?: string}>}
  */
 export async function shareBackup(backup, env = {}) {
@@ -771,7 +825,9 @@ export async function shareBackup(backup, env = {}) {
     // download it was created for: the browser hands the blob URL to the
     // download manager and resolves it asynchronously, so a URL that is gone
     // first leaves Firefox (the browser this branch exists for) with nothing.
-    // The leak is bounded — one blob per export, released on the next one.
+    // There is no release registry: the URL is released by one timer, and if no
+    // timer exists at all it is leaked on purpose — one blob per export is a
+    // fair price for not losing a backup.
     if (typeof urlApi.revokeObjectURL === 'function') {
       const release = () => urlApi.revokeObjectURL(url);
       if (typeof env.defer === 'function') env.defer(release);

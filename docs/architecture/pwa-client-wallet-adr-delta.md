@@ -1179,7 +1179,7 @@ Each is FALSE, and each is the kind of sentence that gets written by accident:
 
 The decision above is no longer prose. It is
 `src/helpers/wallet-secret-store.js` with `tests/unit/wallet-secret-store.test.js`
-(39 cases) pinning it. This subsection records the mapping, because a future
+(60 cases) pinning it. This subsection records the mapping, because a future
 reader's first question will be "is any of §5.6 actually built?".
 
 **The module implements ranks 1 and 2 only.** Rank 3 (passkey PRF) and rank 4
@@ -1190,14 +1190,15 @@ walk-up BYOD device. Both stay in §5.6.1 as ranked options.
 
 | §5.6 decision | Where it is decided/classified in code | How it is proven |
 |---|---|---|
-| The recovery triple is `{seed, countersByKeyset, mintUrls}` and nothing less is a backup (5.4 item 5) | `createRecoveryRecord` / `validateRecoveryRecord` — runs checksum-and-wordlist validation on the phrase, requires ≥1 non-negative integer counter, requires ≥1 `http(s)` mint URL, and rejects `keysetPolicy !== 'deterministic'` | 7 cases, incl. "a seed alone cannot restore" and "rejects a non-http mint URL" |
+| The recovery triple is `{seed, countersByKeyset, mintUrls}` and nothing less is a backup (5.4 item 5) | `createRecoveryRecord` / `validateRecoveryRecord` — runs checksum-and-wordlist validation on the phrase, requires ≥1 non-negative integer counter, requires ≥1 `http(s)` mint URL, and rejects `keysetPolicy !== 'deterministic'` | 8 cases, incl. "a seed alone cannot restore", "rejects a non-http mint URL", and whitespace normalisation |
 | Rank 1: seed in IndexedDB, restored after a reload with no user action | `openSecretStore().save/load`, one record, one key | "writes the triple and reads it back from a NEW store handle (a reload)" |
-| **Cleared data is a normal event, not an edge case** (5.4 item 6) | `clearSiteData()` deletes the DATABASE (what `Clear-Site-Data: "storage"` does), not just the key | The wiped-state case asserts `load()` is `null` — not a partial wallet, not an empty wallet — and that durability degrades to `'none'` which forces a disclosure |
+| **Cleared data is a normal event, not an edge case** (5.4 item 6) | `clearSiteData()` deletes the DATABASE (what `Clear-Site-Data: "storage"` does), not just the key, and rejects on `onblocked` instead of hanging | The wiped-state case asserts `load()` is `null` — not a partial wallet, not an empty wallet — and that durability degrades to `'none'` which forces a disclosure; a second case holds a live connection open and asserts the wipe REFUSES rather than never settling |
 | Recovery after a wipe works only via an off-origin copy | `encryptRecoveryRecord` → `clearSiteData` → `decryptRecoveryRecord` → restore | "RECOVERS from a wipe using a backup taken before it — the whole point of rank 2" |
 | **No storage diversity** — nothing else on the origin keeps a second copy (5.6.2) | the module writes exactly one bucket and no `localStorage` key | "has no 'belt and braces' second on-origin bucket" — after a wipe NOTHING on the origin resurrects the seed |
 | `persist()` is best-effort and secure-context-gated; never a guarantee | `requestPersistentStorage` returns `'unavailable'` where the API is absent (i.e. on the plain-HTTP portal origin) and, when `'granted'`, still says *"survives storage pressure, NOT clear-site-data"* | 3 cases incl. "never claims eviction-proof storage even when granted" |
-| Rank 2: one-tap encrypted export; Web Share first, download fallback; honest "no rail" | `encryptRecoveryRecord`, `buildBackupFile`, `shareBackup` | 5 delivery cases: share, `AbortError` ⇒ `cancelled`, download fallback (Firefox), `unavailable` |
+| Rank 2: one-tap encrypted export; Web Share first, download fallback; honest "no rail" | `encryptRecoveryRecord`, `buildBackupFile`, `shareBackup` | 6 delivery cases: share, `AbortError` ⇒ `cancelled`, download fallback (Firefox), an expired iOS activation (`NotAllowedError`) degrading to the download, `unavailable` |
 | Encryption is **portability + opacity**, never "protection" | the blob carries no plaintext word of the phrase, no mint URL, no counter; Poly1305 makes a wrong passphrase and tampering the SAME typed failure | 5 cases incl. "carries NO plaintext seed…" and "does not distinguish tampering from a wrong passphrase" |
+| A backup's own KDF header may ask for **less** than the shipped cost, never more | `assertSafeKdfParams` bounds `N`, `r`, `p`, `dkLen` **and the product** `128·N·r` at the shipped 128 MiB; an out-of-bounds header is refused before any derivation, and `encryptRecoveryRecord` refuses (never retries) a caller-supplied cost it would refuse to decrypt | 3 cases: individual bounds, the product bound (`N=2^20, r=16` ⇒ 2 GiB, refused in <1 s), and a cheap-but-legal backup still restoring |
 | **"The most you can lose is T" is the load-bearing promise** | `enforceRestingCap` returns `ok` / `export-due` / `over-cap` / `unknown` with `maxLossSats`, and an UNKNOWN balance is never `ok` | 5 cases; `over-cap` reports that the promise is *already broken*, not that it is fine, and `unknown` forces an export. **Classified here, enforced by WS-2** — this module has no funding path, so a caller that never reads the verdict is unaffected |
 | The forbidden sentences cannot reach user-facing text | all four disclosure levels carry a locale key; the catalog is asserted against the §5.6.6 forbidden list | "never claims safety, custody, a keychain, or that encryption protects the money" over every key |
 
@@ -1220,6 +1221,14 @@ walk-up BYOD device. Both stay in §5.6.1 as ranked options.
 3. **A wiped origin is indistinguishable from a fresh one**, so the module reports
    `wipeLossUndetectable: true` whenever there is no durable copy. The app must
    therefore disclose at the first funded moment rather than assume "new user".
+4. **The AAD binding of the backup header is redundancy, not a control, and is
+   documented that way.** Mutation-testing it (replacing `canonicalHeader` with a
+   constant) leaves the whole header-tampering test green, because `kdf`/`salt`
+   feed the derived key, `nonce` feeds the stream, and `magic`/`v`/`aead` are
+   rejected before decryption. It is kept so a *future* header field is
+   authenticated by default. What actually stops a hostile envelope is the set of
+   bounds in front of the derivation — the tag is verified only after the KDF has
+   run, so a parametric bomb cannot be caught by authentication at all.
 
 **Still open, and unchanged by this section:** the concrete value of `T` (§11(7)),
 and the iOS field check on what the Home Screen install actually protects (§11(10)).

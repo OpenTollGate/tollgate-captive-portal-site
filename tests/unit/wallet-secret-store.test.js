@@ -50,7 +50,7 @@ const SEED = 'abandon abandon abandon abandon abandon abandon abandon abandon ab
 const PASSPHRASE = 'correct horse battery staple';
 
 // The SHIPPED KDF cost is N=2^17 (~0.7 s per derivation on the build box). That
-// is right for a one-off export/restore and wrong for a 38-case unit suite, so
+// is right for a one-off export/restore and wrong for a 60-case unit suite, so
 // every case here derives at N=2^10 and ONE case below pins the shipped
 // parameters. Do not "fix" a slow suite by removing that pin: the pin is what
 // proves the shipped default was not silently weakened to make the tests fast.
@@ -104,6 +104,18 @@ describe('recovery record: the NUT-09 triple is enforced at write time', () => {
     } catch (error) {
       expect(error.code).toBe(ERR.INVALID_SEED);
     }
+  });
+
+  it('normalises whitespace exactly as the constructor does', () => {
+    // A phrase pasted from a password manager arrives with a double space or a
+    // trailing newline. If `isValidSeedPhrase` answered false there while
+    // `createRecoveryRecord` accepted and rewrote it, the UI's "is this a seed?"
+    // gate and the storage gate would disagree about the same paste.
+    const messy = `  ${SEED.replace(' ', '  ')}\n`;
+    expect(isValidSeedPhrase(messy)).toBe(true);
+    expect(record({ seed: messy }).seed).toBe(SEED);
+    // And it still rejects a genuinely broken phrase after normalisation.
+    expect(isValidSeedPhrase(`  ${SEED.replace('about', 'abandon')}  `)).toBe(false);
   });
 
   it('rejects a missing or empty countersByKeyset — a seed alone cannot restore', () => {
@@ -329,6 +341,27 @@ describe('cleared-data path: the wipe is a normal event, and only a backup survi
     }
     expect(localKeys).toEqual([]);
   });
+
+  it('REFUSES (does not hang) when the wipe is blocked by a live connection', async () => {
+    // `deleteDatabase` fires `onblocked` when another tab or an open handle still
+    // holds the database — not `onerror`. A promise that only listens for the
+    // latter never settles, and a wipe helper that hangs is worse than one that
+    // fails: the caller has no way to tell a blocked wipe from a slow one. A
+    // test that never returns would also hang CI rather than report anything.
+    const held = await openSecretStore({ indexedDB: indexedDBFactory });
+    await held.save(record());
+    await expect(clearSiteData({ indexedDB: indexedDBFactory })).rejects.toMatchObject({
+      code: ERR.STORE_BLOCKED,
+    });
+    // The data is still there, and the store is still usable: a blocked wipe is
+    // a no-op, not a half-delete.
+    await expect(held.load()).resolves.toMatchObject({ seed: SEED });
+    held.close();
+    // With the connection closed the same call succeeds.
+    await expect(clearSiteData({ indexedDB: indexedDBFactory })).resolves.toMatchObject({
+      cleared: true,
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -506,6 +539,45 @@ describe('encrypted export: portable and opaque, never called "protected"', () =
     }
   });
 
+  it('refuses a header that is in-bounds per FIELD but not per PRODUCT (the real cost)', async () => {
+    // Bounding N and r separately is not a memory guard: N=2^20 and r=16 both
+    // pass, and 128·N·r is then 2 GiB in one allocation — a killed tab, not a
+    // catchable error. The ceiling is the shipped KDF_PARAMS allocation.
+    expect(128 * KDF_PARAMS.N * KDF_PARAMS.r).toBe(KDF_BOUNDS.maxMemoryBytes);
+    const good = JSON.parse(await encryptRecoveryRecord(record(), PASSPHRASE, fast));
+    const productBombs = [
+      { ...good, kdf: { name: 'scrypt', N: 2 ** 20, r: 16, p: 1, dkLen: 32 } }, // 2 GiB
+      { ...good, kdf: { name: 'scrypt', N: 2 ** 20, r: 8, p: 1, dkLen: 32 } }, // 1 GiB
+      { ...good, kdf: { name: 'scrypt', N: 2 ** 18, r: 16, p: 1, dkLen: 32 } }, // 512 MiB
+    ];
+    for (const envelope of productBombs) {
+      const t0 = Date.now();
+      await expect(
+        decryptRecoveryRecord(JSON.stringify(envelope), PASSPHRASE),
+        `N=${envelope.kdf.N} r=${envelope.kdf.r} must be refused before deriving`
+      ).rejects.toMatchObject({ code: ERR.UNSUPPORTED_KDF });
+      expect(Date.now() - t0).toBeLessThan(1000);
+    }
+    // The ceiling is not a floor: a cheap-but-legal backup still restores, which
+    // is what makes old backups safe if the shipped cost is ever raised.
+    const cheap = JSON.parse(await encryptRecoveryRecord(record(), PASSPHRASE, { kdfParams: { N: 2 ** 12 } }));
+    await expect(decryptRecoveryRecord(JSON.stringify(cheap), PASSPHRASE)).resolves.toMatchObject({
+      seed: SEED,
+    });
+  });
+
+  it('refuses to ENCRYPT with parameters it would refuse to decrypt (a caller bug, not a device limit)', async () => {
+    // The two-attempt loop must not swallow this and retry at the fallback cost:
+    // "your parameters were rejected" and "this device ran out of memory" are
+    // different failures and the caller has to be able to tell them apart.
+    for (const kdfParams of [{ N: 3 }, { N: 2 ** 30 }, { N: 2 ** 20, r: 16 }, { dkLen: 16 }]) {
+      await expect(
+        encryptRecoveryRecord(record(), PASSPHRASE, { kdfParams }),
+        `kdfParams ${JSON.stringify(kdfParams)} must be refused, not retried`
+      ).rejects.toMatchObject({ code: ERR.UNSUPPORTED_KDF });
+    }
+  });
+
   it('turns a mangled base64 field into a TYPED error, not a raw DOMException', async () => {
     const good = JSON.parse(await encryptRecoveryRecord(record(), PASSPHRASE, fast));
     for (const field of ['salt', 'nonce', 'ct']) {
@@ -630,6 +702,41 @@ describe('backup delivery: one tap where the platform allows it, honest fallback
     expect(result.exportedAt).toBeNull();
     // And the caller is told to hand the text over by hand, not left with nothing.
     expect(result.reason).toBeTruthy();
+  });
+
+  it('degrades to a download when Safari has already spent the user activation (NotAllowedError)', async () => {
+    // The KDF runs before `share()`, so on iOS the transient activation is
+    // usually gone and `share()` rejects. That must still produce a file — the
+    // module's own docstring says so — rather than surfacing an error to a user
+    // whose backup is their only copy.
+    const clicked = [];
+    const anchor = {
+      set href(v) {
+        clicked.push(`href:${v}`);
+      },
+      set download(v) {
+        clicked.push(`download:${v}`);
+      },
+      click: () => clicked.push('click'),
+      remove: () => {},
+    };
+    const nav = {
+      canShare: () => true,
+      share: async () => {
+        const err = new Error('user activation required');
+        err.name = 'NotAllowedError';
+        throw err;
+      },
+    };
+    const result = await shareBackup(backup(), {
+      navigator: nav,
+      document: { createElement: () => anchor, body: { appendChild: () => {} } },
+      urlApi: { createObjectURL: () => 'blob:ios', revokeObjectURL: () => {} },
+      defer: () => {},
+    });
+    expect(result.state).toBe('downloaded');
+    expect(result.exportedAt).not.toBeNull();
+    expect(clicked).toContain('click');
   });
 });
 
