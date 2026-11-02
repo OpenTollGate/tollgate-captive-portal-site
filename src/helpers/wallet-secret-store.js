@@ -722,7 +722,14 @@ export async function decryptRecoveryRecord(envelopeText, passphrase) {
   return record;
 }
 
-/** A stable, recognisable filename. No timestamp: re-exporting overwrites rather than litters. */
+/**
+ * A stable, recognisable filename.
+ *
+ * It embeds the UTC DATE, not a time: re-exporting on the same UTC day
+ * overwrites rather than litters, and an export after midnight UTC makes a
+ * second file rather than clobbering the previous day's — which is the safer of
+ * the two behaviours when the file may be the only copy.
+ */
 export function backupFilename(now = Date.now()) {
   const d = new Date(now);
   const pad = (n) => String(n).padStart(2, '0');
@@ -875,6 +882,11 @@ export function enforceRestingCap({ balanceSats, capSats, lastExportAt = null } 
     );
   }
   const cap = capSats;
+  // Evidence, not a flag. `0` is what a caller reaches for as a falsy default,
+  // and treating it as "exported in 1970" would promote an unexported balance to
+  // `ok` — the one lie this module exists to prevent. Only a positive finite
+  // timestamp from `shareBackup().exportedAt` counts.
+  const exported = Number.isFinite(lastExportAt) && lastExportAt > 0;
 
   if (!Number.isFinite(balanceSats)) {
     return {
@@ -895,7 +907,7 @@ export function enforceRestingCap({ balanceSats, capSats, lastExportAt = null } 
       reason: `balance ${balance} exceeds the cap ${cap}: the "at most T" promise is already broken`,
     };
   }
-  if (balance > 0 && lastExportAt === null) {
+  if (balance > 0 && !exported) {
     return {
       state: 'export-due',
       maxLossSats: cap,
@@ -913,12 +925,19 @@ export function enforceRestingCap({ balanceSats, capSats, lastExportAt = null } 
 
 /**
  * The honest durability verdict for the current device, and the disclosure text
- * key the UI must show. Four levels, in ascending durability:
+ * key the UI must show. Three levels this module can return, in ascending
+ * durability:
  *
  *   'none'       no store at all — a backup is mandatory BEFORE funding
  *   'evictable'  seed on the device, no durable copy (the petty-cash purse)
  *   'exported'   seed on the device AND a portable encrypted backup exists
- *   'passkey'    seed wrapped by a PRF-derived key (opportunistic, Chrome only)
+ *
+ * A fourth level, `'passkey'` (seed wrapped by a PRF-derived key), is rank 3 in
+ * §5.6.1 and is NOT implemented here or returnable from this function: PRF
+ * `get()` is unsupported on Safari, so it can only be a Chrome-only upgrade and
+ * must never be on the critical path. When it lands it gets its own
+ * `secret_disclosure_passkey` key; there is deliberately no key for it today, so
+ * a caller cannot render a durability level nothing can verify.
  *
  * There is deliberately no 'safe' level and no wording that implies custody.
  *
@@ -941,6 +960,10 @@ export function describeDurability({
   lastExportAt = null,
   overCap = false,
 } = {}) {
+  // Same evidence rule as `enforceRestingCap`: a falsy timestamp is "no export".
+  // `lastExportAt: 0` from a caller that means "unset" must not produce the
+  // sentence "you have a backup file you can restore from on another device".
+  const exported = Number.isFinite(lastExportAt) && lastExportAt > 0;
   if (!recordPresent) {
     return {
       level: 'none',
@@ -954,7 +977,7 @@ export function describeDurability({
       reasons: ['no recovery record on this device'],
     };
   }
-  if (lastExportAt !== null) {
+  if (exported) {
     return {
       level: 'exported',
       disclosureKey: 'secret_disclosure_exported',

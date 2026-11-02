@@ -50,7 +50,7 @@ const SEED = 'abandon abandon abandon abandon abandon abandon abandon abandon ab
 const PASSPHRASE = 'correct horse battery staple';
 
 // The SHIPPED KDF cost is N=2^17 (~0.7 s per derivation on the build box). That
-// is right for a one-off export/restore and wrong for a 60-case unit suite, so
+// is right for a one-off export/restore and wrong for a 62-case unit suite, so
 // every case here derives at N=2^10 and ONE case below pins the shipped
 // parameters. Do not "fix" a slow suite by removing that pin: the pin is what
 // proves the shipped default was not silently weakened to make the tests fast.
@@ -812,6 +812,19 @@ describe('resting cap: "the most you can lose is T" is classified honestly', () 
     }
   });
 
+  it('treats a falsy or nonsense lastExportAt as NO export, not as "exported in 1970"', () => {
+    // `0` is the default a caller reaches for when it means "not set". Reading it
+    // as a timestamp would promote unexported funds to `ok` — the exact lie the
+    // module exists to prevent. `NaN`, a negative and a string are the same class.
+    for (const bogus of [0, -1, NaN, '1760000000000', Infinity]) {
+      const verdict = enforceRestingCap({ balanceSats: 40, capSats: 80, lastExportAt: bogus });
+      expect(verdict.state, `lastExportAt ${String(bogus)}`).toBe('export-due');
+      expect(verdict.mustExport, `lastExportAt ${String(bogus)}`).toBe(true);
+    }
+    // A real evidence timestamp still suppresses the prompt.
+    expect(enforceRestingCap({ balanceSats: 40, capSats: 80, lastExportAt: 1_760_000_000_000 }).state).toBe('ok');
+  });
+
   it('refuses a missing or nonsense cap instead of defaulting it to zero', () => {
     // Defaulting capSats to 0 would turn every positive balance into over-cap,
     // which silently reports the promise as broken for a config mistake.
@@ -939,6 +952,18 @@ describe('durability: "you have a backup" is only said after a backup actually l
     expect(verdict.level).toBe('exported');
     expect(verdict.durableCopy).toBe(true);
     expect(verdict.wipeLossUndetectable).toBe(false);
+  });
+
+  it('does not promote on a falsy or nonsense lastExportAt', () => {
+    // The "you have a backup file you can restore from on another device" string
+    // is the most consequential sentence in the module. A caller that defaults
+    // `lastExportAt` to `0` must land on `evictable`, not on that string.
+    for (const bogus of [0, -1, NaN, '1760000000000', Infinity, undefined]) {
+      const verdict = describeDurability({ recordPresent: true, lastExportAt: bogus });
+      expect(verdict.level, `lastExportAt ${String(bogus)}`).toBe('evictable');
+      expect(verdict.durableCopy, `lastExportAt ${String(bogus)}`).toBe(false);
+      expect(verdict.disclosureKey, `lastExportAt ${String(bogus)}`).not.toBe('secret_disclosure_exported');
+    }
   });
 });
 

@@ -1179,7 +1179,7 @@ Each is FALSE, and each is the kind of sentence that gets written by accident:
 
 The decision above is no longer prose. It is
 `src/helpers/wallet-secret-store.js` with `tests/unit/wallet-secret-store.test.js`
-(60 cases) pinning it. This subsection records the mapping, because a future
+(62 cases) pinning it. This subsection records the mapping, because a future
 reader's first question will be "is any of §5.6 actually built?".
 
 **The module implements ranks 1 and 2 only.** Rank 3 (passkey PRF) and rank 4
@@ -1199,7 +1199,7 @@ walk-up BYOD device. Both stay in §5.6.1 as ranked options.
 | Rank 2: one-tap encrypted export; Web Share first, download fallback; honest "no rail" | `encryptRecoveryRecord`, `buildBackupFile`, `shareBackup` | 6 delivery cases: share, `AbortError` ⇒ `cancelled`, download fallback (Firefox), an expired iOS activation (`NotAllowedError`) degrading to the download, `unavailable` |
 | Encryption is **portability + opacity**, never "protection" | the blob carries no plaintext word of the phrase, no mint URL, no counter; Poly1305 makes a wrong passphrase and tampering the SAME typed failure | 5 cases incl. "carries NO plaintext seed…" and "does not distinguish tampering from a wrong passphrase" |
 | A backup's own KDF header may ask for **less** than the shipped cost, never more | `assertSafeKdfParams` bounds `N`, `r`, `p`, `dkLen` **and the product** `128·N·r` at the shipped 128 MiB; an out-of-bounds header is refused before any derivation, and `encryptRecoveryRecord` refuses (never retries) a caller-supplied cost it would refuse to decrypt | 3 cases: individual bounds, the product bound (`N=2^20, r=16` ⇒ 2 GiB, refused in <1 s), and a cheap-but-legal backup still restoring |
-| **"The most you can lose is T" is the load-bearing promise** | `enforceRestingCap` returns `ok` / `export-due` / `over-cap` / `unknown` with `maxLossSats`, and an UNKNOWN balance is never `ok` | 5 cases; `over-cap` reports that the promise is *already broken*, not that it is fine, and `unknown` forces an export. **Classified here, enforced by WS-2** — this module has no funding path, so a caller that never reads the verdict is unaffected |
+| **"The most you can lose is T" is the load-bearing promise** | `enforceRestingCap` returns `ok` / `export-due` / `over-cap` / `unknown` with `maxLossSats`, and an UNKNOWN balance is never `ok`; `lastExportAt` counts only as a **positive finite** timestamp, so a caller's falsy default cannot promote unexported funds to `ok` | 7 cases; `over-cap` reports that the promise is *already broken*, not that it is fine, `unknown` forces an export, and `0`/`NaN`/a string are treated as "no export". **Classified here, enforced by WS-2** — this module has no funding path, so a caller that never reads the verdict is unaffected |
 | The forbidden sentences cannot reach user-facing text | all four disclosure levels carry a locale key; the catalog is asserted against the §5.6.6 forbidden list | "never claims safety, custody, a keychain, or that encryption protects the money" over every key |
 
 **Three implementation choices this adds to the record, each deliberate:**
