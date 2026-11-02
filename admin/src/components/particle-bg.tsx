@@ -18,6 +18,16 @@ export default function ParticleBg() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Canvas cannot resolve `var(--x)` itself, so read the palette off the
+    // document once per mount. The dots were hardcoded white, which is invisible
+    // on the light palette (white specks on #f6f7fa) — the same failure mode as
+    // the body text in the report, just decorative.
+    const probe = getComputedStyle(document.documentElement);
+    const ink = (probe.getPropertyValue('--text') || '#eef1f7').trim();
+    const rgb = ink.startsWith('#') && ink.length === 7
+      ? [1, 3, 5].map((i) => parseInt(ink.slice(i, i + 2), 16)).join(',')
+      : '238,241,247';
+
     let particles: Particle[] = [];
     let raf = 0;
 
@@ -42,7 +52,7 @@ export default function ParticleBg() {
         size: (Math.random() * 2.25 + 1) * (1 + eased),
         speedX: (Math.random() - 0.5) / 1.4,
         speedY: (Math.random() - 0.5) / 1.4,
-        color: `rgba(255,255,255,${Math.random() * 0.5 + 0.1})`,
+        color: `rgba(${rgb},${Math.random() * 0.5 + 0.1})`,
       };
     }
 
@@ -78,7 +88,7 @@ export default function ParticleBg() {
           const dy = p.y - q.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < 100) {
-            ctx!.strokeStyle = `rgba(255,255,255,${0.2 - dist / 500})`;
+            ctx!.strokeStyle = `rgba(${rgb},${0.2 - dist / 500})`;
             ctx!.lineWidth = 0.5;
             ctx!.beginPath();
             ctx!.moveTo(p.x, p.y);

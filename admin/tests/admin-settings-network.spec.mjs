@@ -56,7 +56,7 @@ test.describe('admin board: private network + administration access', () => {
     ).toBeVisible();
 
     // The SSID is an ordinary setting: the router's current value is shown.
-    await expect(page.locator('#field-private_ssid')).toHaveValue('c08r4d0r-MOCK');
+    await expect(page.locator('#field-private_ssid')).toHaveValue('Private-c08r4d0r-MOCK');
 
     // The passphrase is WRITE-ONLY: the field is empty even though the router
     // has a value, and the page says so rather than pretending it is unset.
@@ -383,5 +383,28 @@ test.describe('admin board: private network + administration access', () => {
     await expect(message).toBeVisible({ timeout: 30000 });
     await expect(message).toHaveClass(/error-text/);
     await expect(message).toContainText('Refused:');
+  });
+});
+
+test.describe('admin board: SSID names', () => {
+  test('shows the suffix/operator fields and a live derived-name preview', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+
+    await page.goto(SETTINGS);
+    await expect(page.locator('.card-title').filter({ hasText: /^WiFi Names$/ })).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('#field-ssid_suffix')).toBeVisible();
+    await expect(page.locator('#field-private_ssid_operator')).toBeVisible();
+    await expect(page.getByText('Derived WiFi names')).toBeVisible();
+    await expect(page.getByText('!TollGate-CODE')).toBeVisible();
+    await expect(page.getByText('Private-c08r4d0r-CODE')).toBeVisible();
+
+    await page.locator('#field-ssid_suffix').fill('myplace');
+    await expect(page.getByText('!TollGate-myplace')).toBeVisible();
+    await expect(page.getByText('Private-c08r4d0r-myplace')).toBeVisible();
+
+    await page.locator('#field-private_ssid_operator').fill('Archipelago');
+    await expect(page.getByText('Private-Archipelago-myplace')).toBeVisible();
+    expect(errors).toEqual([]);
   });
 });

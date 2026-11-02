@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 //
 // Surface coverage:
 //   - Wallet   : tollgate.wallet_info / wallet_fund / wallet_drain_cashu
-//   - WiFi     : network.wireless status + tollgate.upstream_scan / _list / _connect
+//   - WiFi     : network.wireless status (upstream selection lives on Peering)
 test.describe('admin wallet', () => {
   test.beforeEach(async ({ page }) => {
     const errors = [];
@@ -54,7 +54,7 @@ test.describe('admin wallet', () => {
   });
 });
 
-test.describe('admin wifi scanning', () => {
+test.describe('admin wifi radios', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('./');
     await page.waitForSelector('.app-header', { timeout: 30000 });
@@ -70,34 +70,10 @@ test.describe('admin wifi scanning', () => {
     await expect(page.getByText('tollgate-5g', { exact: true })).toBeVisible();
   });
 
-  test('renders upstream_scan results strongest-signal first', async ({ page }) => {
-    const ssids = page.locator('.scan-item .scan-item-ssid');
-    await expect(ssids).toHaveCount(3, { timeout: 15000 });
-    const rows = page.locator('.scan-item');
-    await expect(rows.nth(0).locator('.scan-item-ssid')).toHaveText('UpstreamWiFi');
-    await expect(rows.nth(1).locator('.scan-item-ssid')).toHaveText('NeighborNet');
-    await expect(rows.nth(2).locator('.scan-item-ssid')).toHaveText('OpenNet');
-    // -45 = Excellent, -72 / -80 = Weak (see signalQuality in src/routes/wifi.tsx).
-    await expect(rows.nth(0).locator('.signal-strength')).toHaveText('Excellent');
-    await expect(rows.nth(1).locator('.signal-strength')).toHaveText('Weak');
-    await expect(rows.nth(2).locator('.signal-strength')).toHaveText('Weak');
-  });
-
-  test('shows the connected upstream from upstream_list', async ({ page }) => {
-    const upstream = page.locator('.upstream-item');
-    await expect(upstream).toHaveCount(1, { timeout: 15000 });
-    await expect(upstream.locator('.scan-item-ssid')).toHaveText('UpstreamWiFi');
-    await expect(upstream.getByText('ACTIVE')).toBeVisible();
-  });
-
-  test('connects to an open scanned network via upstream_connect', async ({ page }) => {
-    const openRow = page.locator('.scan-item', { hasText: 'OpenNet' });
-    await expect(openRow).toBeVisible({ timeout: 15000 });
-    // First click expands the inline connect form; the second submits it.
-    await openRow.getByRole('button', { name: 'Connect' }).click();
-    await openRow.getByRole('button', { name: 'Connect' }).click();
-
-    await expect(page.getByText('Connected successfully')).toBeVisible({
+  test('links to Peering for upstream selection', async ({ page }) => {
+    await expect(page.locator('.card-title', { hasText: 'Peering' })).toBeVisible();
+    await page.getByRole('button', { name: 'Manage peering →' }).click();
+    await expect(page.getByRole('heading', { name: 'Cobrador Island' })).toBeVisible({
       timeout: 15000,
     });
   });

@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Peering page.** The admin board now has a dedicated Peering route where
+  Cobradors can discover nearby TollGate peers, see advertised reseller/mint
+  metadata, peer with an open gateway, watch the live peer session and SAT
+  spend, toggle peer discovery / reseller mode, and stop peering with a
+  verified fallback to a known good non-TollGate upstream.
+- **Guest portal and admin board localization.** Both surfaces now ship the
+  same 14 locales (`en, zh-Hans, zh-Hant, es, fr, ar, pt, ru, id, de, ja, vi, tr,
+  it`), with native language names, persisted selection, and RTL handling for
+  Arabic. Admin strings and schema descriptions use catalogue-backed translation.
+- **Configurable SSID names in the admin board.** Settings now exposes
+  `ssid_suffix` and `private_ssid_operator`, with a derived-name preview. The
+  suffix is shared by the guest (`!<brand>-<suffix>`) and private
+  (`Private-<operator>-<suffix>`) networks and persists across reinstalls.
+- **Cobrador identity.** The default TollGate theme stays subtle: a small
+  island/gate mark and a dismissible "Welcome, Cobrador!" card explain that
+  `c08r4d0r` is leetspeak for *cobrador*, the toll/fare collector. A full
+  Cobrador Island skin is opt-in via `VITE_THEME=cobrador-island` or
+  `VITE_BRAND=cobrador`.
+
 ### Security
 - **Admin board: fail closed against a router with no root credential.** rpcd's
   login check (`rpc_login_test_password`, `session.c`) begins with

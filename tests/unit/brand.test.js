@@ -307,12 +307,14 @@ describe('build-side and runtime id normalisation agree', () => {
 });
 
 describe('the shipped brand slot', () => {
-  it('bundles exactly the generic default descriptor and no distribution skin', () => {
+  it('bundles only the generic default and the opt-in Cobrador descriptor', () => {
     // Anti-leak regression test: this repo is the protocol side. The slot may
-    // only ever contain the generic default; an operator onboards by shipping
-    // its own descriptor from its own distribution repo (issue #33).
+    // only contain the generic default plus the explicitly opt-in Cobrador
+    // Island descriptor; an operator onboards by shipping its own descriptor
+    // from its own distribution repo (issue #33).
     const slot = import.meta.glob('../../admin/brand/*.json');
     expect(Object.keys(slot).map(descriptorIdFromPath).sort()).toEqual([
+      'cobrador',
       DEFAULT_BRAND_ID,
     ]);
   });

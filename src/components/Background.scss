@@ -3,6 +3,10 @@
 * - background styles
 **/
 
+/* The gradient ground is token-driven so the light palette swaps it with no
+   rule change. Both stops come from the palette: a subtle lift in the middle
+   (a uniform field gives a reflection nothing to sit on) falling to the page
+   colour at the edges. */
 .tollgate-captive-portal-background {
   position: fixed;
   top: 0;
@@ -11,6 +15,6 @@
   height: 100%;
   z-index: 0;
   pointer-events: none;
-  background: #1a1a2e;
-  background: radial-gradient(circle, #181836 0%, #080e1d 100%);
+  background: var(--color-bg);
+  background: radial-gradient(circle, var(--color-surface) 0%, var(--color-bg) 100%);
 }

@@ -1,0 +1,552 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>TollGate theme mockups — admin + balance</title>
+<!--
+  MOCKUPS, not the app. Three candidate palettes rendered as static HTML so the
+  choice can be made on pictures before the token values are frozen.
+
+  Every swatch below is painted from the SAME token names the app uses
+  (--bg/--card/--accent for admin, --color-* for the guest portal), which is the
+  point: whichever column is picked becomes a token file, not a rewrite.
+
+  Variant A "Obsidian coral"  – near-black ground, coral accent, white-ish body
+  Variant B "Slate coral"     – lifted slate ground, coral accent  (SHIPPED)
+  Variant C "Parchment"       – light ground, deep-coral accent, dark body
+
+  A and C are the two ends of the glare argument; B is the middle ground that is
+  actually shipped, because it is the only one that is dark-branded AND clears
+  AA on the button without going to a non-TollGate accent.
+
+  Render:  ./shot.sh   (Playwright screenshots -> PNGs next to this file)
+-->
+<style>
+  html { font-size: 16px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #4a4a4a;
+    color: #111;
+    padding: 28px;
+    width: 1540px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .intro { font-size: 13px; color: #222; max-width: 1100px; line-height: 1.5; margin-bottom: 22px; }
+  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .variant > h2 { font-size: 14px; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 2px; }
+  .variant > .sub { font-size: 11.5px; color: #333; margin-bottom: 10px; height: 30px; line-height: 1.35; }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+         padding: 2px 7px; border-radius: 999px; background: #111; color: #fff; margin-left: 6px;
+         vertical-align: 2px; }
+  .tag.chosen { background: #34d058; color: #06210b; }
+
+  /* ---------- shared frame: a phone-ish admin screen ---------- */
+  .admin, .guest { border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .admin { font-size: 12px; }
+  .nav { display: flex; }
+  .nav div { flex: 1; text-align: center; padding: 9px 0 8px; font-size: 9.5px; font-weight: 600; }
+  .nav .on { font-weight: 800; }
+
+  .top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; }
+  .brand { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 14px; letter-spacing: -.2px; }
+  .mark { width: 17px; height: 17px; }
+  .sep { opacity: .35; margin: 0 3px; font-weight: 400; }
+  .role { font-size: 10.5px; font-weight: 500; opacity: .75; }
+  .top-right { display: flex; align-items: center; gap: 10px; font-size: 10.5px; }
+  .btn-sm { border-radius: 7px; padding: 5px 9px; font-size: 10.5px; font-weight: 600; }
+
+  .body { padding: 4px 14px 16px; display: flex; flex-direction: column; gap: 11px; }
+  .card { border-radius: 12px; padding: 12px 13px; }
+  .card h3 { font-size: 11.5px; font-weight: 700; letter-spacing: .02em; margin-bottom: 8px;
+             display: flex; align-items: center; gap: 6px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .kv { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
+  .kv span:first-child { font-weight: 500; }
+  .kv span:last-child { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
+  .meter { height: 4px; border-radius: 2px; margin-top: 9px; overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 61%; border-radius: 2px; }
+  .meter-cap { display: flex; justify-content: space-between; font-size: 9.5px; margin-top: 5px; }
+
+  /* button row: the pair whose contrast is the headline problem */
+  .buttons { display: flex; gap: 8px; margin-top: 12px; }
+  .btn { flex: 1; border-radius: 9px; padding: 9px 10px; font-size: 11.5px; font-weight: 700; text-align: center; }
+
+  /* ---------- guest / balance ---------- */
+  .guest { font-size: 12px; }
+  .ghead { padding: 20px 0 12px; text-align: center; }
+  .gmark { width: 96px; }
+  .gwrap { padding: 0 16px 16px; }
+  .gtabs { display: flex; }
+  .gtabs div { flex: 1; text-align: center; padding: 10px 0; font-size: 11px; font-weight: 700; }
+  .gview { padding: 13px; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
+  .gtitle { text-align: center; padding: 2px 0 11px; }
+  .gtitle h4 { font-size: 14px; }
+  .gtitle p { font-size: 10.5px; margin-top: 3px; }
+  .inputrow { display: flex; gap: 7px; margin-bottom: 11px; }
+  .field { flex: 1; border-radius: 8px; padding: 8px 9px; font-size: 10.5px; }
+  .scanbtn { border-radius: 8px; padding: 8px 11px; font-size: 10.5px; font-weight: 700; }
+
+  .balhdr { display: flex; justify-content: space-between; align-items: center;
+            border-top-left-radius: 12px; border-top-right-radius: 12px; padding: 9px 11px;
+            font-size: 11px; font-weight: 700; }
+  .balbody { border-radius: 0 0 10px 10px; padding: 9px 11px; font-size: 10.5px; line-height: 1.45; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 11px; }
+  .tile { border-radius: 9px; padding: 8px 9px; }
+  .tile .l { font-size: 9px; letter-spacing: .02em; }
+  .tile .v { font-size: 14px; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .tile .d { font-size: 8.5px; margin-top: 2px; }
+  .gfooter { text-align: center; font-size: 9.5px; padding: 12px 0 14px; }
+
+  /* ---------- annotation badge under each variant ---------- */
+  .metrics { margin-top: 9px; font-size: 10px; line-height: 1.5;
+             background: #f4f4f4; border: 1px solid #999; border-radius: 7px; padding: 7px 8px;
+             font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .metrics b { font-family: inherit; }
+  .pass { color: #0a6b28; font-weight: 700; }
+  .fail { color: #a3140c; font-weight: 700; }
+  .note { font-size: 10px; color: #333; margin-top: 6px; line-height: 1.45; }
+</style>
+
+<h1>TollGate theme — three candidate palettes, same components</h1>
+<p class="intro">
+  Built from the real admin dashboard and the real guest balance page (Playwright captures of
+  <code>:5199</code> and <code>:5177</code>), repainted from token values only. Each column is one
+  palette; the components, spacing and copy are identical, so the difference you are judging is
+  colour alone. The mono block under each is measured, not estimated:
+  <code>tools/contrast.py</code> for the WCAG 2.1 ratio, <code>tools/glare.py</code> for the same
+  pair after a 0.10 reflected-luminance veil (a typical laptop opposite a window).
+</p>
+
+<div class="row">
+
+  <!-- ═══════════════════ A: obsidian ═══════════════════ -->
+  <div class="variant">
+    <h2>A · Obsidian coral</h2>
+    <p class="sub">Near-black ground, pure-white body, coral accent. The "safe dark mode" answer — and
+      the one that reproduces the glare complaint.</p>
+
+    <!-- admin -->
+    <div class="admin" style="--bg:#0b0b0d; --card:#141417; --raised:#1b1b20; --border:#2b2b33;
+                              --text:#ffffff; --muted:#a8a8b3; --dim:#71717c; --accent:#ff6961;
+                              --accent-label:#160d0c; --success:#6ee7a0; --err:#ff8f89;
+                              background:var(--bg); color:var(--text);">
+      <div class="top" style="border-bottom:1px solid var(--border); background:rgba(11,11,13,.92);">
+        <div class="brand">
+          <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+            <path d="M3 15a9 9 0 0 1 18 0M7 15a5 5 0 0 1 10 0" stroke-linecap="round"/>
+            <circle cx="12" cy="19" r="1.6" fill="var(--accent)" stroke="none"/>
+          </svg>
+          TollGate<span class="sep">|</span><span class="role">root</span>
+        </div>
+        <div class="top-right">
+          <span style="opacity:.75">LuCI →</span>
+          <span class="btn-sm" style="background:var(--raised); color:var(--text);">Logout</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card" style="background:var(--card); border:1px solid var(--border);">
+          <h3><span class="dot" style="background:var(--accent);"></span>System</h3>
+          <div class="kv"><span style="color:var(--muted)">Hostname</span><span>tollgate-gw1</span></div>
+          <div class="kv"><span style="color:var(--muted)">Uptime</span><span>3d 7h 42m</span></div>
+          <div class="kv"><span style="color:var(--muted)">Firmware</span><span>r23630-842932a63d</span></div>
+        </div>
+        <div class="card" style="background:var(--card); border:1px solid var(--border);">
+          <h3><span class="dot" style="background:var(--accent);"></span>Network</h3>
+          <div class="kv"><span style="color:var(--muted)">WAN status</span>
+            <span class="badge" style="background:rgba(110,231,160,.15); color:var(--success);">Connected</span></div>
+          <div class="kv"><span style="color:var(--muted)">WAN IP</span><span>192.168.1.142</span></div>
+          <div class="kv"><span style="color:var(--muted)">DNS</span><span>1.1.1.1, 8.8.8.8</span></div>
+          <div class="meter" style="background:var(--border);"><i style="background:var(--accent);"></i></div>
+          <div class="meter-cap" style="color:var(--muted);"><span>Memory</span><span>61% used</span></div>
+        </div>
+        <div class="buttons">
+          <div class="btn" style="background:var(--accent); color:var(--accent-label);">Save changes</div>
+          <div class="btn" style="background:var(--raised); color:var(--text); border:1px solid var(--border-control, var(--border));">Cancel</div>
+        </div>
+      </div>
+      <div class="nav" style="background:rgba(11,11,13,.95); border-top:1px solid var(--border);">
+        <div class="on" style="color:var(--accent);">Home</div>
+        <div style="color:var(--dim);">WiFi</div>
+        <div style="color:var(--dim);">Devices</div>
+        <div style="color:var(--dim);">Settings</div>
+        <div style="color:var(--dim);">Wallet</div>
+      </div>
+    </div>
+
+    <!-- guest -->
+    <div class="guest" style="margin-top:12px; --bg:#0b0b0d; --surface:#17171b; --raised:#1e1e24;
+                              --text:#ffffff; --muted:#a8a8b3; --dim:#71717c; --cta:#ff6961;
+                              --on-cta:#160d0c; --green:#6ee7a0; --green-tint:rgba(110,231,160,.16);
+                              --on-green:#0b0b0d; --border:#2b2b33;
+                              background:var(--bg); color:var(--text);">
+      <div class="ghead">
+        <svg class="gmark" viewBox="0 0 160 40" fill="none">
+          <path d="M4 30a16 16 0 0 1 32 0M12 30a8 8 0 0 1 16 0" stroke="#ff6961" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="20" cy="34" r="2.6" fill="#ff6961"/>
+          <text x="46" y="30" font-family="inherit" font-size="23" font-weight="800"
+                fill="#ffffff" letter-spacing="-.5">TollGate</text>
+        </svg>
+      </div>
+      <div class="gwrap">
+        <div class="gtabs">
+          <div style="background:var(--surface); color:var(--text); border-top-left-radius:12px;">Cashu</div>
+          <div style="background:var(--raised); color:var(--muted); border-top-right-radius:12px;">Lightning</div>
+        </div>
+        <div class="gview" style="background:var(--surface);">
+          <div class="gtitle">
+            <h4>Your internet balance</h4>
+            <p style="color:var(--muted);">Check how much access a token grants before you pay.</p>
+          </div>
+          <div class="inputrow">
+            <div class="field" style="background:var(--raised); border:1px solid var(--border);
+                                      color:var(--dim);">cashuAeyJ0b2tlbiI6…</div>
+            <div class="scanbtn" style="background:var(--cta); color:var(--on-cta);">Scan</div>
+          </div>
+          <div class="balhdr" style="background:var(--green); color:var(--on-green);">
+            <span>✓ Active</span><span>9 min</span>
+          </div>
+          <div class="balbody" style="background:var(--green-tint); border:2px solid var(--green);
+                                       border-top:none; color:var(--text);">
+            This token is valid and has not been redeemed yet.
+          </div>
+          <div class="grid2">
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Remaining</div><div class="v">9 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Used</div><div class="v">1 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Total</div><div class="v">10 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Metric</div><div class="v">Time</div>
+              <div class="d" style="color:var(--muted);">started 07:14</div></div>
+          </div>
+          <div class="buttons">
+            <div class="btn" style="background:var(--cta); color:var(--on-cta);">Refresh balance</div>
+            <div class="btn" style="background:var(--raised); color:var(--text); border:1px solid var(--border);">Back to portal</div>
+          </div>
+        </div>
+      </div>
+      <div class="gfooter" style="color:var(--muted);">Powered by TollGate — pay as you go</div>
+    </div>
+
+    <div class="metrics">
+      body <b>#fff on #0b0b0d</b> 19.66:1 <span class="pass">AA</span> · veiled 7.50<br>
+      button <b>#160d0c on #ff6961</b> 6.79:1 <span class="pass">AA</span> · veiled 3.05<br>
+      muted on card 7.81:1 <span class="pass">AA</span> · dim 3.81:1 <span class="fail">FAIL AA</span>
+    </div>
+    <p class="note">Extreme step (19.7:1) and the only variant that ships a failing text pair: the dim
+      grey it inherits is 3.81:1 on a card. Clears AA on the headline pairs, but this is the arrangement
+      the report is about — maximum luminance step, so the glyph is what blooms first.</p>
+  </div>
+
+  <!-- ═══════════════════ B: slate (SHIPPED) ═══════════════════ -->
+  <div class="variant">
+    <h2>B · Slate coral <span class="tag chosen">SHIPPED</span></h2>
+    <p class="sub">Lifted slate ground (#14161d), off-white body (#eef1f7), coral accent. Same
+      darkness as A, but the step is pulled off the extreme.</p>
+
+    <div class="admin" style="--bg:#14161d; --card:#1c1f28; --raised:#232733; --border:#3a4152;
+                              --border-control:#6a7590; --text:#eef1f7; --muted:#b3bccd;
+                              --dim:#8e99ad; --accent:#ff6961; --accent-label:#1a1114;
+                              --success:#7ad19a; --err:#ff9b95;
+                              background:var(--bg); color:var(--text);">
+      <div class="top" style="border-bottom:1px solid var(--border); background:rgba(10,12,17,.92);">
+        <div class="brand">
+          <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+            <path d="M3 15a9 9 0 0 1 18 0M7 15a5 5 0 0 1 10 0" stroke-linecap="round"/>
+            <circle cx="12" cy="19" r="1.6" fill="var(--accent)" stroke="none"/>
+          </svg>
+          TollGate<span class="sep">|</span><span class="role">root</span>
+        </div>
+        <div class="top-right">
+          <span style="opacity:.75">LuCI →</span>
+          <span class="btn-sm" style="background:var(--raised); color:var(--text);">Logout</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card" style="background:var(--card); border:1px solid var(--border);">
+          <h3><span class="dot" style="background:var(--accent);"></span>System</h3>
+          <div class="kv"><span style="color:var(--muted)">Hostname</span><span>tollgate-gw1</span></div>
+          <div class="kv"><span style="color:var(--muted)">Uptime</span><span>3d 7h 42m</span></div>
+          <div class="kv"><span style="color:var(--muted)">Firmware</span><span>r23630-842932a63d</span></div>
+        </div>
+        <div class="card" style="background:var(--card); border:1px solid var(--border);">
+          <h3><span class="dot" style="background:var(--accent);"></span>Network</h3>
+          <div class="kv"><span style="color:var(--muted)">WAN status</span>
+            <span class="badge" style="background:rgba(122,209,154,.16); color:var(--success);">Connected</span></div>
+          <div class="kv"><span style="color:var(--muted)">WAN IP</span><span>192.168.1.142</span></div>
+          <div class="kv"><span style="color:var(--muted)">DNS</span><span>1.1.1.1, 8.8.8.8</span></div>
+          <div class="meter" style="background:var(--border);"><i style="background:var(--accent);"></i></div>
+          <div class="meter-cap" style="color:var(--muted);"><span>Memory</span><span>61% used</span></div>
+        </div>
+        <div class="buttons">
+          <div class="btn" style="background:var(--accent); color:var(--accent-label);">Save changes</div>
+          <div class="btn" style="background:var(--raised); color:var(--text); border:1px solid var(--border-control);">Cancel</div>
+        </div>
+      </div>
+      <div class="nav" style="background:rgba(10,12,17,.95); border-top:1px solid var(--border);">
+        <div class="on" style="color:var(--accent);">Home</div>
+        <div style="color:var(--dim);">WiFi</div>
+        <div style="color:var(--dim);">Devices</div>
+        <div style="color:var(--dim);">Settings</div>
+        <div style="color:var(--dim);">Wallet</div>
+      </div>
+    </div>
+
+    <div class="guest" style="margin-top:12px; --bg:#14161d; --surface:#1c1f28; --raised:#232733;
+                              --text:#eef1f7; --muted:#b3bccd; --dim:#8e99ad; --cta:#ff6961;
+                              --on-cta:#1a1114; --green:#7ad19a; --green-tint:rgba(122,209,154,.16);
+                              --on-green:#14161d; --border:#3a4152; --border-control:#6a7590;
+                              background:var(--bg); color:var(--text);">
+      <div class="ghead">
+        <svg class="gmark" viewBox="0 0 160 40" fill="none">
+          <path d="M4 30a16 16 0 0 1 32 0M12 30a8 8 0 0 1 16 0" stroke="#ff6961" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="20" cy="34" r="2.6" fill="#ff6961"/>
+          <text x="46" y="30" font-family="inherit" font-size="23" font-weight="800"
+                fill="#eef1f7" letter-spacing="-.5">TollGate</text>
+        </svg>
+      </div>
+      <div class="gwrap">
+        <div class="gtabs">
+          <div style="background:var(--surface); color:var(--text); border-top-left-radius:12px;">Cashu</div>
+          <div style="background:var(--raised); color:var(--muted); border-top-right-radius:12px;">Lightning</div>
+        </div>
+        <div class="gview" style="background:var(--surface);">
+          <div class="gtitle">
+            <h4>Your internet balance</h4>
+            <p style="color:var(--muted);">Check how much access a token grants before you pay.</p>
+          </div>
+          <div class="inputrow">
+            <div class="field" style="background:var(--raised); border:1px solid var(--border-control);
+                                      color:var(--dim);">cashuAeyJ0b2tlbiI6…</div>
+            <div class="scanbtn" style="background:var(--cta); color:var(--on-cta);">Scan</div>
+          </div>
+          <div class="balhdr" style="background:var(--green); color:var(--on-green);">
+            <span>✓ Active</span><span>9 min</span>
+          </div>
+          <div class="balbody" style="background:var(--green-tint); border:2px solid var(--green);
+                                       border-top:none; color:var(--text);">
+            This token is valid and has not been redeemed yet.
+          </div>
+          <div class="grid2">
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Remaining</div><div class="v">9 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Used</div><div class="v">1 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Total</div><div class="v">10 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Metric</div><div class="v">Time</div>
+              <div class="d" style="color:var(--muted);">started 07:14</div></div>
+          </div>
+          <div class="buttons">
+            <div class="btn" style="background:var(--cta); color:var(--on-cta);">Refresh balance</div>
+            <div class="btn" style="background:var(--raised); color:var(--text); border:1px solid var(--border-control);">Back to portal</div>
+          </div>
+        </div>
+      </div>
+      <div class="gfooter" style="color:var(--muted);">Powered by TollGate — pay as you go</div>
+    </div>
+
+    <div class="metrics">
+      body <b>#eef1f7 on #14161d</b> 15.97:1 <span class="pass">AA</span> · veiled 6.50<br>
+      button <b>#1a1114 on #ff6961</b> 6.56:1 <span class="pass">AA</span> · veiled 3.01<br>
+      muted on card 8.61:1 <span class="pass">AA</span> · dim 5.73:1 <span class="pass">AA</span>
+    </div>
+    <p class="note">Every text pair and every control border clears AA in both schemes — including the
+      4.5:1 dim grey that A fails. The step is 16:1 instead of 20:1: still unmistakably dark-branded,
+      without spending the panel's whole range on one glyph edge.</p>
+  </div>
+
+  <!-- ═══════════════════ C: parchment ═══════════════════ -->
+  <div class="variant">
+    <h2>C · Parchment</h2>
+    <p class="sub">Light ground, deep-coral accent, near-black body. The glare-first answer — dark on
+      light survives a veil far better than light on dark.</p>
+
+    <div class="admin" style="--bg:#f6f7fa; --card:#ffffff; --raised:#eef0f6; --border:#c3cbd9;
+                              --border-control:#767f92; --text:#12151c; --muted:#4a5468;
+                              --dim:#5d667a; --accent:#c2352d; --accent-label:#ffffff;
+                              --success:#1c6b36; --err:#a8271f;
+                              background:var(--bg); color:var(--text);">
+      <div class="top" style="border-bottom:1px solid var(--border); background:rgba(246,247,250,.94);">
+        <div class="brand">
+          <svg class="mark" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+            <path d="M3 15a9 9 0 0 1 18 0M7 15a5 5 0 0 1 10 0" stroke-linecap="round"/>
+            <circle cx="12" cy="19" r="1.6" fill="var(--accent)" stroke="none"/>
+          </svg>
+          TollGate<span class="sep">|</span><span class="role">root</span>
+        </div>
+        <div class="top-right">
+          <span style="opacity:.75">LuCI →</span>
+          <span class="btn-sm" style="background:var(--raised); color:var(--text);">Logout</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="card" style="background:var(--card); border:1px solid var(--border);">
+          <h3><span class="dot" style="background:var(--accent);"></span>System</h3>
+          <div class="kv"><span style="color:var(--muted)">Hostname</span><span>tollgate-gw1</span></div>
+          <div class="kv"><span style="color:var(--muted)">Uptime</span><span>3d 7h 42m</span></div>
+          <div class="kv"><span style="color:var(--muted)">Firmware</span><span>r23630-842932a63d</span></div>
+        </div>
+        <div class="card" style="background:var(--card); border:1px solid var(--border);">
+          <h3><span class="dot" style="background:var(--accent);"></span>Network</h3>
+          <div class="kv"><span style="color:var(--muted)">WAN status</span>
+            <span class="badge" style="background:rgba(28,107,54,.10); color:var(--success);">Connected</span></div>
+          <div class="kv"><span style="color:var(--muted)">WAN IP</span><span>192.168.1.142</span></div>
+          <div class="kv"><span style="color:var(--muted)">DNS</span><span>1.1.1.1, 8.8.8.8</span></div>
+          <div class="meter" style="background:var(--border);"><i style="background:var(--accent);"></i></div>
+          <div class="meter-cap" style="color:var(--muted);"><span>Memory</span><span>61% used</span></div>
+        </div>
+        <div class="buttons">
+          <div class="btn" style="background:var(--accent); color:var(--accent-label);">Save changes</div>
+          <div class="btn" style="background:var(--raised); color:var(--text); border:1px solid var(--border-control);">Cancel</div>
+        </div>
+      </div>
+      <div class="nav" style="background:rgba(246,247,250,.96); border-top:1px solid var(--border);">
+        <div class="on" style="color:var(--accent);">Home</div>
+        <div style="color:var(--dim);">WiFi</div>
+        <div style="color:var(--dim);">Devices</div>
+        <div style="color:var(--dim);">Settings</div>
+        <div style="color:var(--dim);">Wallet</div>
+      </div>
+    </div>
+
+    <div class="guest" style="margin-top:12px; --bg:#f6f7fa; --surface:#ffffff; --raised:#eef0f6;
+                              --text:#12151c; --muted:#4a5468; --dim:#5d667a; --cta:#c2352d;
+                              --on-cta:#ffffff; --green:#1c6b36; --green-tint:rgba(28,107,54,.10);
+                              --on-green:#ffffff; --border:#c3cbd9; --border-control:#767f92;
+                              background:var(--bg); color:var(--text);">
+      <div class="ghead">
+        <svg class="gmark" viewBox="0 0 160 40" fill="none">
+          <path d="M4 30a16 16 0 0 1 32 0M12 30a8 8 0 0 1 16 0" stroke="#c2352d" stroke-width="3.5" stroke-linecap="round"/>
+          <circle cx="20" cy="34" r="2.6" fill="#c2352d"/>
+          <text x="46" y="30" font-family="inherit" font-size="23" font-weight="800"
+                fill="#12151c" letter-spacing="-.5">TollGate</text>
+        </svg>
+      </div>
+      <div class="gwrap">
+        <div class="gtabs">
+          <div style="background:var(--surface); color:var(--text); border-top-left-radius:12px;">Cashu</div>
+          <div style="background:var(--raised); color:var(--muted); border-top-right-radius:12px;">Lightning</div>
+        </div>
+        <div class="gview" style="background:var(--surface);">
+          <div class="gtitle">
+            <h4>Your internet balance</h4>
+            <p style="color:var(--muted);">Check how much access a token grants before you pay.</p>
+          </div>
+          <div class="inputrow">
+            <div class="field" style="background:var(--raised); border:1px solid var(--border-control);
+                                      color:var(--dim);">cashuAeyJ0b2tlbiI6…</div>
+            <div class="scanbtn" style="background:var(--cta); color:var(--on-cta);">Scan</div>
+          </div>
+          <div class="balhdr" style="background:var(--green); color:var(--on-green);">
+            <span>✓ Active</span><span>9 min</span>
+          </div>
+          <div class="balbody" style="background:var(--green-tint); border:2px solid var(--green);
+                                       border-top:none; color:var(--text);">
+            This token is valid and has not been redeemed yet.
+          </div>
+          <div class="grid2">
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Remaining</div><div class="v">9 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Used</div><div class="v">1 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Total</div><div class="v">10 min</div></div>
+            <div class="tile" style="background:var(--raised); border:1px solid var(--border);">
+              <div class="l" style="color:var(--muted);">Metric</div><div class="v">Time</div>
+              <div class="d" style="color:var(--muted);">started 07:14</div></div>
+          </div>
+          <div class="buttons">
+            <div class="btn" style="background:var(--cta); color:var(--on-cta);">Refresh balance</div>
+            <div class="btn" style="background:var(--raised); color:var(--text); border:1px solid var(--border-control);">Back to portal</div>
+          </div>
+        </div>
+      </div>
+      <div class="gfooter" style="color:var(--muted);">Powered by TollGate — pay as you go</div>
+    </div>
+
+    <div class="metrics">
+      body <b>#12151c on #f6f7fa</b> 17.05:1 <span class="pass">AA</span> · veiled 6.86<br>
+      button <b>#fff on #c2352d</b> 5.47:1 <span class="pass">AA</span> · veiled 3.94<br>
+      muted on card 7.61:1 <span class="pass">AA</span> · dim 5.76:1 <span class="pass">AA</span>
+    </div>
+    <p class="note">Best headroom of the three: it is the only variant that keeps AA on body text at a
+      0.20 veil, and its button holds 3.94 after a 0.10 veil because dark on light survives a reflection
+      better than light on dark. Costs the dark identity — on a router admin page it reads as a generic
+      web form. Shipped as <code>prefers-color-scheme: light</code>, not as the default.</p>
+  </div>
+
+</div>
+
+<!-- ═══════════════ defects found while implementing ═══════════════
+     Not palette choices — two places where the ink and its ground were
+     picked independently and nobody measured the pair. Rendered from the
+     real app, same as the three variants above. -->
+<h2 style="margin-top:3.5rem; font-size:1.05rem; letter-spacing:.06em; text-transform:uppercase;
+           color:#c9cfdd;">Two defects the palette alone did not fix</h2>
+<p class="sub" style="max-width:78ch; margin-bottom:1.4rem;">
+  Both were found by screenshotting the running app after the retheme and reading the pixels,
+  not by looking at the token table. Each is a pair the token gate could not see: one is baked
+  into a PNG, the other is produced by <code>opacity</code> at paint time.
+</p>
+
+<div class="variant" style="display:flex; gap:2.2rem; align-items:flex-start; flex-wrap:wrap;">
+  <div style="flex:1 1 320px; min-width:300px;">
+    <h2 style="font-size:.95rem;">1 · The wordmark was black on a near-black page</h2>
+    <p class="sub" style="margin-bottom:.9rem;">
+      <code>BRAND.logo</code> resolved to <code>logo-colour.png</code> (ink <b>#090909</b>) on the
+      dark palette. <b>1.10:1</b> — the wordmark was painted, and invisible.
+    </p>
+    <div style="display:flex; border-radius:10px; overflow:hidden; border:1px solid #3a4152;">
+      <div style="flex:1; background:#14161d; padding:1.5rem 1rem; text-align:center;">
+        <div style="color:#090909; font-weight:800; font-size:1.5rem; letter-spacing:-.02em;">TollGate</div>
+        <div style="margin-top:.7rem; font:600 .62rem/1 ui-monospace,monospace; color:#8e99ad;">
+          BEFORE · #090909 on #14161d · 1.10:1
+        </div>
+      </div>
+      <div style="flex:1; background:#14161d; padding:1.5rem 1rem; text-align:center;
+                  box-shadow:inset 1px 0 0 #3a4152;">
+        <div style="color:#ffffff; font-weight:800; font-size:1.5rem; letter-spacing:-.02em;">TollGate</div>
+        <div style="margin-top:.7rem; font:600 .62rem/1 ui-monospace,monospace; color:#7ad19a;">
+          AFTER · #ffffff on #14161d · 18.07:1
+        </div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:.8rem;">
+      Fix: <code>admin/src/components/brand-logo.tsx</code> picks the asset by
+      <code>prefers-color-scheme</code> — the same <code>&lt;picture&gt;</code> swap the guest
+      header already used. Now gated in <code>tools/contrast.py</code> as
+      <em>brand wordmark (image ink, not a token)</em>, because a token gate cannot see a PNG.
+    </p>
+  </div>
+
+  <div style="flex:1 1 320px; min-width:300px;">
+    <h2 style="font-size:.95rem;">2 · The disabled button was the unreadable state</h2>
+    <p class="sub" style="margin-bottom:.9rem;">
+      <code>.btn:disabled { opacity: .45 }</code> composites the fill <em>and</em> the label toward
+      the page. Coral <code>#ff6961</code> became <code>rgb(130,64,66)</code>, the dark label
+      became <code>rgb(27,25,31)</code>: <b>2.29:1</b>. The login page <em>opens</em> with
+      Sign In disabled.
+    </p>
+    <div style="border-radius:10px; padding:1.3rem; background:#1c1f28; border:1px solid #3a4152;
+                display:flex; flex-direction:column; gap:.7rem;">
+      <div style="text-align:center; padding:.62rem; border-radius:8px; font-weight:600;
+                  font-size:.85rem; background:rgb(130,64,66); color:rgb(27,25,31);">
+        Sign In — before (opacity .45 · 2.29:1)
+      </div>
+      <div style="text-align:center; padding:.62rem; border-radius:8px; font-weight:600;
+                  font-size:.85rem; background:#232733; color:#b3bccd;
+                  border:1px solid #3a4152;">
+        Sign In — after (token pair · 7.80:1)
+      </div>
+    </div>
+    <p class="note" style="margin-top:.8rem;">
+      Fix: explicit <code>--disabled-bg / --disabled-text / --disabled-border</code> tokens in both
+      palettes instead of <code>opacity</code>. WCAG 1.4.3 exempts inactive controls, so this was
+      never an AA failure — it is simply what the report described, in the state the page shows first.
+      Now gated at AA.
+    </p>
+  </div>
+</div>
