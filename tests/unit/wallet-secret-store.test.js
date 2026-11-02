@@ -23,8 +23,12 @@ import {
   BACKUP_MAGIC,
   DB_NAME,
   ERR,
+  KDF_BOUNDS,
+  KDF_FALLBACK_PARAMS,
   KDF_PARAMS,
+  RECORD_KEY,
   SecretStoreError,
+  STORE_NAME,
   buildBackupFile,
   clearSiteData,
   createRecoveryRecord,
@@ -58,6 +62,8 @@ const record = (overrides = {}) =>
     seed: SEED,
     countersByKeyset: { '009a1f293253e41e': 7 },
     mintUrls: ['https://mint.minibits.cash/Bitcoin'],
+    // The wallet would report this; the module refuses to assume it.
+    keysetPolicy: 'deterministic',
     now: 1_760_000_000_000,
     ...overrides,
   });
@@ -106,12 +112,14 @@ describe('recovery record: the NUT-09 triple is enforced at write time', () => {
   });
 
   it('rejects a non-integer or negative counter', () => {
-    const verdict = validateRecoveryRecord({
-      ...record(),
-      countersByKeyset: { '009a1f293253e41e': 1.5 },
-    });
-    expect(verdict.ok).toBe(false);
-    expect(verdict.code).toBe(ERR.MISSING_COUNTERS);
+    for (const bad of [1.5, -1, '7', null]) {
+      const verdict = validateRecoveryRecord({
+        ...record(),
+        countersByKeyset: { '009a1f293253e41e': bad },
+      });
+      expect(verdict.ok, `counter ${String(bad)} must be refused`).toBe(false);
+      expect(verdict.code).toBe(ERR.MISSING_COUNTERS);
+    }
   });
 
   it('rejects a missing or non-http mint URL', () => {
@@ -123,6 +131,27 @@ describe('recovery record: the NUT-09 triple is enforced at write time', () => {
     const verdict = validateRecoveryRecord({ ...record(), keysetPolicy: 'random' });
     expect(verdict.ok).toBe(false);
     expect(verdict.message).toMatch(/not recoverable/);
+  });
+
+  it('rejects a record with NO keyset policy — the module cannot vouch for a wallet it never saw', () => {
+    // The policy is the CALLER's statement about its wallet. Defaulting it here
+    // would make the record assert "deterministic" on behalf of code that never
+    // looked, which is the failure the field exists to prevent.
+    const { keysetPolicy, ...withoutPolicy } = record();
+    expect(keysetPolicy).toBe('deterministic');
+    const verdict = validateRecoveryRecord(withoutPolicy);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.message).toMatch(/keysetPolicy is required/);
+    // And the constructor refuses it too, rather than stamping a value it cannot
+    // know.
+    expect(() => createRecoveryRecord({ ...record(), keysetPolicy: undefined })).toThrow(
+      /keysetPolicy is required/
+    );
+  });
+
+  it('stamps the policy the caller supplied, and refuses a non-deterministic one at write time', () => {
+    expect(record({ keysetPolicy: 'deterministic' }).keysetPolicy).toBe('deterministic');
+    expect(() => record({ keysetPolicy: 'random' })).toThrow(/not recoverable/);
   });
 
   it('rejects an unknown record version instead of guessing', () => {
@@ -249,17 +278,56 @@ describe('cleared-data path: the wipe is a normal event, and only a backup survi
     // buys NOTHING against clear-site-data, because they all die together.
     // This asserts the module never wrote a second copy anywhere: after a wipe,
     // nothing on the origin can resurrect the seed.
+    //
+    // Assertions made REAL (a review caught the earlier version of this test
+    // passing vacuously): `databases()` existing is asserted rather than
+    // defaulted to `[]`, localStorage is asserted to be a real API before the
+    // absence claim means anything, and every database AND every key in it is
+    // enumerated — not just the one name we expected to write.
     const store = await openSecretStore({ indexedDB: indexedDBFactory });
     await store.save(record());
     store.close();
+
+    // Before the wipe the database must actually exist, or "absent after" is
+    // not a statement about anything.
+    expect(typeof indexedDBFactory.databases).toBe('function');
+    const before = await indexedDBFactory.databases();
+    expect(before.map((d) => d.name)).toContain(DB_NAME);
+
     await clearSiteData({ indexedDB: indexedDBFactory });
 
-    const databases =
-      typeof indexedDBFactory.databases === 'function'
-        ? await indexedDBFactory.databases()
-        : [];
-    expect(databases.map((d) => d.name)).not.toContain(DB_NAME);
-    expect(globalThis.localStorage?.getItem?.(`${DB_NAME}.seed`) ?? null).toBeNull();
+    const after = await indexedDBFactory.databases();
+    expect(after.map((d) => d.name)).not.toContain(DB_NAME);
+
+    // Enumerate every remaining database and every key in it: a second bucket
+    // under another name would be exactly the §5.6.2 defect.
+    const residue = [];
+    for (const info of after) {
+      const db = await new Promise((resolve, reject) => {
+        const req = indexedDBFactory.open(info.name);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      for (const storeName of Array.from(db.objectStoreNames)) {
+        const tx = db.transaction(storeName, 'readonly');
+        const keys = await new Promise((resolve, reject) => {
+          const req = tx.objectStore(storeName).getAllKeys();
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+        residue.push(...keys.map((k) => `${info.name}/${storeName}/${k}`));
+      }
+      db.close();
+    }
+    expect(residue).toEqual([]);
+
+    // localStorage: only a real claim if the API exists in this environment.
+    expect(typeof globalThis.localStorage).toBe('object');
+    const localKeys = [];
+    for (let i = 0; i < globalThis.localStorage.length; i += 1) {
+      localKeys.push(globalThis.localStorage.key(i));
+    }
+    expect(localKeys).toEqual([]);
   });
 });
 
@@ -288,6 +356,42 @@ describe('encrypted export: portable and opaque, never called "protected"', () =
     // Deliberately slow: two full-cost derivations (~0.7 s each idle, several
     // seconds on a loaded CI box). Keep the real cost, raise the budget.
   }, 60_000);
+
+  it('falls back to a cheaper cost when the shipped one cannot be allocated', async () => {
+    // A low-end phone can refuse the 128 MiB buffer. Falling back keeps the
+    // export working; the envelope records WHICH cost was used, so the backup
+    // still restores anywhere. The first attempt is made to fail like an OOM.
+    expect(KDF_FALLBACK_PARAMS.N).toBeLessThan(KDF_PARAMS.N);
+    expect(KDF_FALLBACK_PARAMS.N).toBeGreaterThanOrEqual(KDF_BOUNDS.minN);
+    expect(KDF_BOUNDS.maxN).toBeGreaterThanOrEqual(KDF_PARAMS.N);
+
+    const tried = [];
+    const oomAtShippedCost = async (pw, salt, params) => {
+      tried.push(params.N);
+      if (params.N === KDF_PARAMS.N) throw new RangeError('Array buffer allocation failed');
+      // Delegate the fallback attempt to the real derivation at its own cost.
+      const real = await import('@noble/hashes/scrypt.js');
+      return real.scryptAsync(pw, salt, params);
+    };
+
+    const envelope = await encryptRecoveryRecord(record(), PASSPHRASE, {
+      scryptAsync: oomAtShippedCost,
+    });
+    const parsed = JSON.parse(envelope);
+    // The fallback cost is what the envelope records — and it still decrypts.
+    expect(tried).toEqual([KDF_PARAMS.N, KDF_FALLBACK_PARAMS.N]);
+    expect(parsed.kdf).toMatchObject({ N: KDF_FALLBACK_PARAMS.N, r: 8, p: 1, dkLen: 32 });
+    await expect(decryptRecoveryRecord(envelope, PASSPHRASE)).resolves.toMatchObject({ seed: SEED });
+  }, 60_000);
+
+  it('reports BOTH costs failing as a typed error, never a silent no-op', async () => {
+    const alwaysOom = async () => {
+      throw new RangeError('Array buffer allocation failed');
+    };
+    await expect(
+      encryptRecoveryRecord(record(), PASSPHRASE, { scryptAsync: alwaysOom })
+    ).rejects.toMatchObject({ code: ERR.KDF_FAILED });
+  });
 
   it('carries NO plaintext seed, mint URL, counter or word from the phrase', async () => {
     const envelope = await encryptRecoveryRecord(record(), PASSPHRASE, fast);
@@ -343,6 +447,81 @@ describe('encrypted export: portable and opaque, never called "protected"', () =
     });
   });
 
+  it('refuses every manipulated header: kdf, salt, nonce, aead, or version', async () => {
+    // The parameters travel inside the file so old backups keep working. Whoever
+    // supplies the file can also rewrite the parameters, so every field must be
+    // refused when edited.
+    //
+    // Measured scope of this test (verified by mutation): it is driven by the
+    // *validators and the key/nonce inputs*, NOT by the AEAD's AAD binding.
+    // Replacing `canonicalHeader` with a constant leaves this test green, because
+    // kdf/salt feed the derived key, nonce feeds the stream, and magic/v/aead are
+    // rejected by explicit checks before any decryption. The AAD is
+    // defence-in-depth for a future header field that is none of those three
+    // things; do not read this test as proof that it works.
+    // Built at N=2^11 (not the suite's usual 2^10) so "weaken N" is a real edit
+    // rather than a no-op that would have made this case pass vacuously.
+    const good = JSON.parse(
+      await encryptRecoveryRecord(record(), PASSPHRASE, { kdfParams: { N: 2 ** 11 } })
+    );
+    expect(good.kdf.N).toBe(2 ** 11);
+    const edits = {
+      'kdf.N weakened to 1024': { ...good, kdf: { ...good.kdf, N: 2 ** 10 } },
+      'kdf.N strengthened': { ...good, kdf: { ...good.kdf, N: 2 ** 12 } },
+      'kdf.r raised': { ...good, kdf: { ...good.kdf, r: 9 } },
+      'kdf.dkLen changed': { ...good, kdf: { ...good.kdf, dkLen: 16 } },
+      'aead relabelled': { ...good, aead: 'aes-gcm' },
+      'salt swapped': { ...good, salt: Buffer.alloc(16, 1).toString('base64') },
+      'nonce swapped': { ...good, nonce: Buffer.alloc(24, 2).toString('base64') },
+      'magic changed': { ...good, magic: 'NOT-A-BACKUP' },
+      'version bumped': { ...good, v: 2 },
+    };
+    for (const [what, envelope] of Object.entries(edits)) {
+      await expect(
+        decryptRecoveryRecord(JSON.stringify(envelope), PASSPHRASE),
+        `${what} must not be accepted`
+      ).rejects.toBeInstanceOf(SecretStoreError);
+    }
+  });
+
+  it('refuses an unbounded or malformed KDF header before deriving (memory-exhaustion guard)', async () => {
+    const good = JSON.parse(await encryptRecoveryRecord(record(), PASSPHRASE, fast));
+    const hostile = [
+      { ...good, kdf: { ...good.kdf, N: 2 ** 30 } }, // ~1 TiB of scrypt memory
+      { ...good, kdf: { ...good.kdf, N: 3 } }, // not a power of two
+      { ...good, kdf: { ...good.kdf, N: 1.5 } },
+      { ...good, kdf: { ...good.kdf, r: 4096 } },
+      { ...good, kdf: { ...good.kdf, p: -1 } },
+      { ...good, kdf: { ...good.kdf, dkLen: 1 } },
+      { ...good, kdf: { name: 'argon2id', N: 1024, r: 8, p: 1, dkLen: 32 } },
+      { ...good, kdf: undefined },
+    ];
+    for (const envelope of hostile) {
+      // Typed, and quick: the point is that no derivation is attempted.
+      const t0 = Date.now();
+      await expect(decryptRecoveryRecord(JSON.stringify(envelope), PASSPHRASE)).rejects.toMatchObject(
+        { code: ERR.UNSUPPORTED_KDF }
+      );
+      expect(Date.now() - t0).toBeLessThan(1000);
+    }
+  });
+
+  it('turns a mangled base64 field into a TYPED error, not a raw DOMException', async () => {
+    const good = JSON.parse(await encryptRecoveryRecord(record(), PASSPHRASE, fast));
+    for (const field of ['salt', 'nonce', 'ct']) {
+      for (const bad of ['@@@', '', undefined, 42]) {
+        await expect(
+          decryptRecoveryRecord(JSON.stringify({ ...good, [field]: bad }), PASSPHRASE),
+          `${field}=${String(bad)} must be typed`
+        ).rejects.toMatchObject({ code: ERR.NOT_A_BACKUP });
+      }
+    }
+    // Right alphabet, wrong length: also a typed refusal, before any derivation.
+    await expect(
+      decryptRecoveryRecord(JSON.stringify({ ...good, salt: Buffer.alloc(4, 1).toString('base64') }), PASSPHRASE)
+    ).rejects.toMatchObject({ code: ERR.NOT_A_BACKUP });
+  });
+
   it('refuses to ENCRYPT a triple that could not restore (counters missing)', async () => {
     await expect(
       encryptRecoveryRecord(
@@ -391,7 +570,11 @@ describe('backup delivery: one tap where the platform allows it, honest fallback
         throw err;
       },
     };
-    await expect(shareBackup(backup(), { navigator: nav })).resolves.toEqual({ state: 'cancelled' });
+    const result = await shareBackup(backup(), { navigator: nav });
+    expect(result.state).toBe('cancelled');
+    // A dismissed sheet is NOT evidence of a backup: a caller that promoted the
+    // wallet to "exported" here would tell the user they have a file they do not.
+    expect(result.exportedAt).toBeNull();
   });
 
   it('falls back to a download when files cannot be shared (Firefox shares no files)', async () => {
@@ -411,20 +594,42 @@ describe('backup delivery: one tap where the platform allows it, honest fallback
       body: { appendChild: () => {} },
     };
     const nav = { canShare: () => false };
+    const revoked = [];
+    const deferred = [];
     const urlApi = {
       createObjectURL: () => 'blob:test',
-      revokeObjectURL: () => {},
+      revokeObjectURL: (u) => revoked.push(u),
     };
-    const result = await shareBackup(backup(), { navigator: nav, document: doc, urlApi });
+    const result = await shareBackup(backup(), {
+      navigator: nav,
+      document: doc,
+      urlApi,
+      now: 1_760_000_000_000,
+      defer: (fn) => deferred.push(fn),
+    });
     expect(result.state).toBe('downloaded');
+    expect(result.exportedAt).toBe(1_760_000_000_000);
     expect(clicked).toContain(`download:${backup().filename}`);
     expect(clicked).toContain('click');
+
+    // The revoke must NOT happen in the same task as the click: Firefox can
+    // abort the download when its blob URL dies first. This is the assertion the
+    // earlier version of this test lacked, and the bug it let through.
+    expect(revoked).toEqual([]);
+    expect(deferred).toHaveLength(1);
+    deferred[0]();
+    expect(revoked).toEqual(['blob:test']);
   });
 
   it('says "unavailable" rather than silently dropping the backup', async () => {
-    await expect(shareBackup(backup(), { navigator: {}, document: null })).resolves.toMatchObject({
-      state: 'unavailable',
-    });
+    // No `document` key at all: the real "this context has no DOM" path, rather
+    // than an explicit null which short-circuits the same check.
+    const nav = {};
+    const result = await shareBackup(backup(), { navigator: nav, urlApi: undefined });
+    expect(result.state).toBe('unavailable');
+    expect(result.exportedAt).toBeNull();
+    // And the caller is told to hand the text over by hand, not left with nothing.
+    expect(result.reason).toBeTruthy();
   });
 });
 
@@ -458,7 +663,7 @@ describe('persistence request: reports the truth on the plain-HTTP portal origin
 // 7. The cap T — the promise that makes the rest safe
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('resting cap: "the most you can lose is T" is enforced, not asserted', () => {
+describe('resting cap: "the most you can lose is T" is classified honestly', () => {
   it('is "ok" inside the cap with a durable copy already taken', () => {
     expect(enforceRestingCap({ balanceSats: 40, capSats: 80, lastExportAt: 1 })).toMatchObject({
       state: 'ok',
@@ -479,10 +684,46 @@ describe('resting cap: "the most you can lose is T" is enforced, not asserted', 
     expect(verdict.state).toBe('over-cap');
     expect(verdict.mustExport).toBe(true);
     expect(verdict.reason).toMatch(/promise is already broken/);
+    // The reported max loss is the ACTUAL balance, not the cap.
+    expect(verdict.maxLossSats).toBe(81);
   });
 
   it('treats a zero balance as nothing-to-lose, not as a pending export', () => {
     expect(enforceRestingCap({ balanceSats: 0, capSats: 80 })).toMatchObject({ state: 'ok' });
+  });
+
+  it('refuses to round an UNKNOWN balance up to healthy', () => {
+    // The mint is unreachable, or the amount failed to parse. "I do not know" is
+    // the most dangerous state for a promise about how much can be lost, so it
+    // must never come back as `ok` / no-export-needed.
+    for (const unknown of [undefined, null, NaN, Infinity, '40', {}]) {
+      const verdict = enforceRestingCap({ balanceSats: unknown, capSats: 80 });
+      expect(verdict.state, `balance ${String(unknown)}`).toBe('unknown');
+      expect(verdict.mustExport).toBe(true);
+      expect(verdict.maxLossSats).toBeNull();
+      expect(verdict.reason).toMatch(/NOT bounded/);
+    }
+  });
+
+  it('refuses a missing or nonsense cap instead of defaulting it to zero', () => {
+    // Defaulting capSats to 0 would turn every positive balance into over-cap,
+    // which silently reports the promise as broken for a config mistake.
+    for (const bad of [undefined, null, NaN, 0, -1, '80']) {
+      expect(() => enforceRestingCap({ balanceSats: 40, capSats: bad }), `cap ${String(bad)}`).toThrow(
+        /capSats must be a positive finite number/
+      );
+    }
+  });
+
+  it('never smooths over-cap or unknown back to ok, whatever lastExportAt says', () => {
+    // A durable copy does not rescue the cap promise: the money is still at risk
+    // of the user's device, not of eviction. Keep the two independent.
+    expect(
+      enforceRestingCap({ balanceSats: 200, capSats: 80, lastExportAt: 1 }).state
+    ).toBe('over-cap');
+    expect(enforceRestingCap({ balanceSats: NaN, capSats: 80, lastExportAt: 1 }).state).toBe(
+      'unknown'
+    );
   });
 });
 
@@ -490,38 +731,49 @@ describe('resting cap: "the most you can lose is T" is enforced, not asserted', 
 // 8. Disclosure wording — the forbidden claims are absent from the catalog
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('disclosure copy: the catalog may not say the false things (§5.6.6)', () => {
+describe('disclosure copy: EVERY secret_* string may not say the false things (§5.6.6)', () => {
+  // Scan the whole added namespace, not a hand-picked subset: an earlier version
+  // of this suite listed 8 keys and would have stayed green if, say,
+  // `secret_persist_granted` were reworded to "encrypted at rest, so it is
+  // protected" — the exact claim the module exists to refuse.
+  const secretKeys = Object.keys(en).filter((k) => k.startsWith('secret_'));
   const requiredKeys = [
     'secret_disclosure_none',
     'secret_disclosure_evictable',
     'secret_disclosure_exported',
     'secret_loss_cap',
-    'secret_export_action',
-    'secret_export_passphrase_label',
-    'secret_export_warning',
-    'secret_restore_action',
+    'secret_loss_over_cap',
   ];
 
-  it('defines every key the durability helper can return', () => {
-    for (const key of requiredKeys) {
-      expect(en[key], `${key} must be defined in public/locales/en.json`).toBeTruthy();
-      expect(typeof en[key]).toBe('string');
-      expect(en[key].trim().length).toBeGreaterThan(0);
+  it('finds the whole namespace, not just the keys the helper returns', () => {
+    // 19 today; a floor, not an equality, so adding a string cannot fail here —
+    // but dropping the namespace (or a key rename) can.
+    expect(secretKeys.length).toBeGreaterThanOrEqual(19);
+    for (const key of requiredKeys) expect(secretKeys).toContain(key);
+  });
+
+  it('defines every key the durability helper can return, non-empty', () => {
+    for (const key of secretKeys) {
+      expect(typeof en[key], `${key} must be a string`).toBe('string');
+      expect(en[key].trim().length, `${key} must not be empty`).toBeGreaterThan(0);
     }
   });
 
   it('never claims safety, custody, a keychain, or that encryption protects the money', () => {
     const forbidden = [
       /your money is safe/i,
+      /the money is safe/i,
+      /is safe to use/i,
       /secure enclave/i,
-      /os keychain/i,
       /keychain/i,
+      /keystore/i,
+      /hardware-backed/i,
       /encrypted at rest/i,
       /protected by encryption/i,
       /we can recover it for you/i,
       /sign in to restore/i,
     ];
-    for (const key of requiredKeys) {
+    for (const key of secretKeys) {
       for (const pattern of forbidden) {
         expect(en[key], `${key} must not match ${pattern}`).not.toMatch(pattern);
       }
@@ -530,8 +782,84 @@ describe('disclosure copy: the catalog may not say the false things (§5.6.6)', 
 
   it('states the loss cap by name, and does not promise recovery from the seed alone', () => {
     expect(en.secret_loss_cap).toMatch(/\{\{cap\}\}/);
-    for (const key of requiredKeys) {
+    // The over-cap string is the honest counterpart: a user holding MORE than the
+    // cap must not be shown "the most you can lose is {{cap}}".
+    expect(en.secret_loss_over_cap).toMatch(/\{\{cap\}\}/);
+    for (const key of secretKeys) {
       expect(en[key]).not.toMatch(/restore from the seed alone/i);
     }
+  });
+
+  it('does not let the persist-granted string out-claim the module itself', () => {
+    // `requestPersistentStorage` reports "survives storage pressure, NOT
+    // clear-site-data". The user-facing string must not contradict it.
+    expect(en.secret_persist_granted).not.toMatch(/until you clear/i);
+    expect(en.secret_persist_granted).toMatch(/clear site data|reset|storage pressure/i);
+  });
+
+  it('never asserts a wiped device is a BRAND NEW one', () => {
+    // A wipe is indistinguishable from a fresh install, which is why the module
+    // reports `wipeLossUndetectable`. "...on it yet" would assert newness.
+    expect(en.secret_disclosure_none).not.toMatch(/yet/i);
+    expect(en.secret_disclosure_none).toMatch(/erased|no wallet is stored/i);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. The durability verdict is driven by EVIDENCE, not by intent
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('durability: "you have a backup" is only said after a backup actually left', () => {
+  it('does not accept a cancelled share as evidence', async () => {
+    const nav = {
+      canShare: () => true,
+      share: async () => {
+        const err = new Error('dismissed');
+        err.name = 'AbortError';
+        throw err;
+      },
+    };
+    const evidence = await shareBackup(buildBackupFile('{"a":1}'), { navigator: nav });
+    expect(evidence.exportedAt).toBeNull();
+    // Feeding that to the verdict must NOT produce 'exported'.
+    expect(
+      describeDurability({ recordPresent: true, lastExportAt: evidence.exportedAt }).level
+    ).toBe('evictable');
+  });
+
+  it('promotes to "exported" only when an exportedAt was returned', () => {
+    const verdict = describeDurability({ recordPresent: true, lastExportAt: 1_760_000_000_000 });
+    expect(verdict.level).toBe('exported');
+    expect(verdict.durableCopy).toBe(true);
+    expect(verdict.wipeLossUndetectable).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. A corrupt stored record is refused on READ, not handed to the caller
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('stored record: re-validated on load, so a bad write cannot become a wallet', () => {
+  it('refuses a record that is invalid but present (a future version, or devtools)', async () => {
+    const store = await openSecretStore({ indexedDB: indexedDBFactory });
+    // Bypass `save`'s validation the way a hand edit or a future writer would.
+    const raw = await new Promise((resolve, reject) => {
+      const openReq = indexedDBFactory.open(DB_NAME);
+      openReq.onsuccess = () => resolve(openReq.result);
+      openReq.onerror = () => reject(openReq.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = raw.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(
+        { v: 1, seed: 'not a mnemonic', countersByKeyset: {}, mintUrls: [], keysetPolicy: 'deterministic' },
+        RECORD_KEY
+      );
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    raw.close();
+
+    await expect(store.load()).rejects.toMatchObject({ code: ERR.CORRUPT_RECORD });
+    store.close();
   });
 });

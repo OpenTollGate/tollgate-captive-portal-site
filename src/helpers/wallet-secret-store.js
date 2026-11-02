@@ -83,6 +83,24 @@ export const RECORD_KEY = 'v1';
 // path, which is what makes that acceptable. The parameters travel in the
 // envelope, so raising them later does not strand backups made today.
 export const KDF_PARAMS = Object.freeze({ N: 2 ** 17, r: 8, p: 1, dkLen: 32 });
+
+// The fallback cost, used only when the shipped cost cannot be ALLOCATED (a
+// low-end phone with other tabs open: N=2^17,r=8 needs one 128 MiB buffer). The
+// envelope records whichever cost was actually used, so a backup made on the
+// fallback restores anywhere. 2^15 = 32 MiB, still far above a GPU-fodder cost.
+export const KDF_FALLBACK_PARAMS = Object.freeze({ N: 2 ** 15, r: 8, p: 1, dkLen: 32 });
+
+// Bounds for a KDF header that arrives from a FILE, i.e. from an attacker. A
+// backup envelope carries its own scrypt parameters so old backups keep
+// working, which means a hostile file can ask us to allocate 128·N·r bytes.
+// These bounds are what stop `N: 2**30` from being a memory-exhaustion gadget.
+export const KDF_BOUNDS = Object.freeze({
+  minN: 2 ** 10,
+  maxN: 2 ** 20,
+  maxR: 16,
+  maxP: 4,
+});
+
 export const SALT_BYTES = 16;
 export const NONCE_BYTES = 24;
 
@@ -97,6 +115,11 @@ export const ERR = Object.freeze({
   WRONG_PASSPHRASE_OR_TAMPERED: 'E_AUTH',
   NO_INDEXEDDB: 'E_NO_IDB',
   EMPTY_PASSPHRASE: 'E_PASSPHRASE',
+  UNSUPPORTED_KDF: 'E_KDF',
+  KDF_FAILED: 'E_KDF_FAILED',
+  CORRUPT_RECORD: 'E_CORRUPT_RECORD',
+  STORE_BLOCKED: 'E_IDB_BLOCKED',
+  BAD_CAP: 'E_BAD_CAP',
 });
 
 export class SecretStoreError extends Error {
@@ -116,19 +139,29 @@ export class SecretStoreError extends Error {
  * @param {string} input.seed                 BIP-39 mnemonic
  * @param {Record<string, number>} input.countersByKeyset
  * @param {string[]} input.mintUrls
+ * @param {string} [input.keysetPolicy]       the WALLET's actual policy for this mint
  * @param {number} [input.now]                epoch ms, injectable for tests
  * @returns {object} frozen record
  */
-export function createRecoveryRecord({ seed, countersByKeyset, mintUrls, now } = {}) {
+export function createRecoveryRecord({
+  seed,
+  countersByKeyset,
+  mintUrls,
+  keysetPolicy,
+  now,
+} = {}) {
   const record = {
     v: RECORD_VERSION,
     seed: typeof seed === 'string' ? seed.trim().replace(/\s+/g, ' ') : seed,
     countersByKeyset: countersByKeyset,
     mintUrls: mintUrls,
-    // Only `deterministic` outputs are NUT-09 recoverable. Recording it makes a
-    // future accidental switch to random secrets a *visible* backup defect
-    // instead of a silent one.
-    keysetPolicy: 'deterministic',
+    // Only `deterministic` outputs are NUT-09 recoverable. This is the CALLER's
+    // statement about the wallet it is reading, not a constant this module can
+    // know — a hard-coded 'deterministic' would assert something about a wallet
+    // it has never seen, and nothing in the module could detect a wallet that
+    // switched to random secrets. So it is an input, and `validateRecoveryRecord`
+    // REFUSES it when absent rather than filling it in.
+    keysetPolicy,
     createdAt: typeof now === 'number' ? now : Date.now(),
   };
   const verdict = validateRecoveryRecord(record);
@@ -206,20 +239,31 @@ export function validateRecoveryRecord(record) {
     }
   }
 
-  if (record.keysetPolicy !== undefined && record.keysetPolicy !== 'deterministic') {
+  if (record.keysetPolicy !== 'deterministic') {
     return {
       ok: false,
       code: ERR.MISSING_COUNTERS,
-      message: `keysetPolicy ${record.keysetPolicy} is not recoverable (only deterministic is)`,
+      message:
+        record.keysetPolicy === undefined
+          ? 'keysetPolicy is required: a backup must record that the keysets are NUT-09 deterministic'
+          : `keysetPolicy ${record.keysetPolicy} is not recoverable (only deterministic is)`,
     };
   }
 
   return { ok: true };
 }
 
-/** True when `seed` is a valid BIP-39 mnemonic in the English wordlist. */
+/**
+ * True when `seed` is a valid BIP-39 mnemonic in the English wordlist.
+ *
+ * Normalises whitespace the same way `createRecoveryRecord` does. Without that,
+ * a phrase pasted from a password manager with a double or trailing space
+ * validates here and is then rewritten by the constructor, so the two halves of
+ * the "is this a seed?" question disagree about the same input.
+ */
 export function isValidSeedPhrase(seed) {
-  return typeof seed === 'string' && bip39.validateMnemonic(seed.trim(), englishWordlist);
+  if (typeof seed !== 'string') return false;
+  return bip39.validateMnemonic(seed.trim().replace(/\s+/g, ' '), englishWordlist);
 }
 
 /** Generate a fresh 12-word seed on the device. Entropy comes from the platform CSPRNG. */
@@ -233,6 +277,28 @@ function wrapRequest(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error('indexeddb request failed'));
+  });
+}
+
+/**
+ * Wrap a request that has an `onblocked` state.
+ *
+ * `deleteDatabase` (and an upgrade with another tab holding an older version)
+ * fires `blocked`, NOT `error`. A promise that only listens for the latter never
+ * settles, and a wipe-simulation helper that hangs is worse than one that
+ * throws — the test would time out with no diagnosis at all.
+ */
+function wrapBlockableRequest(request, what) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error(`${what} failed`));
+    request.onblocked = () =>
+      reject(
+        new SecretStoreError(
+          ERR.STORE_BLOCKED,
+          `${what} is blocked: another tab or open connection still holds the database`
+        )
+      );
   });
 }
 
@@ -292,7 +358,16 @@ export async function openSecretStore(opts = {}) {
     /** @returns {Promise<object|null>} */
     async load() {
       const value = await withStore('readonly', (s) => wrapRequest(s.get(RECORD_KEY)));
-      return value === undefined ? null : value;
+      if (value === undefined || value === null) return null;
+      // Re-validate on READ as well as on write. A record written by a future
+      // version, or edited through devtools, must not be handed to the caller as
+      // a usable wallet: the same check that guards `save` also guards `load`,
+      // and a bad one degrades to "no wallet here" instead of a half-usable one.
+      const verdict = validateRecoveryRecord(value);
+      if (!verdict.ok) {
+        throw new SecretStoreError(ERR.CORRUPT_RECORD, `stored record is not usable: ${verdict.message}`);
+      }
+      return value;
     },
     async clear() {
       await withStore('readwrite', (s) => s.delete(RECORD_KEY));
@@ -322,7 +397,9 @@ export async function clearSiteData(opts = {}) {
       : undefined;
   if (!f) return { cleared: false, reason: ERR.NO_INDEXEDDB };
   const name = opts.dbName || DB_NAME;
-  await wrapRequest(f.deleteDatabase(name));
+  // `onblocked`, not `onerror`, is what fires when another tab still holds the
+  // database — so this must reject rather than hang.
+  await wrapBlockableRequest(f.deleteDatabase(name), `deleteDatabase(${name})`);
   return { cleared: true, dbName: name };
 }
 
@@ -380,6 +457,87 @@ function randomBytes(env, n) {
 }
 
 /**
+ * The authenticated header.
+ *
+ * Every field here is covered by the Poly1305 tag, so it cannot be edited
+ * without the passphrase. That matters most for `kdf`: the parameters travel in
+ * the file (so old backups keep working), and an unauthenticated `kdf` would let
+ * whoever supplied the file claim `N: 2` and hand us a backup that opens with a
+ * weak derivation, or claim `N: 2**30` and turn restore into a memory bomb.
+ * `salt` and `nonce` are in here too — a swapped salt is a different key, and a
+ * swapped nonce with a reused key would be a nonce-reuse bug.
+ *
+ * Serialised by hand in a FIXED order rather than via JSON.stringify of the
+ * parsed object, so a field order change in a future writer cannot silently
+ * invalidate every existing backup.
+ */
+function canonicalHeader({ magic, v, aead, kdf, salt }) {
+  return JSON.stringify({
+    aead,
+    kdf: { name: kdf.name, N: kdf.N, r: kdf.r, p: kdf.p, dkLen: kdf.dkLen },
+    magic,
+    salt,
+    v,
+  });
+}
+
+/** Validate KDF parameters that arrived from a FILE, before they are used. */
+function assertSafeKdfParams(kdf) {
+  const bad = (why) => new SecretStoreError(ERR.UNSUPPORTED_KDF, `refusing backup KDF: ${why}`);
+  if (!kdf || kdf.name !== 'scrypt') throw bad('only scrypt is understood');
+  const ints = ['N', 'r', 'p', 'dkLen'];
+  for (const field of ints) {
+    if (!Number.isInteger(kdf[field])) throw bad(`${field} is not an integer`);
+  }
+  if (kdf.N < KDF_BOUNDS.minN || kdf.N > KDF_BOUNDS.maxN) {
+    throw bad(`N ${kdf.N} is outside ${KDF_BOUNDS.minN}..${KDF_BOUNDS.maxN}`);
+  }
+  // scrypt requires a power of two; a non-power-of-two N throws inside @noble
+  // with a raw error, so reject it here where the failure can be typed.
+  if ((kdf.N & (kdf.N - 1)) !== 0) throw bad(`N ${kdf.N} is not a power of two`);
+  if (kdf.r < 1 || kdf.r > KDF_BOUNDS.maxR) throw bad(`r ${kdf.r} is outside 1..${KDF_BOUNDS.maxR}`);
+  if (kdf.p < 1 || kdf.p > KDF_BOUNDS.maxP) throw bad(`p ${kdf.p} is outside 1..${KDF_BOUNDS.maxP}`);
+  if (kdf.dkLen !== 32) throw bad(`dkLen ${kdf.dkLen} is not 32`);
+  return kdf;
+}
+
+/** Decode one base64 envelope field, or fail with a typed error. */
+function decodeField(envelope, field) {
+  const value = envelope[field];
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new SecretStoreError(ERR.NOT_A_BACKUP, `envelope field ${field} is missing`);
+  }
+  try {
+    return fromBase64(value);
+  } catch {
+    // A truncated or e-mail-mangled backup is the ordinary case here, not an
+    // attack: it must reach the UI as "that file is not a backup", never as a
+    // raw DOMException the caller cannot branch on.
+    throw new SecretStoreError(ERR.NOT_A_BACKUP, `envelope field ${field} is not valid base64`);
+  }
+}
+
+async function deriveKey(passphrase, salt, kdf, env = {}) {
+  // `env.scryptAsync` is a test seam only: it exists so the OOM-fallback path can
+  // be exercised without actually allocating 128 MiB and dying. Production never
+  // passes it.
+  const scrypt = env.scryptAsync || scryptAsync;
+  try {
+    return await scrypt(new TextEncoder().encode(passphrase.normalize('NFKD')), salt, {
+      N: kdf.N,
+      r: kdf.r,
+      p: kdf.p,
+      dkLen: kdf.dkLen,
+    });
+  } catch (error) {
+    throw new SecretStoreError(
+      ERR.KDF_FAILED,
+      `the key derivation failed on this device (${String((error && error.message) || error)})`
+    );
+  }
+}
+
+/**
  * Encrypt a recovery record into a portable JSON envelope.
  *
  * The passphrase is the ONLY thing the user must remember, so this is the rail
@@ -399,28 +557,49 @@ export async function encryptRecoveryRecord(record, passphrase, env = {}) {
   // `env.kdfParams` exists for the test suite (a full-cost scrypt per case is
   // ~0.7 s of CPU and dominates a parallel run). Production never passes it, so
   // the shipped cost is KDF_PARAMS and the default-cost test pins that.
-  const params = { ...KDF_PARAMS, ...(env.kdfParams || {}) };
+  const wanted = { ...KDF_PARAMS, ...(env.kdfParams || {}) };
   const salt = randomBytes(env, SALT_BYTES);
   const nonce = randomBytes(env, NONCE_BYTES);
-  const kdf = { name: 'scrypt', ...params };
-  const key = await scryptAsync(
-    new TextEncoder().encode(passphrase.normalize('NFKD')),
-    salt,
-    { N: kdf.N, r: kdf.r, p: kdf.p, dkLen: kdf.dkLen }
-  );
-  const ciphertext = xchacha20poly1305(key, nonce).encrypt(
+
+  // Two attempts, not one: the shipped cost allocates a 128 MiB buffer, which a
+  // low-end phone with other tabs open can refuse. The fallback is only used
+  // when the FIRST attempt fails to allocate, and the parameters of whichever
+  // one succeeded are recorded in the envelope — so a backup made on the
+  // fallback restores on any device. A failure at both costs is a typed error,
+  // because "the export button does nothing" is the worst possible outcome here.
+  const attempts = env.kdfParams ? [wanted] : [wanted, { ...KDF_FALLBACK_PARAMS }];
+  let kdf = null;
+  let key = null;
+  const failures = [];
+  for (const candidate of attempts) {
+    const params = { name: 'scrypt', ...candidate };
+    try {
+      assertSafeKdfParams(params);
+      key = await deriveKey(passphrase, salt, params, env);
+      kdf = params;
+      break;
+    } catch (error) {
+      failures.push(params.N);
+    }
+  }
+  if (!key) {
+    throw new SecretStoreError(
+      ERR.KDF_FAILED,
+      `the key derivation failed at every supported cost (tried N=${failures.join(', ')})`
+    );
+  }
+
+  const saltB64 = toBase64(salt);
+  const header = { magic: BACKUP_MAGIC, v: BACKUP_VERSION, aead: 'xchacha20poly1305', kdf, salt: saltB64 };
+  const ciphertext = xchacha20poly1305(key, nonce, new TextEncoder().encode(canonicalHeader(header))).encrypt(
     new TextEncoder().encode(JSON.stringify(record))
   );
 
   // The envelope carries everything needed to decrypt on a NEW device with
-  // nothing but the passphrase: KDF params, salt, nonce. AAD binds the magic +
-  // version so a version downgrade cannot be replayed.
+  // nothing but the passphrase: KDF params, salt, nonce. The header above is
+  // passed as AAD, so none of it can be edited without failing authentication.
   return JSON.stringify({
-    magic: BACKUP_MAGIC,
-    v: BACKUP_VERSION,
-    aead: 'xchacha20poly1305',
-    kdf,
-    salt: toBase64(salt),
+    ...header,
     nonce: toBase64(nonce),
     ct: toBase64(ciphertext),
   });
@@ -452,30 +631,45 @@ export async function decryptRecoveryRecord(envelopeText, passphrase) {
       `backup version ${envelope.v} is not ${BACKUP_VERSION}`
     );
   }
-  const kdf = envelope.kdf || {};
-  if (kdf.name !== 'scrypt' || !Number.isInteger(kdf.N) || !Number.isInteger(kdf.r)) {
-    throw new SecretStoreError(ERR.NOT_A_BACKUP, 'unsupported KDF');
+  const aead = envelope.aead;
+  if (aead !== 'xchacha20poly1305') {
+    throw new SecretStoreError(ERR.NOT_A_BACKUP, `unsupported AEAD ${aead}`);
+  }
+  // Bounds BEFORE the derivation: these parameters came from a file, and an
+  // unbounded N is a memory-exhaustion gadget (128·N·r bytes).
+  const kdf = assertSafeKdfParams(envelope.kdf);
+
+  const salt = decodeField(envelope, 'salt');
+  const nonce = decodeField(envelope, 'nonce');
+  const ciphertext = decodeField(envelope, 'ct');
+  if (salt.length !== SALT_BYTES || nonce.length !== NONCE_BYTES) {
+    throw new SecretStoreError(ERR.NOT_A_BACKUP, 'wrong salt or nonce length');
   }
 
-  const key = await scryptAsync(
-    new TextEncoder().encode(passphrase.normalize('NFKD')),
-    fromBase64(envelope.salt),
-    { N: kdf.N, r: kdf.r, p: kdf.p, dkLen: kdf.dkLen || 32 }
-  );
+  const key = await deriveKey(passphrase, salt, kdf);
 
   let plaintext;
   try {
-    plaintext = xchacha20poly1305(key, fromBase64(envelope.nonce)).decrypt(
-      fromBase64(envelope.ct)
+    plaintext = xchacha20poly1305(key, nonce, new TextEncoder().encode(canonicalHeader(envelope))).decrypt(
+      ciphertext
     );
   } catch {
+    // One failure for a wrong passphrase AND for tampering, deliberately: an
+    // oracle that distinguished them would confirm a guessed passphrase on a
+    // file the attacker already has.
     throw new SecretStoreError(
       ERR.WRONG_PASSPHRASE_OR_TAMPERED,
       'the passphrase is wrong or the backup was modified'
     );
   }
 
-  const record = JSON.parse(new TextDecoder().decode(plaintext));
+  let record;
+  try {
+    record = JSON.parse(new TextDecoder().decode(plaintext));
+  } catch {
+    // Authenticated but unparseable: a writer bug, not a user error. Still typed.
+    throw new SecretStoreError(ERR.CORRUPT_RECORD, 'the backup decrypted to something that is not JSON');
+  }
   const verdict = validateRecoveryRecord(record);
   if (!verdict.ok) {
     // Decryption succeeded but the payload is not a usable triple. That is a
@@ -515,9 +709,23 @@ export function buildBackupFile(envelopeText, opts = {}) {
  * (Chrome Android >= 76, iOS Safari >= 14). Firefox cannot share files at all,
  * so the `<a download>` path is a real fallback and not decoration.
  *
- * @returns {Promise<{state: 'shared'|'cancelled'|'downloaded'|'unavailable', reason?: string}>}
+ * "One tap" is a claim about THIS function, not about the whole export: the
+ * caller must derive the key (seconds of scrypt) before it has a file to share,
+ * and Safari's transient user activation for `share()` is typically gone by
+ * then. So on iOS expect `NotAllowedError` here followed by the download path —
+ * which is honest and still saves the file, just not via the share sheet. Do not
+ * describe the iOS flow to a user as "one tap to your Files app".
+ *
+ * The return value is the durability EVIDENCE, not just a status word:
+ * `exportedAt` is set only when the file actually left the page, so a caller
+ * cannot promote a wallet to "you have a backup" after the user dismissed the
+ * sheet. That distinction is the difference between a disclosure that is true
+ * and one that lies to a user about their only copy.
+ *
+ * @returns {Promise<{state: 'shared'|'cancelled'|'downloaded'|'unavailable', exportedAt: number|null, reason?: string}>}
  */
 export async function shareBackup(backup, env = {}) {
+  const now = typeof env.now === 'number' ? env.now : Date.now();
   const nav = env.navigator || (typeof navigator !== 'undefined' ? navigator : undefined);
   const canShareFiles =
     !!nav &&
@@ -534,10 +742,11 @@ export async function shareBackup(backup, env = {}) {
   if (canShareFiles) {
     try {
       await nav.share({ files: [backup.file], title: 'TollGate wallet backup' });
-      return { state: 'shared' };
+      return { state: 'shared', exportedAt: now };
     } catch (error) {
-      // AbortError means the user closed the sheet — not a failure to report.
-      if (error && error.name === 'AbortError') return { state: 'cancelled' };
+      // AbortError means the user closed the sheet — not a failure to report,
+      // and NOT evidence of a backup.
+      if (error && error.name === 'AbortError') return { state: 'cancelled', exportedAt: null };
       // Anything else falls through to the download path rather than losing
       // the backup.
     }
@@ -558,12 +767,23 @@ export async function shareBackup(backup, env = {}) {
     doc.body.appendChild(a);
     a.click();
     a.remove();
-    if (typeof urlApi.revokeObjectURL === 'function') urlApi.revokeObjectURL(url);
-    return { state: 'downloaded' };
+    // Revoke LATER, never in the same task. Revoking synchronously can abort the
+    // download it was created for: the browser hands the blob URL to the
+    // download manager and resolves it asynchronously, so a URL that is gone
+    // first leaves Firefox (the browser this branch exists for) with nothing.
+    // The leak is bounded — one blob per export, released on the next one.
+    if (typeof urlApi.revokeObjectURL === 'function') {
+      const release = () => urlApi.revokeObjectURL(url);
+      if (typeof env.defer === 'function') env.defer(release);
+      else if (typeof setTimeout === 'function') setTimeout(release, 60_000);
+      // No timer available at all: leak the one URL rather than lose the file.
+    }
+    return { state: 'downloaded', exportedAt: now };
   }
 
   return {
     state: 'unavailable',
+    exportedAt: null,
     reason: 'neither Web Share (files) nor a download anchor is available in this context',
   };
 }
@@ -571,21 +791,45 @@ export async function shareBackup(backup, env = {}) {
 // ── the policy cap (T), and what may be promised ────────────────────────────
 
 /**
- * Enforce the resting-balance cap.
+ * Classify the resting balance against the cap.
  *
  * "The most you can lose is T" is the load-bearing promise of the design, and
- * it is true only while the unexported balance stays under the cap. This is a
- * pure function so the rule is testable and cannot drift into the UI.
+ * it holds only while the unexported balance stays under the cap. This is a
+ * pure function so the rule cannot drift into the UI — but note what that means
+ * and what it does not: **it classifies, it does not enforce.** A wallet write
+ * path that never calls it is unaffected, so the caller (WS-2) is what enforces
+ * the cap. Read `state` and refuse the write; do not treat this module's
+ * existence as the enforcement.
+ *
+ * An UNKNOWN balance is never `ok`. If the mint is unreachable or the amount did
+ * not parse, we cannot say the loss is bounded by T, so the honest answer is
+ * `unknown` with `mustExport: true`.
  *
  * @param {object} input
  * @param {number} input.balanceSats
  * @param {number} input.capSats
  * @param {number|null} [input.lastExportAt]
- * @returns {{state: 'ok'|'export-due'|'over-cap', maxLossSats: number, mustExport: boolean, reason: string}}
+ * @returns {{state: 'ok'|'export-due'|'over-cap'|'unknown', maxLossSats: number|null, mustExport: boolean, reason: string}}
  */
 export function enforceRestingCap({ balanceSats, capSats, lastExportAt = null } = {}) {
-  const balance = Number.isFinite(balanceSats) ? balanceSats : 0;
-  const cap = Number.isFinite(capSats) ? capSats : 0;
+  if (!Number.isFinite(capSats) || capSats <= 0) {
+    throw new SecretStoreError(
+      ERR.BAD_CAP,
+      `capSats must be a positive finite number, got ${capSats}: without a cap there is no bound to promise`
+    );
+  }
+  const cap = capSats;
+
+  if (!Number.isFinite(balanceSats)) {
+    return {
+      state: 'unknown',
+      maxLossSats: null,
+      mustExport: true,
+      reason:
+        'balance is unknown (mint unreachable or amount unparsed): the loss is NOT bounded by the cap until it is known, so treat it as an export-due state',
+    };
+  }
+  const balance = balanceSats;
 
   if (balance > cap) {
     return {
@@ -621,13 +865,32 @@ export function enforceRestingCap({ balanceSats, capSats, lastExportAt = null } 
  *   'passkey'    seed wrapped by a PRF-derived key (opportunistic, Chrome only)
  *
  * There is deliberately no 'safe' level and no wording that implies custody.
+ *
+ * `lastExportAt` must come from EVIDENCE, i.e. from `shareBackup()['exportedAt']`
+ * for a run that actually handed the file off — never from the fact that the
+ * export sheet was opened. A cancelled or unavailable share is not a backup, and
+ * telling a user "you have a backup file" when they dismissed the sheet is the
+ * one lie this module exists to prevent.
+ *
+ * This module does not persist `lastExportAt`. Whatever owns the wallet must,
+ * because `'exported'` is otherwise forgotten on the next reload and the user
+ * drops back to `'evictable'` with a backup they still have.
+ *
+ * `overCap` is passed through rather than hidden: when it is true the "at most T"
+ * promise is already broken, so the UI must show the over-cap string, not the cap.
  */
-export function describeDurability({ caps = {}, recordPresent = false, lastExportAt = null } = {}) {
+export function describeDurability({
+  caps = {},
+  recordPresent = false,
+  lastExportAt = null,
+  overCap = false,
+} = {}) {
   if (!recordPresent) {
     return {
       level: 'none',
       disclosureKey: 'secret_disclosure_none',
-      maxLossSatsKey: 'secret_loss_cap',
+      maxLossSatsKey: overCap ? 'secret_loss_over_cap' : 'secret_loss_cap',
+      overCap,
       durableCopy: false,
       // A wiped origin looks identical to a fresh one. We cannot know, so the
       // UI must disclose at the first funded moment rather than guess.
@@ -639,7 +902,8 @@ export function describeDurability({ caps = {}, recordPresent = false, lastExpor
     return {
       level: 'exported',
       disclosureKey: 'secret_disclosure_exported',
-      maxLossSatsKey: 'secret_loss_cap',
+      maxLossSatsKey: overCap ? 'secret_loss_over_cap' : 'secret_loss_cap',
+      overCap,
       durableCopy: true,
       wipeLossUndetectable: false,
       reasons: ['an encrypted backup exists off-device'],
@@ -648,7 +912,8 @@ export function describeDurability({ caps = {}, recordPresent = false, lastExpor
   return {
     level: 'evictable',
     disclosureKey: 'secret_disclosure_evictable',
-    maxLossSatsKey: 'secret_loss_cap',
+    maxLossSatsKey: overCap ? 'secret_loss_over_cap' : 'secret_loss_cap',
+    overCap,
     durableCopy: false,
     wipeLossUndetectable: true,
     reasons: [

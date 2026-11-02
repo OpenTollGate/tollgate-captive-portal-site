@@ -1188,7 +1188,7 @@ which makes it a Chrome-only *upgrade* that must never be on the critical path,
 and FSA is a fleet-only rail whose per-session re-grant is meaningless on a
 walk-up BYOD device. Both stay in §5.6.1 as ranked options.
 
-| §5.6 decision | Where it is enforced in code | How it is proven |
+| §5.6 decision | Where it is decided/classified in code | How it is proven |
 |---|---|---|
 | The recovery triple is `{seed, countersByKeyset, mintUrls}` and nothing less is a backup (5.4 item 5) | `createRecoveryRecord` / `validateRecoveryRecord` — runs checksum-and-wordlist validation on the phrase, requires ≥1 non-negative integer counter, requires ≥1 `http(s)` mint URL, and rejects `keysetPolicy !== 'deterministic'` | 7 cases, incl. "a seed alone cannot restore" and "rejects a non-http mint URL" |
 | Rank 1: seed in IndexedDB, restored after a reload with no user action | `openSecretStore().save/load`, one record, one key | "writes the triple and reads it back from a NEW store handle (a reload)" |
@@ -1198,7 +1198,7 @@ walk-up BYOD device. Both stay in §5.6.1 as ranked options.
 | `persist()` is best-effort and secure-context-gated; never a guarantee | `requestPersistentStorage` returns `'unavailable'` where the API is absent (i.e. on the plain-HTTP portal origin) and, when `'granted'`, still says *"survives storage pressure, NOT clear-site-data"* | 3 cases incl. "never claims eviction-proof storage even when granted" |
 | Rank 2: one-tap encrypted export; Web Share first, download fallback; honest "no rail" | `encryptRecoveryRecord`, `buildBackupFile`, `shareBackup` | 5 delivery cases: share, `AbortError` ⇒ `cancelled`, download fallback (Firefox), `unavailable` |
 | Encryption is **portability + opacity**, never "protection" | the blob carries no plaintext word of the phrase, no mint URL, no counter; Poly1305 makes a wrong passphrase and tampering the SAME typed failure | 5 cases incl. "carries NO plaintext seed…" and "does not distinguish tampering from a wrong passphrase" |
-| **"The most you can lose is T" is the load-bearing promise** | `enforceRestingCap` returns `ok` / `export-due` / `over-cap` with `maxLossSats` | 4 cases; `over-cap` reports that the promise is *already broken*, not that it is fine |
+| **"The most you can lose is T" is the load-bearing promise** | `enforceRestingCap` returns `ok` / `export-due` / `over-cap` / `unknown` with `maxLossSats`, and an UNKNOWN balance is never `ok` | 5 cases; `over-cap` reports that the promise is *already broken*, not that it is fine, and `unknown` forces an export. **Classified here, enforced by WS-2** — this module has no funding path, so a caller that never reads the verdict is unaffected |
 | The forbidden sentences cannot reach user-facing text | all four disclosure levels carry a locale key; the catalog is asserted against the §5.6.6 forbidden list | "never claims safety, custody, a keychain, or that encryption protects the money" over every key |
 
 **Three implementation choices this adds to the record, each deliberate:**
