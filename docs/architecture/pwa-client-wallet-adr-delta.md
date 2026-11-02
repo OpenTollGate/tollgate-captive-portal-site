@@ -1175,6 +1175,55 @@ Each is FALSE, and each is the kind of sentence that gets written by accident:
 | "Add to Home Screen on iOS and your money is safe — the install exempts the wallet from the 7-day deletion." | **Still forbidden, but the reason is now narrower than an earlier revision said.** The exemption *is* documented (WebKit's policy names the home-screen first-party domain as exempt from the 7-day cap on all script-writeable storage, the class IndexedDB is in — §5.6.5). What makes the sentence false is everything the exemption does **not** cover: `Clear-Site-Data: "storage"`, a profile reset, private browsing, device loss, and any non-WebKit engine — plus the fact that it is documented **policy** whose in-practice behaviour on a current iOS is a field check (§11(10)). The install is a *capability* requirement and a documented ITP-exemption; durability is the `T` cap plus the export. |
 | "In 7 days iOS deletes the wallet's IndexedDB." | **`UNVERIFIED` as a flat statement** (§5.6.5(c)) — there is no IndexedDB-specific seven-day clause in WebKit's policy, so the converse claim is not settled either. Label it, do not assert it. |
 
+#### 5.6.7 The shipped implementation of this section — what landed, and what it refuses to do
+
+The decision above is no longer prose. It is
+`src/helpers/wallet-secret-store.js` with `tests/unit/wallet-secret-store.test.js`
+(39 cases) pinning it. This subsection records the mapping, because a future
+reader's first question will be "is any of §5.6 actually built?".
+
+**The module implements ranks 1 and 2 only.** Rank 3 (passkey PRF) and rank 4
+(File System Access) are NOT implemented: PRF `get()` is Safari-unsupported,
+which makes it a Chrome-only *upgrade* that must never be on the critical path,
+and FSA is a fleet-only rail whose per-session re-grant is meaningless on a
+walk-up BYOD device. Both stay in §5.6.1 as ranked options.
+
+| §5.6 decision | Where it is enforced in code | How it is proven |
+|---|---|---|
+| The recovery triple is `{seed, countersByKeyset, mintUrls}` and nothing less is a backup (5.4 item 5) | `createRecoveryRecord` / `validateRecoveryRecord` — runs checksum-and-wordlist validation on the phrase, requires ≥1 non-negative integer counter, requires ≥1 `http(s)` mint URL, and rejects `keysetPolicy !== 'deterministic'` | 7 cases, incl. "a seed alone cannot restore" and "rejects a non-http mint URL" |
+| Rank 1: seed in IndexedDB, restored after a reload with no user action | `openSecretStore().save/load`, one record, one key | "writes the triple and reads it back from a NEW store handle (a reload)" |
+| **Cleared data is a normal event, not an edge case** (5.4 item 6) | `clearSiteData()` deletes the DATABASE (what `Clear-Site-Data: "storage"` does), not just the key | The wiped-state case asserts `load()` is `null` — not a partial wallet, not an empty wallet — and that durability degrades to `'none'` which forces a disclosure |
+| Recovery after a wipe works only via an off-origin copy | `encryptRecoveryRecord` → `clearSiteData` → `decryptRecoveryRecord` → restore | "RECOVERS from a wipe using a backup taken before it — the whole point of rank 2" |
+| **No storage diversity** — nothing else on the origin keeps a second copy (5.6.2) | the module writes exactly one bucket and no `localStorage` key | "has no 'belt and braces' second on-origin bucket" — after a wipe NOTHING on the origin resurrects the seed |
+| `persist()` is best-effort and secure-context-gated; never a guarantee | `requestPersistentStorage` returns `'unavailable'` where the API is absent (i.e. on the plain-HTTP portal origin) and, when `'granted'`, still says *"survives storage pressure, NOT clear-site-data"* | 3 cases incl. "never claims eviction-proof storage even when granted" |
+| Rank 2: one-tap encrypted export; Web Share first, download fallback; honest "no rail" | `encryptRecoveryRecord`, `buildBackupFile`, `shareBackup` | 5 delivery cases: share, `AbortError` ⇒ `cancelled`, download fallback (Firefox), `unavailable` |
+| Encryption is **portability + opacity**, never "protection" | the blob carries no plaintext word of the phrase, no mint URL, no counter; Poly1305 makes a wrong passphrase and tampering the SAME typed failure | 5 cases incl. "carries NO plaintext seed…" and "does not distinguish tampering from a wrong passphrase" |
+| **"The most you can lose is T" is the load-bearing promise** | `enforceRestingCap` returns `ok` / `export-due` / `over-cap` with `maxLossSats` | 4 cases; `over-cap` reports that the promise is *already broken*, not that it is fine |
+| The forbidden sentences cannot reach user-facing text | all four disclosure levels carry a locale key; the catalog is asserted against the §5.6.6 forbidden list | "never claims safety, custody, a keychain, or that encryption protects the money" over every key |
+
+**Three implementation choices this adds to the record, each deliberate:**
+
+1. **The export uses pure-JS `@noble` + `@scure/bip39`, not WebCrypto.** `crypto.subtle`
+   is secure-context-gated (§3.2), so an AES-GCM export would work on the vendor
+   origin and fail on the captive portal — the exact place the user first gets
+   funded. XChaCha20-Poly1305 + `scrypt` behave identically on both.
+2. **`scrypt` at N=2^17, r=8, p=1** (measured on the build box, min of 5
+   samples: 2^14 → 106 ms, 2^15 → 199 ms, 2^16 → 357 ms, 2^17 → 692 ms when the
+   box was idle; re-measured under a 1-minute load average of 16.7 on 8 vCPUs the
+   same points read 218 / 399 / 704 / 1867 ms — the spread is CPU contention, so
+   the honest claim is "~0.7 s idle, up to ~2 s on a busy desktop, several
+   seconds on a low-end phone", not a single figure). It is a one-off cost on a
+   button press, not on an unlock path, and the parameters travel inside the
+   envelope so a future cost increase does not strand existing backups. A test
+   pins the shipped value so the suite's cheaper test-only params can never
+   become the default.
+3. **A wiped origin is indistinguishable from a fresh one**, so the module reports
+   `wipeLossUndetectable: true` whenever there is no durable copy. The app must
+   therefore disclose at the first funded moment rather than assume "new user".
+
+**Still open, and unchanged by this section:** the concrete value of `T` (§11(7)),
+and the iOS field check on what the Home Screen install actually protects (§11(10)).
+
 ---
 
 ## 6. D2 — scope, sequencing and the workstreams
@@ -1815,6 +1864,7 @@ is *"a UX convenience, explicitly not custody"*). The panel shows:
 | D4 reflects the operator's REVERSED decision: resting balance REQUIRED, `T` is the cap, with a justified default | §5.4 (esp. items 1–3), §1 D4 row |
 | Panel 3 reachability corrected — reachable and designed-for, still never before a balance and never mid-payment | §5.5, §7.3 |
 | Secret-storage decision documented (device-local + persisted + cap; one-tap encrypted export; opportunistic PRF; FSA for the fleet) with traps and prohibitions | §5.6 |
+| Secret-storage decision **implemented** for ranks 1+2, with the cleared-data path tested and the forbidden claims pinned in the locale catalog | §5.6.7, `src/helpers/wallet-secret-store.js`, `tests/unit/wallet-secret-store.test.js` |
 | Background-autonomy requirement documented with the honest per-platform limits, the three-layer ship decision (L0 mandatory / L1 mandatory best-effort / L2 optional-removable), the promises, the prohibitions, and the **formerly-open module question now answered and verified** | §6.6 |
 | Background-execution **limits + documented workarounds** recorded as a decision-ready inventory (L2 included) with cost and sovereignty per option, explicitly marked NOT-to-build-now so a future loop need not re-derive it | §6.6.4.1 |
 | The **decision on the background limits recorded**: accepted and documented, not worked around; **L0 + L1 ship**, L2/native deferred to a future ralph loop; asymmetry (**correct everywhere, autonomous only on Android**) stated to the user | §6.6.4.2, §6.6.2 |
