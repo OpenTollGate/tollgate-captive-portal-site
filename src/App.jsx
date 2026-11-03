@@ -10,6 +10,7 @@ import Lightning from './components/Lightning.jsx'
 import GatewayObjectivePicker from './components/GatewayObjectivePicker.jsx'
 import { Error } from './components/Status.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
+import InstallPanel from './components/InstallPanel.jsx';
 import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon.jsx'
 
 // helpers
@@ -123,6 +124,8 @@ export const App = () => {
 
         <div className="tollgate-captive-portal-content">
           <div className="tollgate-captive-portal-content-container">
+
+            <InstallPanel />
 
             <div className="tollgate-captive-portal-tabs" aria-label={t('tab_aria_label')} data-hidden={!loading && !!error}>
               <Tab type="cashu" method={method} setMethod={setMethod} />

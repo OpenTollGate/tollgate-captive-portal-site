@@ -161,5 +161,17 @@
   "gateway.current": "Current gateway",
   "gateway.unavailable": "Gateway choice is not available on this router.",
   "gateway.choice_locked": "Locked by this router",
-  "gateway.use_for_next_session": "Use for next session"
+  "gateway.use_for_next_session": "Use for next session",
+  "install_signpost_title": "Save this portal to your home screen",
+  "install_signpost_unavailable": "Your browser cannot install this page directly — it is served over an unencrypted connection, which browsers only allow for installable apps over HTTPS. Follow the steps below to add it to your home screen instead.",
+  "install_signpost_manual_ios": "Tap the Share button, then choose \"Add to Home Screen\".",
+  "install_signpost_manual_android": "Open the browser menu (⋮) and choose \"Add to Home screen\".",
+  "install_signpost_manual_desktop": "Use your browser menu to pin or install this page as an app.",
+  "install_app_title": "Keep your internet access one tap away",
+  "install_app_body": "Add TollGate to your home screen. It opens straight to your balance and top-up, without hunting for the portal each time you connect.",
+  "install_app_cta": "Add to home screen",
+  "install_app_later": "Not now",
+  "install_app_note_no_custody": "Your wallet stays on this device. The app is a shortcut to this network's portal, not a place your funds are held.",
+  "low_security_notice_title": "This connection is not encrypted",
+  "low_security_notice_body": "This portal is not served over HTTPS, so do not enter a seed phrase or any password here."
 }

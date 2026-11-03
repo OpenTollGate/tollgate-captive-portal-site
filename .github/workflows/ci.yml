@@ -89,7 +89,14 @@ jobs:
         # identity covers this router, explicit in both directions, and dropped
         # again (fail open) when :8443 never came up.
         run: sh packaging/tests/test-92-admin-board-tls.sh
-      - run: npm test
+      - name: Unit tests + coverage thresholds
+        # Same suite as `npm test`, plus the coverage gate. The thresholds are
+        # SCOPED (vitest.config.js) to the PWA install/shell surface this
+        # change owns: the repo-wide statement number is ~30% because whole
+        # subsystems carry no unit tests, so a global 80% floor would be red for
+        # reasons unrelated to any given diff. Running the coverage provider
+        # here makes the scoped floor enforced rather than aspirational.
+        run: npm run test:coverage
       - name: Packaging guard (foreign-skin cleanup)
         run: sh tests/packaging/foreign-skins-guard.sh .
       - run: npm run build

@@ -160,5 +160,17 @@
   "gateway.current": "Portale attuale",
   "gateway.unavailable": "La scelta del gateway non è disponibile su questo router.",
   "gateway.choice_locked": "Bloccato da questo router",
-  "gateway.use_for_next_session": "Utilizzare per la sessione successiva"
+  "gateway.use_for_next_session": "Utilizzare per la sessione successiva",
+  "install_signpost_title": "Salva questo portale sulla schermata Home",
+  "install_signpost_unavailable": "Il browser non può installare questa pagina direttamente: viene servita su una connessione non cifrata e i browser consentono di installare app solo su HTTPS. Segui i passaggi qui sotto per aggiungerla alla schermata Home.",
+  "install_signpost_manual_ios": "Tocca Condividi, quindi «Aggiungi alla schermata Home».",
+  "install_signpost_manual_android": "Apri il menu del browser (⋮) e scegli «Aggiungi a schermata Home».",
+  "install_signpost_manual_desktop": "Usa il menu del browser per aggiungere o installare questa pagina come app.",
+  "install_app_title": "Il tuo accesso a internet a portata di tocco",
+  "install_app_body": "Aggiungi TollGate alla schermata Home. Si apre direttamente sul saldo e sulla ricarica, senza dover cercare il portale ogni volta che ti connetti.",
+  "install_app_cta": "Aggiungi alla schermata Home",
+  "install_app_later": "Non ora",
+  "install_app_note_no_custody": "Il tuo portafoglio resta su questo dispositivo. L’app è una scorciatoia verso il portale di questa rete, non un luogo in cui vengono custoditi i tuoi fondi.",
+  "low_security_notice_title": "Questa connessione non è cifrata",
+  "low_security_notice_body": "Questo portale non viene servito in HTTPS: non inserire qui frasi di recupero o password."
 }
