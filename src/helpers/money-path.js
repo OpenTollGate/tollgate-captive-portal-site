@@ -31,6 +31,20 @@
 // An ALLOW-list, never a glob of the build output. A glob is how `/pay` or
 // `/api/invoice` ends up inside a precache manifest and gets served to a
 // differently-scoped page.
+//
+// ── The CODE must be on this list, not just the markup ──────────────────────
+//
+// The original list named only the documents, the manifest and the icons. That
+// is necessary and NOT sufficient: an offline reload serves the HTML, whose
+// <script src="/assets/…"> requests are then evaluated against this allow-list,
+// miss, get bypassed into a dead network, and the page renders as an empty white
+// rectangle. The built worker therefore carries a list GENERATED from the built
+// documents (scripts/precache-manifest.mjs), and the JavaScript/CSS entries below
+// state the rule the generator enforces.
+//
+// The predicates in this module are deliberately path-SHAPE rules (they do not
+// enumerate Vite's hashes, which change every build). The generator supplies the
+// concrete list; this file supplies the contract and the authority denials.
 export const PRECACHE_ALLOWLIST = Object.freeze([
   '/splash.html',
   '/balance.html',
@@ -39,7 +53,24 @@ export const PRECACHE_ALLOWLIST = Object.freeze([
   '/favicon.ico',
   '/logo192.png',
   '/logo512.png',
+  '/logo-maskable-512.png',
 ]);
+
+/**
+ * Build output that the app cannot render without, under `/assets/`.
+ *
+ * Content-hashed JS/CSS plus the brand mark. Matched by SHAPE because the hash
+ * is unknowable ahead of the build — and because a literal list of hashes is
+ * exactly the kind of thing that silently goes stale on the next release.
+ */
+export const PRECACHE_ASSET_SHAPE = Object.freeze({
+  // Requires the `-<hash>` suffix Vite emits (`portal-BJdlAeKP.js`). Without it
+  // the rule would admit ANY `/assets/*.js`, including a hand-authored file the
+  // build never produced — which is what `isSafeToStore` refuses.
+  immutable: /^\/assets\/[^/]+-[A-Za-z0-9_-]{6,}\.(?:js|css)$/i,
+  brandMark: /^\/assets\/TollGate_Logo-[^/]*\.png$/,
+  localeCatalogue: /^\/locales\/[A-Za-z-]+\.json$/,
+});
 
 // ── Paths that must NEVER be cached, replayed, or synthesised ────────────────
 //
@@ -81,22 +112,40 @@ export function mustNotBeCached(request) {
 
   let pathname;
   try {
-    pathname = new URL(request.url, 'http://placeholder.invalid').pathname.toLowerCase();
+    // Case PRESERVED for the allow-list comparison below: Vite content hashes
+    // carry uppercase letters, and lowercasing here is what made every bundle
+    // miss the allow-list. The authority suffixes are fixed lowercase route
+    // names, so they are compared on a lowered copy instead.
+    pathname = new URL(request.url, 'http://placeholder.invalid').pathname;
   } catch {
     return true; // unparseable => fail closed
   }
 
+  const lower = pathname.toLowerCase();
+
   if (
     NEVER_CACHE_SUFFIXES.some(
-      (suffix) => pathname === suffix || pathname.endsWith(suffix) || pathname.includes(`${suffix}/`)
+      (suffix) => lower === suffix || lower.endsWith(suffix) || lower.includes(`${suffix}/`)
     )
   ) {
     return true;
   }
 
-  // Anything outside the precache allow-list is a bypass by default. NOTE this
-  // includes the hashed `/assets/*` bundle: precaching those belongs in the
-  // generated allow-list, not in a blanket wildcard here.
+  // Anything outside the precache allow-list is a bypass by default.
+  //
+  // The hashed `/assets/*` bundle is admitted by SHAPE rather than by literal
+  // path, because the hash changes every build — a literal list of hashes is
+  // the thing that silently goes stale. The concrete shipped list is generated
+  // from the built documents by scripts/precache-manifest.mjs, which is what
+  // `public/sw.js` actually carries; this predicate states the rule.
+  if (
+    PRECACHE_ASSET_SHAPE.immutable.test(pathname) ||
+    PRECACHE_ASSET_SHAPE.brandMark.test(pathname) ||
+    PRECACHE_ASSET_SHAPE.localeCatalogue.test(pathname)
+  ) {
+    return false;
+  }
+
   return !PRECACHE_ALLOWLIST.includes(pathname);
 }
 

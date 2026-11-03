@@ -75,8 +75,29 @@ test.describe('W1 — evidence capture', () => {
       await context.setOffline(true);
       const res = await page.reload({ waitUntil: 'domcontentloaded' });
       expect(res.status()).toBe(200);
+
+      // Wait for the shell to HYDRATE before the screenshot. `domcontentloaded`
+      // fires while `#root` is still empty, so the previous capture produced a
+      // blank white PNG — a file named "offline reload served from cache" that
+      // showed nothing at all. The assertions below were passing the whole time;
+      // only the picture was worthless. A human looking at the PR could not tell
+      // an offline shell from a dead page.
+      //
+      // The reload is answered from the precached splash.html, which carries the
+      // entry shell and re-fetches everything it shows. With the network cut
+      // those fetches fail, so the app renders its error/degraded state — that
+      // IS the honest offline picture, and it is the one worth shipping.
+      await page.waitForSelector('#tollgate-captive-portal', { timeout: 15000 });
+      // Let the app settle into that state rather than shooting it mid-paint.
+      await page.waitForLoadState('networkidle').catch(() => {});
+
       await page.screenshot({ path: join(OUT, '03-offline-reload-served-from-cache.png'), fullPage: false });
+      const shotText = (await page.locator('body').innerText()).replace(/\s+/g, ' ').trim().slice(0, 160);
       console.log(`  wrote 03-offline-reload-served-from-cache.png (status ${res.status()} with the network cut)`);
+      console.log(`  offline page renders: "${shotText}"`);
+      // A blank capture is not evidence. Fail the capture if the shell hydrated
+      // to nothing, so this artifact cannot silently regress to a white PNG.
+      expect(shotText.length, 'the offline shell must render text, not a blank page').toBeGreaterThan(20);
 
       // The worker's own report, written next to the screenshots: what cache
       // answered, and what the version handshake says.
@@ -92,6 +113,50 @@ test.describe('W1 — evidence capture', () => {
       console.log(`  wrote 03-offline-proof.json: ${JSON.stringify(report)}`);
 
       await context.setOffline(false);
+
+      // ── 4. the iOS and Android install affordances, CAPTURED ──────────
+      //
+      // The card requires "the iOS/Android install affordance captured". Until
+      // now the platform wording was only asserted in
+      // tests/unit/install-panel-signpost.test.jsx, so an artifact a human could
+      // look at did not exist.
+      //
+      // The panel picks its copy from `navigator.userAgent` (manualHintKey()),
+      // so the UA string is the exact INPUT the code branches on and overriding
+      // it is emulating the real input, not faking an outcome. WebKit is not
+      // installed here (chromium-only, as documented in README/CI), and the
+      // layout at phone width is what these shots are for — the copy is the
+      // assertion.
+      for (const [name, ua, viewport, expected] of [
+        [
+          '04-install-affordance-ios',
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          { width: 390, height: 844 },
+          'Share button',
+        ],
+        [
+          '05-install-affordance-android',
+          'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+          { width: 412, height: 915 },
+          'browser menu',
+        ],
+      ]) {
+        const browser = page.context().browser();
+        const deviceCtx = await browser.newContext({ userAgent: ua, viewport });
+        try {
+          const p = await deviceCtx.newPage();
+          await p.goto(`${secureHost.origin}/${SERVED_ENTRY_DOCUMENT}`, { waitUntil: 'load' });
+          await p.waitForSelector('[data-testid="install-panel"]', { timeout: 15000 });
+          const text = (await p.locator('[data-testid="install-panel"]').innerText()).replace(/\s+/g, ' ');
+          // The assertion is why this is evidence rather than decoration: a
+          // screenshot of the WRONG platform's instruction is worse than none.
+          expect(text, `${name} must show the platform instruction`).toContain(expected);
+          await p.screenshot({ path: join(OUT, `${name}.png`), fullPage: false });
+          console.log(`  wrote ${name}.png — "${expected}"`);
+        } finally {
+          await deviceCtx.close();
+        }
+      }
     } finally {
       await secureHost.close();
     }

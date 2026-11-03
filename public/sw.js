@@ -76,15 +76,46 @@ var CACHE_NAME = CACHE_PREFIX + SW_VERSION;
 // `/ln-invoice` ends up in a precache manifest and then gets served to a
 // differently-scoped page. Mirrors PRECACHE_ALLOWLIST in
 // src/helpers/money-path.js, which is the tested form of the same rule.
+//
+// The list is GENERATED at build time by scripts/stamp-sw.mjs from what the
+// built splash.html/balance.html actually reference (scripts/precache-manifest.mjs),
+// then substituted over the block below. The entries between the markers are a
+// placeholder standing in for that list; they are not what ships.
+//
+// Why generated: as a hand-written list this file omitted the JavaScript and CSS
+// bundles, so an offline reload returned the HTML and then asked for
+// `/assets/<hash>.js` — which this allow-list did not name, so the worker
+// bypassed it into a dead network and the page stayed blank. A list that must be
+// updated whenever Vite renames a bundle is a list that WILL rot; deriving it
+// from the document removes the class of bug rather than the instance.
+/*__PRECACHE__*/
 var PRECACHE = [
   './splash.html',
   './balance.html',
+  './404.html',
   './manifest.json',
   './favicon.ico',
   './logo192.png',
   './logo512.png',
   './logo-maskable-512.png',
 ];
+/*__PRECACHE_END__*/
+
+/**
+ * Is this an IMMUTABLE build asset (content-hashed by Vite)?
+ *
+ * Vite emits `/assets/<name>-<hash>.js|css` and its hash changes with the
+ * content, so a cached copy can never be stale: the same URL always means the
+ * same bytes. Those are served cache-first.
+ *
+ * The entry DOCUMENTS (`/splash.html`, `/balance.html`) are the opposite — their
+ * URL is stable across releases, so cache-first would pin a returning visitor to
+ * an old shell forever. They are network-first, with the cached copy as the
+ * offline fallback.
+ */
+function isImmutableAsset(pathname) {
+  return pathname.indexOf('/assets/') === 0 && /\.(js|css)$/i.test(pathname);
+}
 
 // Authority endpoints: a stale copy is worse than none, and serving one is how
 // a customer is told they have access they do not have. Matched on the trailing
@@ -117,20 +148,92 @@ function mustNotBeCached(request) {
 
   var pathname;
   try {
-    pathname = new URL(request.url, self.location.origin).pathname.toLowerCase();
+    // NOT lowercased. The authority list below is lowercase and is compared
+    // case-insensitively (see the loop), because those are fixed API route
+    // names. The precache allow-list is NOT: Vite emits content hashes with
+    // UPPERCASE letters (`portal-BJdlAeKP.js`), so lowercasing the pathname
+    // before comparing it to the allow-list made every bundle miss.
+    //
+    // That miss is what produced the blank offline page: the worker decided
+    // `/assets/portal-BJdlAeKP.js` was not on the allow-list, bypassed it, and
+    // the bundle request died with the network cut. The assets were IN the
+    // cache the whole time — measured: `precached` listed 13 entries including
+    // that exact path, while the reload still failed with
+    // `net::ERR_INTERNET_DISCONNECTED`.
+    pathname = new URL(request.url, self.location.origin).pathname;
   } catch (e) {
     return true; // unparseable => fail closed
   }
 
+  var lower = pathname.toLowerCase();
+
   for (var i = 0; i < NEVER_CACHE.length; i++) {
     var suffix = NEVER_CACHE[i];
     if (
-      pathname === suffix ||
-      pathname.slice(-suffix.length) === suffix ||
-      pathname.indexOf(suffix + '/') !== -1
+      lower === suffix ||
+      lower.slice(-suffix.length) === suffix ||
+      lower.indexOf(suffix + '/') !== -1
     ) {
       return true;
     }
+  }
+
+  // ── and the ALLOW-LIST half, which this file was missing ────────────────
+  //
+  // The authority list above is necessary but NOT sufficient. Everything the
+  // portal fetches from the router arrives as a GET on a path this list does
+  // not name (`/` for the TollGate details, `/api/multi_wan/objectives`, and
+  // any future endpoint), so a suffix-only rule intercepts them and re-issues
+  // the request FROM THE WORKER — which is exactly what must not happen:
+  //
+  //   * the worker's cross-origin request is where CORS is judged against the
+  //     *document's* origin, so a perfectly good same-page fetch can fail once
+  //     the worker takes it over;
+  //   * per the Chrome Local Network Access announcement quoted at the top of
+  //     this file, a local-network request from a service worker additionally
+  //     requires the worker's origin to have been granted LNA — so the request
+  //     fails where the page's own fetch succeeded;
+  //   * and the failure is a bare network error, which the app renders as
+  //     "Failed to fetch TollGate details" — a portal that cannot fetch its
+  //     own price sheet, caused by the thing that was supposed to make it
+  //     installable.
+  //
+  // So the default is BYPASS and caching is the exception: only a GET on the
+  // precache allow-list may be answered or re-issued here. This is the same
+  // rule as mustNotBeCached() in src/helpers/money-path.js, which was already
+  // correct — the two had silently diverged, and the e2e suite caught it.
+  if (!isPrecachedPath(pathname)) return true;
+
+  return false;
+}
+
+/**
+ * Is this pathname one of the shell assets this worker may serve?
+ *
+ * CASE-SENSITIVE on purpose. Vite's content hashes carry uppercase letters, and
+ * a case-insensitive comparison here is what silently disqualified every bundle
+ * from the allow-list. The NEVER_CACHE authority list above is the opposite
+ * (case-insensitive, fixed route names); the two are deliberately different and
+ * that difference is the bug this comment exists to prevent from returning.
+ */
+function isPrecachedPath(pathname) {
+  // The hashed build output, admitted by SHAPE. The literal list below is
+  // generated at build time (scripts/precache-manifest.mjs) and DOES name these
+  // concrete files; the shape test is here so this classic worker stays correct
+  // against the same predicate as src/helpers/money-path.js even if the
+  // generated list is ever stale. It cannot admit an API path: the NEVER_CACHE
+  // authority check and the non-GET check both run before this.
+  //
+  // The `-<hash>` suffix is required, so a hand-authored `/assets/app.js` (which
+  // the build never emits) is still bypassed rather than cached.
+  if (/^\/assets\/[^/]+-[A-Za-z0-9_-]{6,}\.(js|css)$/.test(pathname)) return true;
+  if (/^\/assets\/TollGate_Logo-[^/]*\.png$/.test(pathname)) return true;
+  if (/^\/locales\/[A-Za-z-]+\.json$/.test(pathname)) return true;
+
+  for (var i = 0; i < PRECACHE.length; i++) {
+    // PRECACHE entries are written './name'; compare on the leading-slash form.
+    var entry = PRECACHE[i].replace(/^\.\//, '/');
+    if (pathname === entry) return true;
   }
   return false;
 }
@@ -204,36 +307,78 @@ self.addEventListener('fetch', function (event) {
   event.respondWith(
     (function () {
       return caches.open(CACHE_NAME).then(function (cache) {
-        return cache.match(request, { ignoreMethod: true }).then(function (cached) {
-          if (cached) return cached;
+        // ── strategy split, and it is not cosmetic ──────────────────────
+        //
+        // IMMUTABLE assets (Vite's content-hashed /assets/*.js|css):
+        //   cache-first. The URL and the bytes are 1:1, so a hit can never be
+        //   stale, and this is what makes an installed app start instantly.
+        //
+        // Everything else on the allow-list (the entry DOCUMENTS and icons):
+        //   network-first with the cached copy as the offline fallback. Their
+        //   URLs are stable across releases, so cache-first would pin a
+        //   returning visitor to the previous release's shell — the exact
+        //   "stale shell" failure this worker is meant to make impossible.
+        //
+        // One strategy for the whole allow-list is the bug that produced a
+        // blank offline page AND, if it had been cache-first, a permanently
+        // stale one. Both halves are pinned in
+        // tests/unit/sw-fetch-rule.test.js and tests/e2e/offline-shell.spec.mjs.
+        var pathname;
+        try {
+          // Case-PRESERVED: isImmutableAsset() must see the real Vite hash.
+          pathname = new URL(request.url, self.location.origin).pathname;
+        } catch (e) {
+          return fetch(request);
+        }
 
-          return fetch(request)
-            .then(function (response) {
-              // Never store a non-OK or opaque response.
-              if (response.ok && response.type === 'basic') {
-                cache.put(request, response.clone()).catch(function () {});
-              }
-              return response;
-            })
-            .catch(function () {
-              // Offline and not in the precache. Return a real failure rather
-              // than a fabricated document — a fabricated shell here could
-              // render a stale balance or a stale invoice as if it were live.
-              if (request.mode === 'navigate') {
-                // A navigation with no cached document gets the entry shell,
-                // which is the only page that can explain the situation. It
-                // carries NO state; the app re-fetches everything it shows.
-                return cache.match('./splash.html').then(function (shell) {
-                  return shell || new Response('', { status: 504, statusText: 'Gateway Timeout' });
-                });
-              }
-              return new Response('', { status: 504, statusText: 'Gateway Timeout' });
+        var network = fetch(request)
+          .then(function (response) {
+            // Never store a non-OK or opaque response.
+            if (response.ok && response.type === 'basic') {
+              cache.put(request, response.clone()).catch(function () {});
+            }
+            return response;
+          });
+
+        if (isImmutableAsset(pathname)) {
+          return cache.match(request, { ignoreMethod: true }).then(function (cached) {
+            if (cached) return cached;
+            return network.catch(function () {
+              return offlineResponse(cache, request);
             });
+          });
+        }
+
+        // Document / icon: prefer the network so a release actually lands,
+        // fall back to the cached copy when the network is gone.
+        return network.catch(function () {
+          return cache.match(request, { ignoreMethod: true }).then(function (cached) {
+            if (cached) return cached;
+            return offlineResponse(cache, request);
+          });
         });
       });
     })()
   );
 });
+
+/**
+ * What to serve when neither the network nor an exact cache entry answered.
+ *
+ * A navigation gets the entry shell, which is the only page that can explain the
+ * situation. It carries NO state; the app re-fetches everything it shows. Any
+ * other request gets a real failure rather than a fabricated document — a
+ * fabricated response here could render a stale balance or a stale invoice as if
+ * it were live.
+ */
+function offlineResponse(cache, request) {
+  if (request.mode === 'navigate') {
+    return cache.match('./splash.html').then(function (shell) {
+      return shell || new Response('', { status: 504, statusText: 'Gateway Timeout' });
+    });
+  }
+  return Promise.resolve(new Response('', { status: 504, statusText: 'Gateway Timeout' }));
+}
 
 // ── messages ────────────────────────────────────────────────────────────────
 self.addEventListener('message', function (event) {

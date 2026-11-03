@@ -22,23 +22,13 @@
 // The version is a hash of the worker source plus the names of the precached
 // files, so adding/removing a precache entry also bumps it.
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { computePrecache, computeVersion, renderPrecacheArray } from './precache-manifest.mjs';
 
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url));
 const repo = path.resolve(scriptsDir, '..');
-
-/** Files whose CONTENT decides the app-shell version. */
-const PRECACHED = [
-  'splash.html',
-  'balance.html',
-  'manifest.json',
-  'favicon.ico',
-  'logo192.png',
-  'logo512.png',
-  'logo-maskable-512.png',
-];
 
 function hashFile(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -50,21 +40,16 @@ function hashFile(file) {
  * Includes the worker source itself, so a change to the fetch rules is a new
  * version even when no precached asset moved — otherwise a fixed money-path bug
  * would keep being served by the worker already installed.
+ *
+ * The precache LIST and the CONTENT of every entry are part of the identity too
+ * (see scripts/precache-manifest.mjs). That is what makes a rebuilt bundle a new
+ * shell version: Vite changes the asset filename, and the cache name moves with
+ * it instead of serving the previous release's JavaScript forever.
+ *
+ * computeVersion is re-exported from precache-manifest.mjs so the version and
+ * the list can never be computed from two different notions of "the shell".
  */
-export function computeVersion(webroot, swSourcePath) {
-  const h = createHash('sha256');
-  h.update(readFileSync(swSourcePath));
-  for (const rel of PRECACHED) {
-    const p = path.join(webroot, rel);
-    // A missing file is part of the identity too: its absence changes what the
-    // worker will cache, so it must change the version.
-    h.update(rel);
-    h.update(existsSync(p) ? hashFile(p) : 'MISSING');
-  }
-  // 12 hex chars is plenty for a cache namespace and stays readable in
-  // `caches.keys()` output during a debugging session.
-  return h.digest('hex').slice(0, 12);
-}
+export { computeVersion } from './precache-manifest.mjs';
 
 function main() {
   const webroot = process.env.PWA_WEBROOT || path.join(repo, 'build');
@@ -82,6 +67,25 @@ function main() {
 
   const version = computeVersion(webroot, swSource);
   const src = readFileSync(swSource, 'utf8');
+
+  // ── VALIDATE BEFORE WRITING ─────────────────────────────────────────────
+  //
+  // Both refusals below used to run AFTER the stamped worker had already been
+  // written to `build/sw.js`, so a build that exited 1 left a HALF-BUILT worker
+  // on disk: version stamped, precache list still the hand-written placeholder
+  // block. Anything that then served that webroot (a preview, an e2e run, a
+  // packaging step that does not check the exit code) shipped a worker whose
+  // precache omits the JS and CSS — the exact blank-offline-shell defect this
+  // module exists to prevent. A refusal must leave the tree UNCHANGED.
+  const PRECACHE_MARKER = /\/\*__PRECACHE__\*\/[\s\S]*?\/\*__PRECACHE_END__\*\//;
+  if (!PRECACHE_MARKER.test(src)) {
+    console.error(
+      '[stamp-sw] public/sw.js has no /*__PRECACHE__*/ … /*__PRECACHE_END__*/ block,' +
+        ' so the generated precache list has nowhere to go. Refusing to ship a' +
+        ' hand-maintained list that a Vite rename will silently orphan.'
+    );
+    process.exit(1);
+  }
 
   if (!src.includes('__SW_VERSION__')) {
     console.error(
@@ -102,6 +106,24 @@ function main() {
   }
 
   console.log(`[stamp-sw] ${path.relative(repo, swTarget)} stamped with version ${version}`);
+
+  // ── DERIVE the precache list from the built documents ───────────────────
+  //
+  // The source worker carries a hand-written `/*__PRECACHE__*/` placeholder
+  // block. It is replaced here with the list computed from what the built
+  // splash.html/balance.html actually reference — the JS and CSS included.
+  //
+  // Without this, the shipped allow-list named only the HTML and icons, so an
+  // offline reload returned the document and then asked for `/assets/*.js`,
+  // which the worker bypassed into a dead network: a blank page. The list is
+  // generated rather than maintained so a Vite hash rename cannot orphan it.
+  // The marker was validated above, BEFORE the version was written — so this
+  // replace cannot fail half-way through a build.
+  const precache = computePrecache(webroot);
+  const stamped = readFileSync(swTarget, 'utf8');
+  writeFileSync(swTarget, stamped.replace(PRECACHE_MARKER, renderPrecacheArray(precache)));
+  console.log(`[stamp-sw] precache: ${precache.length} entries (${precache.filter((e) => e.startsWith('./assets/')).length} assets)`);
+
 
   // Leave a machine-readable record so the e2e gate and a human can both read
   // what version the webroot is. Written next to the worker, not inside it.

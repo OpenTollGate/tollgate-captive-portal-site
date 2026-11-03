@@ -68,10 +68,17 @@ describe('money-path: the app shell may be served from cache', () => {
     }
   });
 
-  it('the allow-list is a positive list, not a glob of the build output', () => {
-    // A hashed bundle chunk is NOT in the allow-list; it belongs in a generated
-    // list, and a blanket wildcard is how a money endpoint gets swept in.
-    expect(mustNotBeCached(req('GET', 'http://192.168.1.1:2051/assets/index-YkGiQMp2.js'))).toBe(true);
+  it('the allow-list admits the hashed bundle by SHAPE, not by wildcard', () => {
+    // A content-hashed chunk is part of the shell: without it the offline reload
+    // serves markup that cannot render. It is admitted by PATH SHAPE because the
+    // Vite hash is unknowable ahead of the build, so a literal list of hashes
+    // would go stale on the next release.
+    expect(mustNotBeCached(req('GET', 'http://192.168.1.1:2051/assets/index-YkGiQMp2.js'))).toBe(false);
+    expect(mustNotBeCached(req('GET', 'http://192.168.1.1:2051/assets/portal-BJdlAeKP.css'))).toBe(false);
+    // ...but the shape is NOT a blanket wildcard: an API path under /assets/ is
+    // not a build chunk, and anything outside the named shapes still bypasses.
+    expect(mustNotBeCached(req('GET', 'http://192.168.1.1:2051/assets/pay'))).toBe(true);
+    expect(mustNotBeCached(req('GET', 'http://192.168.1.1:2051/assets/v1/mint'))).toBe(true);
   });
 
   it('an unknown path fails closed', () => {
@@ -97,8 +104,12 @@ describe('money-path: isSafeToStore refuses authority payloads', () => {
     expect(isSafeToStore('http://192.168.1.1:2051/', '{"session_active":true}')).toBe(false);
   });
 
-  it('refuses a non-allow-listed url regardless of body', () => {
+  it('refuses a url outside every named shell shape', () => {
+    // `/assets/app.js` has no content hash, so it is not build output this app
+    // produced. It must not enter a cache — the check is shape-based (see
+    // PRECACHE_ASSET_SHAPE), not a blanket `/assets/*` wildcard.
     expect(isSafeToStore('http://192.168.1.1:2051/assets/app.js', 'body{}')).toBe(false);
+    expect(isSafeToStore('http://192.168.1.1:2051/api/multi_wan/objectives', 'body{}')).toBe(false);
   });
 
   it('allows an allow-listed url with no authority fields', () => {
