@@ -12,16 +12,19 @@
   flex-direction: column;
   gap: 0.6rem;
 
+  /* The label is the state colour on its own tint; painting it --color-white
+     (which is page text) made it read as body copy and, on the light palette,
+     as near-black on near-white. */
   &.error {
     background: var(--color-red-transparent);
     border-color: var(--color-red);
-    color: var(--color-white);
+    color: var(--color-red);
   }
 
   &.success {
     background: var(--color-green-transparent);
     border-color: var(--color-green);
-    color: var(--color-white);
+    color: var(--color-green);
   }
 
   &-header {
@@ -32,11 +35,17 @@
   }
 
   &-content {
+    /* inner rule separates the detail from the header; it belongs to the state,
+       so it takes the state colour rather than a fixed white that vanished on
+       the light palette */
     padding-top: 0.6rem;
-    border-top-color: var(--color-white);
+    border-top-color: currentColor;
     border-top-style: solid;
     border-top-width: 0.2rem;
     font-size: var(--font-size-small);
+    /* the detail line is body copy inside the tint, so it is the page colour,
+       not the state colour (the state colour is already the header) */
+    color: var(--color);
   }
 
   &-label {

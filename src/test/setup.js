@@ -71,7 +71,7 @@ const installLocalStorageIfMissing = () => {
 
 installLocalStorageIfMissing();
 
-// ⚠️ The returned object (and therefore `t`) MUST be identity-stable.
+// ⚠️ The returned `t` MUST be identity-stable — built ONCE at factory scope.
 //
 // Components here (e.g. src/components/Cashu.jsx:165 `[token, selectedMint, t]`)
 // list `t` in their effect dependency arrays. A factory that builds a NEW `t`
@@ -82,21 +82,21 @@ installLocalStorageIfMissing();
 // exhausted (site of the suite-wide "JavaScript heap out of memory" fatal,
 // which killed the run before any summary printed).
 //
-// Create the API object ONCE at factory scope and return the same reference
-// from every call. Two suites (tests/unit/renew-after-expiry.test.jsx,
-// tests/unit/cashu-auto-select-mint.test.jsx) had each worked around this with
-// their own stable local mock; fixing it here removes the footgun for every
-// current and future suite instead of paying the workaround per file.
+// `i18n` and `t` are created once, outside the returned hooks, so every
+// `useTranslation()` call hands back the SAME references. Rebasing onto main
+// converged on this same shape independently (the Cobrador Island merge touched
+// this file), so the rebase resolution keeps main's factory form verbatim and
+// adds only the Node-26 storage guard above it.
 vi.mock('react-i18next', () => {
+  const i18n = { language: 'en' };
   const t = (key, opts) => {
     if (typeof opts === 'object' && opts !== null) {
       return key + JSON.stringify(opts);
     }
     return key;
   };
-  const api = { t, i18n: { language: 'en' }, ready: true };
   return {
-    useTranslation: () => api,
+    useTranslation: () => ({ t, i18n, ready: true }),
     Trans: ({ children }) => children,
   };
 });

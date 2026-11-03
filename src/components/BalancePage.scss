@@ -11,7 +11,7 @@
 .balance-display {
   border: 0.2rem solid var(--color-green);
   background: var(--color-green-transparent);
-  color: var(--color-white);
+  color: var(--color);
   display: flex;
   flex-direction: column;
   // clip the header's rounded top corners against the outer border
@@ -27,6 +27,11 @@
     font-weight: 600;
     padding: 0.8rem 1rem;
     background-color: var(--color-green);
+    /* the header ground is a FILLED green, so its label cannot be page text:
+       --color-white on the dark palette's #7ad19a is 1.63:1. It takes the
+       on-success label instead (dark on the light-green fill, 9.82:1; white on
+       the light palette's dark-green fill, 6.55:1). */
+    color: var(--color-on-success);
     border-top-left-radius: var(--border-radius-large);
     border-top-right-radius: var(--border-radius-large);
   }
@@ -51,7 +56,9 @@
 
   &-content {
     padding: 0.8rem 1rem;
-    border-top: 0.2rem solid var(--color-white);
+    /* the divider sits ON the green tint, so it takes the state colour (a
+       fixed --color-white rule was 1.08:1 against the light palette's tint) */
+    border-top: 0.2rem solid var(--color-green);
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
@@ -65,7 +72,10 @@
     }
 
     .muted {
-      opacity: 0.85;
+      /* a colour token, not opacity: .85 multiplied body text toward the green
+         tint under it (4.94:1 dark / 4.62:1 light). The muted token is the
+         intended de-emphasis and holds 6.14:1 / 6.56:1 on the same tint. */
+      color: var(--color-negative);
     }
   }
 }

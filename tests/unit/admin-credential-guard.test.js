@@ -67,12 +67,6 @@ describe('credential state probe (pre-auth)', () => {
       passwordSet: true,
       username: 'root',
       provisional: false,
-      // Added by #71 ("force the default-credential change for admin AND
-      // management WiFi"): the same probe also reports whether the PRIVATE WiFi
-      // key is still the package default. It carries the same
-      // never-a-value-only-a-fact contract as `provisional`, and the same
-      // default-false rule: a router that does not answer the marker question
-      // is not a provisional one.
       privateWifiProvisional: false,
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -163,13 +157,9 @@ describe('credential state probe (pre-auth)', () => {
 
     const status = await fetchCredentialStatus();
 
-    // `provisional` is the /etc/tollgate/admin-credential-provisional marker
-    // state (a generated credential the owner must replace) and
-    // `privateWifiProvisional` the /etc/tollgate/private-wifi-credential-provisional
-    // one (#71); both are facts about a credential and never a value. The key
-    // set is asserted EXACTLY (not as a subset) so a field that silently starts
-    // leaking a secret is caught here — hence adding `privateWifiProvisional`
-    // rather than relaxing the comparison.
+    // `provisional` and `privateWifiProvisional` are the two install-time
+    // marker states (generated credentials the owner must replace); they are
+    // facts about the credential, still never values.
     expect(Object.keys(status).sort()).toEqual([
       'passwordSet',
       'privateWifiProvisional',

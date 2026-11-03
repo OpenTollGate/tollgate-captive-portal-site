@@ -2,6 +2,8 @@
 build/
 coverage/
 node_modules/
+.vite-cache/
 test-results/
 .playwright-mcp/
 .omo/
+__pycache__/

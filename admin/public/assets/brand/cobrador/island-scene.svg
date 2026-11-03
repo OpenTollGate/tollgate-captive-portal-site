@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B1420"/>
+      <stop offset=".55" stop-color="#102235"/>
+      <stop offset="1" stop-color="#0A111B"/>
+    </linearGradient>
+    <radialGradient id="sun" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#FF6961" stop-opacity=".95"/>
+      <stop offset=".55" stop-color="#FF6961" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#FF6961" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E2636"/>
+      <stop offset="1" stop-color="#071019"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE8E4" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#FFE8E4" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <circle cx="1180" cy="250" r="360" fill="url(#sun)"/>
+  <circle cx="1180" cy="250" r="88" fill="#FF6961" opacity=".82"/>
+  <!-- stars / signal points -->
+  <g fill="#EEF1F7" opacity=".22">
+    <circle cx="160" cy="120" r="2"/><circle cx="280" cy="80" r="1.5"/><circle cx="420" cy="150" r="2"/>
+    <circle cx="620" cy="90" r="1.5"/><circle cx="820" cy="140" r="2"/><circle cx="980" cy="70" r="1.5"/>
+    <circle cx="1360" cy="120" r="2"/><circle cx="1480" cy="220" r="1.5"/><circle cx="120" cy="280" r="1.5"/>
+  </g>
+  <!-- distant islands -->
+  <path d="M0 580c150-70 280-92 430-60 150 32 250 66 360 62 110-4 210-36 340-30 170 8 330 50 470 70v268H0z" fill="#0A1A27"/>
+  <path d="M0 640c190-46 360-44 520-12 160 32 290 48 420 34 130-14 260-40 400-24 100 12 190 34 260 50v212H0z" fill="url(#sea)"/>
+  <!-- main island -->
+  <path d="M470 650c46-78 110-120 186-126 78-6 158 24 236 94 30 28 60 46 92 56-72 24-154 38-248 40-142 4-268-20-376-58 38-1 74-3 110-6z" fill="#07131F"/>
+  <path d="M540 640c34-48 78-74 124-78 48-4 98 16 146 60" fill="none" stroke="#14364A" stroke-width="8"/>
+  <path d="M610 616c28-28 60-42 96-44 36-2 74 10 110 40" fill="none" stroke="#6FD3D9" stroke-width="5" opacity=".55"/>
+  <!-- lighthouse -->
+  <g transform="translate(800 448) scale(1.3)">
+    <path d="M-26 150h52l-8-92h-36z" fill="#EEF1F7"/>
+    <path d="M-18 58h36l-6-30h-24z" fill="#FF6961"/>
+    <rect x="-12" y="72" width="24" height="12" fill="#0C1420" opacity=".55"/>
+    <rect x="-16" y="98" width="32" height="12" fill="#0C1420" opacity=".55"/>
+    <path d="M0 28v-28" stroke="#EEF1F7" stroke-width="4"/>
+    <path d="M0 28L-360 -40 0 96z" fill="url(#beam)" opacity=".9"/>
+  </g>
+  <!-- contour chart lines -->
+  <g fill="none" stroke="#6FD3D9" opacity=".12">
+    <path d="M0 760c180-40 340-38 500 0s340 38 520 0 400-34 580 0"/>
+    <path d="M0 805c180-34 340-32 500 0s340 32 520 0 400-28 580 0"/>
+    <path d="M0 850c180-28 340-26 500 0s340 26 520 0 400-22 580 0"/>
+  </g>
+</svg>

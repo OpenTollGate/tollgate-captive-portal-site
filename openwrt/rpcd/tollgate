@@ -108,7 +108,10 @@ case "$1" in
       "upstream_scan":{},
       "upstream_connect":{"ssid":"string","passphrase":"string"},
       "upstream_list":{},
-      "upstream_remove":{"ssid":"string"}
+      "upstream_remove":{"ssid":"string"},
+      "upstream_known":{},
+      "upstream_status":{},
+      "upstream_disconnect":{}
     }'
     ;;
   call)
@@ -362,6 +365,15 @@ case "$1" in
         ;;
       upstream_list)
         tollgate --json upstream list 2>/dev/null
+        ;;
+      upstream_known)
+        tollgate --json upstream known 2>/dev/null
+        ;;
+      upstream_status)
+        tollgate --json upstream status 2>/dev/null
+        ;;
+      upstream_disconnect)
+        tollgate --json upstream disconnect 2>/dev/null
         ;;
       upstream_remove)
         INPUT=$(cat)

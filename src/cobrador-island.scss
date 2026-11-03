@@ -1,0 +1,42 @@
+/* Opt-in Cobrador Island skin for the guest portal. The default TollGate look
+   is untouched; VITE_THEME=cobrador-island adds the island horizon and warmer
+   ocean/coral tokens. */
+.theme-cobrador-island {
+  --tg-bg: #0c1420;
+  --tg-surface: #142435;
+  --tg-text: #eef1f7;
+  --tg-muted: #b3c2d1;
+}
+.theme-cobrador-island body {
+  background:
+    linear-gradient(rgba(8, 14, 24, 0.42), rgba(8, 14, 24, 0.7)),
+    url('./assets/brand/cobrador/island-scene.svg') center / cover fixed no-repeat,
+    #0c1420;
+}
+.theme-cobrador-island .app,
+.theme-cobrador-island .container {
+  position: relative;
+  z-index: 1;
+}
+.theme-cobrador-island .card,
+.theme-cobrador-island .panel {
+  background: rgba(20, 36, 53, 0.88);
+  border-color: #23384d;
+  backdrop-filter: blur(8px);
+}
+.theme-cobrador-island .language-switcher select {
+  background: rgba(12, 20, 32, 0.9);
+  border-color: #35506b;
+  color: #eef1f7;
+}
+
+.theme-cobrador-island .tollgate-captive-portal-header img {
+  width: min(11rem, 68vw) !important;
+  height: auto;
+  max-width: 100%;
+}
+@media (max-width: 480px) {
+  .theme-cobrador-island .tollgate-captive-portal-header img {
+    width: min(9.5rem, 62vw) !important;
+  }
+}
