@@ -119,7 +119,15 @@ export const InstallPanel = ({ variant: variantProp, showFirstRun } = {}) => {
       const choice = await deferredPrompt.userChoice;
       // `dismissed` is a decision, not a failure. Either way the prompt is
       // single-use and cannot be replayed.
-      if (choice && choice.outcome === 'accepted') markInstallDismissed();
+      if (choice && choice.outcome === 'accepted') {
+        // Accepting IS the answer to the question this panel asks. Recording it
+        // in the store alone is not enough: the mounted panel reads its
+        // `dismissed` state, not storage, so without this the customer who just
+        // installed is shown the add-to-home-screen steps on the very screen
+        // that installed them.
+        markInstallDismissed();
+        setDismissed(true);
+      }
     } catch {
       /* a prompt that errors is not worth taking the page down over */
     }

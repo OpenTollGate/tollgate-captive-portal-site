@@ -38,6 +38,13 @@ All notable changes to this project are documented here.
   opens in one of them.
 
 ### Fixed
+- **Accepting the install prompt left the install panel on screen.** `install()`
+  recorded an accepted install in the store but never updated the mounted
+  panel's `dismissed` state, so the customer who had just installed the app was
+  immediately shown the add-to-home-screen steps — on the same screen, asking
+  them to do the thing they had just done. The accepted branch now sets the
+  state as well, and a declined prompt still leaves the manual steps available
+  (the prompt is single-use, so the button goes, but the guidance does not).
 - **The web app manifest could not install on the origin it is served from.**
   `public/manifest.json` declared `start_url: "."`, which resolves to `/` — and the served
   webroot contains `splash.html` and **no `index.html`** (the build renames it, and
