@@ -160,5 +160,17 @@
   "gateway.current": "Gerbang saat ini",
   "gateway.unavailable": "Pilihan gateway tidak tersedia di router ini.",
   "gateway.choice_locked": "Dikunci oleh router ini",
-  "gateway.use_for_next_session": "Gunakan untuk sesi berikutnya"
+  "gateway.use_for_next_session": "Gunakan untuk sesi berikutnya",
+  "install_signpost_title": "Simpan portal ini ke layar utama",
+  "install_signpost_unavailable": "Peramban Anda tidak dapat memasang halaman ini secara langsung — halaman ini disajikan melalui koneksi tanpa enkripsi, dan peramban hanya mengizinkan pemasangan aplikasi melalui HTTPS. Ikuti langkah di bawah untuk menambahkannya ke layar utama.",
+  "install_signpost_manual_ios": "Ketuk Bagikan, lalu pilih \"Tambahkan ke Layar Utama\".",
+  "install_signpost_manual_android": "Buka menu peramban (⋮) dan pilih \"Tambahkan ke layar utama\".",
+  "install_signpost_manual_desktop": "Gunakan menu peramban untuk menyematkan atau memasang halaman ini sebagai aplikasi.",
+  "install_app_title": "Akses internet Anda hanya dengan satu ketukan",
+  "install_app_body": "Tambahkan TollGate ke layar utama. Aplikasi langsung membuka saldo dan isi ulang Anda, tanpa perlu mencari portal setiap kali terhubung.",
+  "install_app_cta": "Tambahkan ke layar utama",
+  "install_app_later": "Nanti saja",
+  "install_app_note_no_custody": "Dompet Anda tetap di perangkat ini. Aplikasi ini adalah pintasan ke portal jaringan ini, bukan tempat dana Anda disimpan.",
+  "low_security_notice_title": "Koneksi ini tidak terenkripsi",
+  "low_security_notice_body": "Portal ini tidak disajikan melalui HTTPS, jadi jangan masukkan frasa pemulihan atau kata sandi apa pun di sini."
 }

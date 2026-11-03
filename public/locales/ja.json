@@ -160,5 +160,17 @@
   "gateway.current": "現在のゲートウェイ",
   "gateway.unavailable": "このルーターではゲートウェイを選択できません。",
   "gateway.choice_locked": "このルーターによってロックされています",
-  "gateway.use_for_next_session": "次回のセッションに使用します"
+  "gateway.use_for_next_session": "次回のセッションに使用します",
+  "install_signpost_title": "このポータルをホーム画面に保存",
+  "install_signpost_unavailable": "このページはブラウザから直接インストールできません。暗号化されていない接続で配信されており、ブラウザは HTTPS 経由のアプリのみインストールを許可します。以下の手順でホーム画面に追加してください。",
+  "install_signpost_manual_ios": "「共有」をタップし、「ホーム画面に追加」を選択します。",
+  "install_signpost_manual_android": "ブラウザのメニュー（⋮）を開き、「ホーム画面に追加」を選択します。",
+  "install_signpost_manual_desktop": "ブラウザのメニューから、このページをアプリとしてピン留めまたはインストールします。",
+  "install_app_title": "インターネットへのアクセスをワンタップで",
+  "install_app_body": "TollGate をホーム画面に追加します。接続のたびにポータルを探すことなく、残高とチャージ画面が直接開きます。",
+  "install_app_cta": "ホーム画面に追加",
+  "install_app_later": "後で",
+  "install_app_note_no_custody": "ウォレットはこの端末に残ります。アプリはこのネットワークのポータルへのショートカットであり、資金を保管する場所ではありません。",
+  "low_security_notice_title": "この接続は暗号化されていません",
+  "low_security_notice_body": "このポータルは HTTPS で配信されていません。シードフレーズやパスワードはここに入力しないでください。"
 }

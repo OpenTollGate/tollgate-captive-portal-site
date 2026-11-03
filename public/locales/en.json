@@ -167,19 +167,11 @@
   "install_signpost_manual_ios": "Tap the Share button, then choose \"Add to Home Screen\".",
   "install_signpost_manual_android": "Open the browser menu (⋮) and choose \"Add to Home screen\".",
   "install_signpost_manual_desktop": "Use your browser menu to pin or install this page as an app.",
-  "install_signpost_note": "Adding it to your home screen gives you a full-screen app that opens this portal directly. It works only while connected to this network.",
-  "install_signpost_already_installed": "You are running the installed app.",
   "install_app_title": "Keep your internet access one tap away",
   "install_app_body": "Add TollGate to your home screen. It opens straight to your balance and top-up, without hunting for the portal each time you connect.",
   "install_app_cta": "Add to home screen",
   "install_app_later": "Not now",
-  "install_app_ios_share": "In Safari, tap Share, then \"Add to Home Screen\".",
   "install_app_note_no_custody": "Your wallet stays on this device. The app is a shortcut to this network's portal, not a place your funds are held.",
-  "offline_shell_ready": "The app is ready to open offline.",
-  "offline_app_unavailable": "This page cannot run offline here because it is not served over a secure connection.",
   "low_security_notice_title": "This connection is not encrypted",
-  "low_security_notice_body": "This portal is not served over HTTPS, so do not enter a seed phrase or any password here.",
-  "paste_fallback_title": "No app needed",
-  "paste_fallback_body": "You can pay without installing anything — paste a Cashu token below, or scan it with another device. The router checks it for you.",
-  "paste_fallback_trust_note": "Your token is sent to this router only. Nothing is stored in this browser beyond what is needed to complete the payment."
+  "low_security_notice_body": "This portal is not served over HTTPS, so do not enter a seed phrase or any password here."
 }
