@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Peering page.** The admin board now has a dedicated Peering route where
+  Cobradors can discover nearby TollGate peers, see advertised reseller/mint
+  metadata, peer with an open gateway, watch the live peer session and SAT
+  spend, toggle peer discovery / reseller mode, and stop peering with a
+  verified fallback to a known good non-TollGate upstream.
+- **Guest portal and admin board localization.** Both surfaces now ship the
+  same 14 locales (`en, zh-Hans, zh-Hant, es, fr, ar, pt, ru, id, de, ja, vi, tr,
+  it`), with native language names, persisted selection, and RTL handling for
+  Arabic. Admin strings and schema descriptions use catalogue-backed translation.
+- **Configurable SSID names in the admin board.** Settings now exposes
+  `ssid_suffix` and `private_ssid_operator`, with a derived-name preview. The
+  suffix is shared by the guest (`!<brand>-<suffix>`) and private
+  (`Private-<operator>-<suffix>`) networks and persists across reinstalls.
+- **Cobrador identity.** The default TollGate theme stays subtle: a small
+  island/gate mark and a dismissible "Welcome, Cobrador!" card explain that
+  `c08r4d0r` is leetspeak for *cobrador*, the toll/fare collector. A full
+  Cobrador Island skin is opt-in via `VITE_THEME=cobrador-island` or
+  `VITE_BRAND=cobrador`.
+
 ### Security
 - **The CSP blocked every Cashu mint call, and `balance.html` had no CSP at all.**
   `index.html` shipped `connect-src 'self' http: ws:`, and CSP scheme-sources are
@@ -226,6 +246,19 @@ All notable changes to this project are documented here.
   actually owns instead of a fixed `:8443`.
 
 ### Tests
+- **Token conformance corpus vectors pin the decoder and the submit wire.**
+  `tests/unit/corpus-conformance.test.js` runs the canonical fixtures vendored
+  from the protocol repo's conformance corpus
+  ([OpenTollGate/tollgate `corpus/`](https://github.com/OpenTollGate/tollgate/pull/30),
+  v1 @ `5368dd8`, under `tests/fixtures/corpus/`) through `validateToken` and
+  `submitToken`. This is the regression lock for the v0.6.0 browser e-cash
+  incident ([#82](https://github.com/OpenTollGate/tollgate-captive-portal-site/issues/82) / PRTA#247 / tmbg#952): the known-good cdk-0.18.1-minted V3/V4
+  V2-keyset tokens, the 16-hex truncated-id shape, and the hex-C shape must all
+  decode client-side (the merchant re-validates authoritatively on submit), and
+  a decode-passing token MUST reach `POST /` as a raw `text/plain` body — the
+  incident's packet capture showed 0 POSTs, so the wire shape is asserted
+  against a fetch mock. Fixtures carry a README with provenance and the resync
+  command for when the corpus revs.
 - **`92` mapping + marker suites (new, offline):** `packaging/tests/test-92-entry-ui-mapping.sh`
   drives the whole script in a sandbox (`packaging/tests/lib-92-sandbox.sh`): both
   mappings against the literal port lists, invariant 3 (one binder per port, with

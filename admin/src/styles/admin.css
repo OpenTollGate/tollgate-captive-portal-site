@@ -116,14 +116,21 @@ button {
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  /* NOT `opacity`: see --disabled-bg in variables.css. Opacity composites the
+     fill and the label toward the page and collapsed this pair to 2.29:1 —
+     the exact "hard to read" symptom, in the state the login page opens in. */
+  opacity: 1;
+  background: var(--disabled-bg);
+  border-color: var(--disabled-border);
+  color: var(--disabled-text);
   cursor: not-allowed;
   transform: none;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  /* a dark label on the coral: white on #ff6961 is 2.82:1 and fails AA */
+  color: var(--text-on-accent);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -131,21 +138,28 @@ button {
 }
 
 .btn-secondary {
-  background: var(--border);
+  /* a button is a *surface*, not a hairline: painting it --border (the 1px
+     separator colour) made it read as a disabled block. It takes the raised
+     surface, with a control border that clears 1.4.11's 3:1. */
+  background: var(--card-hover);
+  border: 1px solid var(--border-control);
   color: var(--text);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--card-hover);
+  background: var(--overlay-tint);
 }
 
 .btn-danger {
   background: var(--error);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #d93a30;
+  /* NOT --error-strong: the label above is --text-on-accent, which is DARK in
+     this palette, so the hover fill has to stay light enough to carry it.
+     --error-strong is a dark red and dropped the pair to 3.39:1. */
+  background: var(--error-hover);
 }
 
 .btn-sm {
@@ -163,16 +177,31 @@ button {
   width: 100%;
   padding: 0.7rem 0.9rem;
   background: var(--bg);
-  border: 1px solid var(--border);
+  /* an input is a CONTROL: WCAG 1.4.11 wants 3:1 against its surroundings, so
+     it takes --border-control (3.92:1 on --bg). It shipped on --border, the
+     decorative hairline (1.77:1), which is why the fields read as flat panels
+     with no edge. */
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: var(--font-size);
-  outline: none;
+  /* no blanket `outline: none` — that suppressed the UA focus ring for
+     keyboard users and left only the border-colour swap below */
   transition: border-color 0.15s ease;
 }
 
+/* Focus is signalled two ways, because either one alone was not enough:
+   the border still moves to --accent for a mouse user, and a
+   :focus-visible outline paints --focus-ring, which clears WCAG 2.4.11's
+   3:1 against the resting border (3.34:1 dark / 3.64:1 light). The border
+   swap on its own was 1.63:1 — a focus state that could not be seen. */
 .input:focus {
   border-color: var(--accent);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .input::placeholder {
@@ -205,12 +234,12 @@ button {
 }
 
 .badge-success {
-  background: rgba(50, 215, 75, 0.15);
+  background: var(--success-dim);
   color: var(--success);
 }
 
 .badge-error {
-  background: rgba(255, 69, 58, 0.15);
+  background: var(--error-dim);
   color: var(--error);
 }
 
@@ -220,7 +249,7 @@ button {
 }
 
 .badge-muted {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay-tint);
   color: var(--text-muted);
 }
 
@@ -443,7 +472,7 @@ button {
   left: 0;
   right: 0;
   height: var(--header-h);
-  background: rgba(17, 17, 17, 0.92);
+  background: var(--scrim);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
@@ -480,7 +509,7 @@ button {
 
 .btn-logout:hover {
   color: var(--error);
-  background: rgba(255, 69, 58, 0.1);
+  background: var(--error-dim);
 }
 
 .header-actions {
@@ -491,25 +520,30 @@ button {
 
 /* Cross-link to the other admin UI (LuCI). Rendered only from the router's
    ui_links answer: an anchor when it names an HTTPS url, otherwise the plain
-   reason line below — never a disabled-looking dead button. */
+   reason line below — never a disabled-looking dead button.
+
+   Neither rule multiplies its colour by `opacity`. Both used to (.8 / .7), and
+   `opacity` composites the painted pixels toward whatever is behind them, so
+   the pair that actually ships is not the token pair the gate scores:
+   --text-dim is 6.29:1 on the page, but at .8 it painted 4.47:1 (under AA) and
+   the reason line at .7 painted 3.72:1. The de-emphasis now comes from the
+   --text-dim token itself, which is already the darkest readable step above
+   --text-muted. Hover still brightens by moving to --accent. */
 .ui-crosslink {
   font-size: var(--font-size-xsmall);
   color: var(--text-dim);
   text-decoration: none;
-  opacity: 0.8;
   white-space: nowrap;
 }
 
 .ui-crosslink:hover {
   color: var(--accent);
-  opacity: 1;
 }
 
 .ui-crosslink-reason {
   margin: 0;
   font-size: var(--font-size-xsmall);
   color: var(--text-dim);
-  opacity: 0.7;
   white-space: nowrap;
   max-width: 22ch;
   overflow: hidden;
@@ -532,7 +566,7 @@ button {
   left: 0;
   right: 0;
   height: var(--nav-h);
-  background: rgba(17, 17, 17, 0.95);
+  background: var(--scrim);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
@@ -601,6 +635,7 @@ button {
 
 .scan-item-ssid {
   font-weight: 600;
+  flex-shrink: 0;
   font-size: var(--font-size-small);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -654,4 +689,87 @@ button {
   flex-direction: column;
   gap: 0.4rem;
   align-items: flex-end;
+}
+
+/* ─── Language picker ─────────────────────────────────────────────── */
+.lang-switcher { display: inline-flex; align-items: center; }
+.lang-switcher select {
+  background: var(--surface, #1b1f2a);
+  color: var(--text, #eef1f7);
+  border: 1px solid var(--border-control, #3a4152);
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  font-size: var(--font-size-xsmall, 0.72rem);
+  cursor: pointer;
+  max-width: 11rem;
+}
+.lang-switcher select:focus-visible { outline: 2px solid var(--accent, #ff6961); outline-offset: 2px; }
+.lang-switcher-compact select { max-width: 9rem; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+[dir="rtl"] .app-header, [dir="rtl"] .header-actions { direction: rtl; }
+
+/* ─── Cobrador welcome ────────────────────────────────────────────── */
+.cobrador-welcome-card { border-color: var(--accent, #ff6961); }
+.cobrador-welcome-card .card-header { align-items: center; }
+.cobrador-info {
+  width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 1px solid var(--border-control, #3a4152);
+  background: transparent; color: var(--text, #eef1f7); font-weight: 700; cursor: help;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;
+}
+.cobrador-info:focus-visible { outline: 2px solid var(--accent, #ff6961); outline-offset: 2px; }
+.cobrador-dismiss {
+  background: transparent; border: 0; color: var(--text-dim, #b3bccd); font-size: 1.15rem;
+  cursor: pointer; line-height: 1; padding: 0.15rem 0.35rem; border-radius: 6px;
+}
+.cobrador-dismiss:hover { color: var(--text, #eef1f7); background: var(--surface, #1b1f2a); }
+.cobrador-lead { margin: 0.25rem 0 0; color: var(--text, #eef1f7); text-wrap: balance; }
+.cobrador-info-body {
+  margin: 0.65rem 0 0; padding: 0.75rem; border-radius: 8px;
+  background: var(--surface, #1b1f2a); color: var(--text-dim, #b3bccd);
+  border: 1px solid var(--border, #2a3040); line-height: 1.55;
+}
+
+/* ─── Peering ─────────────────────────────────────────────────────── */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.page-title { margin: 0; font-size: var(--font-size-large, 1.35rem); }
+.grid-cols-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.peer-metrics { padding: 0.5rem 0; }
+.peer-item { border-inline-start: 3px solid var(--accent, #ff6961); }
+.toggle-row { display: flex; align-items: flex-start; gap: 0.65rem; cursor: pointer; }
+.toggle-row input { margin-top: 0.2rem; accent-color: var(--accent, #ff6961); }
+.toggle-row span { display: flex; flex-direction: column; gap: 0.15rem; }
+@media (max-width: 640px) {
+  .page-header { flex-direction: column; }
+  .grid-cols-2 { grid-template-columns: 1fr; }
+}
+[dir="rtl"] .peer-item { border-inline-start: 0; border-inline-end: 3px solid var(--accent, #ff6961); }
+
+/* ─── Peering rows: identity above, metadata beneath, action right ─── */
+.peer-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  flex-wrap: wrap;
+}
+.peer-row + .peer-row { border-top: 1px solid var(--border); }
+.peer-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.peer-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
+.peer-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; color: var(--text-dim); font-size: var(--font-size-small); }
+.peer-action { flex-shrink: 0; display: flex; align-items: center; }
+@media (max-width: 640px) {
+  .peer-row { flex-direction: column; align-items: stretch; }
+  .peer-action { width: 100%; }
+  .peer-action .btn, .peer-action .connect-form, .peer-action .connect-form-row { width: 100%; }
+  .peer-action .btn { min-height: 42px; justify-content: center; }
+  .app-header { height: auto; min-height: var(--header-h); flex-wrap: wrap; padding: 0.35rem 0.6rem; gap: 0.35rem; }
+  .header-user { display: none; }
+  .header-actions { gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end; }
+  .btn-logout span { display: none; }
+  .lang-switcher select { max-width: 7rem; }
+  .app-content { padding-top: calc(var(--header-h) + 0.75rem); }
 }

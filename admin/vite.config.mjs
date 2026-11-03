@@ -67,6 +67,15 @@ export default defineConfig({
   root: rootDir,
   base: process.env.VITE_BASE_PATH || '/',
   plugins: [brandFavicon(), preact()],
+  // Both apps in this repo resolve `vite` out of ONE node_modules symlink, so
+  // their dependency pre-bundles share `node_modules/.vite` by default. When the
+  // admin (:5199) and guest (:5177) servers run at the same time, whichever
+  // optimizes last invalidates the other's deps and every module request 504s
+  // with "Outdated Optimize Dep" — the board then renders unstyled and empty,
+  // which reads exactly like a CSS regression. Opt-in only: unset, Vite uses its
+  // normal cache, so builds and a single dev server behave exactly as before.
+  cacheDir: process.env.VITE_CACHE_DIR || undefined,
+
   build: {
     outDir: fileURLToPath(new URL('../build/admin', import.meta.url)),
     emptyOutDir: true,

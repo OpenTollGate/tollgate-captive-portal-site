@@ -128,7 +128,10 @@ const manifest = {
   start_url: `${scopeBase}index.html`,
   scope: scopeBase,
   display: 'standalone',
-  background_color: '#111111',
+  // Must match --bg in admin/src/styles/variables.css (dark palette). A PWA
+  // paints this behind the first frame, so a stale value shows as a flash of
+  // the previous theme on every cold start.
+  background_color: '#14161d',
   theme_color: themeColor,
   icons: [
     {

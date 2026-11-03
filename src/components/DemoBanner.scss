@@ -8,9 +8,12 @@
   align-items: center;
   justify-content: center;
   gap: .6rem;
-  background-color: rgba(255, 181, 76, 0.14);
-  border-bottom: .1rem solid rgba(255, 181, 76, 0.3);
-  color: var(--color-negative);
+  background-color: var(--color-cta-transparent);
+  border-bottom: .1rem solid var(--color-cta);
+  /* the banner ground is the accent tint over the page, so the label is body
+     text (7.58:1 dark / 6.15:1 light) — --color-negative is the secondary grey
+     and read as decoration rather than a notice */
+  color: var(--color);
   font-size: var(--font-size-xsmall);
   font-weight: 600;
   letter-spacing: .03em;
@@ -22,7 +25,7 @@
     width: .6rem;
     height: .6rem;
     border-radius: 50%;
-    background-color: #FFB54C;
+    background-color: var(--color-cta);
     animation: demo-pulse 2s ease-in-out infinite;
   }
 }

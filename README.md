@@ -121,6 +121,25 @@ The hardcoded mock data (used for development) should be updated regularly to ma
 - [ ] **Surface the balance page in a first-run config wizard**  
   The Balance page (`src/components/BalancePage.jsx`) is currently reachable as a standalone tab. It is intentionally self-contained (it only needs `tollgateDetails` and an optional `onNavigate` callback) so it can be reused as a step in a future first-run configuration wizard. When such a wizard is designed, decide where the balance check should sit in the flow and whether it should pre-fill from a detected/stored token.
 
+### Gateway objective picker
+
+The picker stays completely hidden until the merchant API on `http://<portal-host>:2121`
+serves `GET /api/multi_wan/objectives` with
+`{enabled:true, allow_change:"next_session"|"never", current:"<id>", objectives:[{id,label,summary?}]}`.
+IDs must be unique, labels nonempty strings, and `current` must name an offered ID.
+404, a 4-second timeout, disabled capability or malformed JSON produces no UI.
+`never` shows disabled options with the next-session explanation; all changes are
+labelled **Use for next session**, never an immediate switch. English copy lives in
+`public/locales/en.json` (served as `/locales/en.json`).
+
+No backend implements this endpoint yet. The write contract is **proposed, not a
+verified backend capability**: `POST` to the same path with `{"objective":"<id>"}`,
+2xx acknowledging storage for the next session. Errors never report success;
+404/405/501 disable further choices and show unavailable. The backend must implement
+both methods before enabling this capability. Current-session routing is never changed
+by the portal. Unit and browser coverage: `gateway-objective-picker.test.jsx` and
+`gateway-objectives.spec.mjs`.
+
 ### License
 
 This project is licensed under the GPLv3 License.

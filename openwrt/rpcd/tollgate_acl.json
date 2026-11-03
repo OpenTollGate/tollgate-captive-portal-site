@@ -28,7 +28,9 @@
           "pricing",
           "sessions",
           "upstream_scan",
-          "upstream_list"
+          "upstream_list",
+          "upstream_known",
+          "upstream_status"
         ],
         "system": ["info", "board"],
         "network.interface": ["dump"],
@@ -53,6 +55,7 @@
           "activate",
           "upstream_connect",
           "upstream_remove",
+          "upstream_disconnect",
           "admin_credential_claim"
         ],
         "network.wireless": ["reload"],

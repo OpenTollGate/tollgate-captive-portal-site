@@ -1,7 +1,6 @@
 {
-  "short_name": "TollGate",
-  "name": "TollGate Captive Portal",
-  "description": "Pay-as-you-go internet access on this network.",
+  "short_name": "Tollgate Portal",
+  "name": "Tollgate Captive Portal",
   "icons": [
     {
       "src": "logo192.png",
@@ -16,28 +15,13 @@
       "purpose": "any"
     },
     {
-      "src": "logo192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "logo512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
       "src": "favicon.ico",
       "sizes": "72x72",
-      "type": "image/x-icon",
-      "purpose": "any"
+      "type": "image/x-icon"
     }
   ],
-  "start_url": "splash.html",
-  "scope": "./",
-  "id": "tollgate-captive-portal",
+  "start_url": ".",
   "display": "standalone",
   "theme_color": "#000000",
-  "background_color": "#000000"
+  "background_color": "#14161d"
 }

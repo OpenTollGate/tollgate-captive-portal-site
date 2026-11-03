@@ -46,6 +46,8 @@ vi.mock('../../src/helpers/cashu.js', () => ({
   submitToken: async () => ({ status: 1, label: 'ok', message: 'ok' }),
   canSubmitAnyway: () => false,
   extractProofsFromToken: () => [],
+  mintUrlFromToken: () => null,
+  findMintOption: () => null,
 }));
 
 // no network: the mint's swap fee is skipped, exactly as in production when the

@@ -1,0 +1,12 @@
+{
+  "id": "cobrador",
+  "name": "Cobrador Island",
+  "domain": "cobrador.lan",
+  "tagline": "The operator's island control room",
+  "poweredBy": "Powered by TollGate",
+  "website": "https://tollgate.me/",
+  "version": "Cobrador Island",
+  "themeColor": "#FF6961",
+  "sessionKey": "tollgate_session",
+  "sessionUser": "tollgate_user"
+}

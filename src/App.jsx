@@ -7,6 +7,7 @@ import classNames from 'classnames';
 import Background from './components/Background.jsx'
 import Cashu from './components/Cashu.jsx'
 import Lightning from './components/Lightning.jsx'
+import GatewayObjectivePicker from './components/GatewayObjectivePicker.jsx'
 import { Error } from './components/Status.jsx';
 import DemoBanner from './components/DemoBanner.jsx';
 import { AccessGrantedIcon, RadioButtonIcon, ErrorIcon } from './components/Icon.jsx'
@@ -20,8 +21,12 @@ import './App.scss'
 
 // import the tollgate logos
 import logoWhite from './assets/logo/TollGate_Logo-C-white.png';
+import logoBlack from './assets/logo/TollGate_Logo-C-black.png';
+import cobradorLogoWhite from './assets/brand/cobrador/logo-white.png';
 
 // main component
+const THEME_LOGO_WHITE = import.meta.env.VITE_THEME === 'cobrador-island' ? cobradorLogoWhite : logoWhite;
+
 export const App = () => {
   const { t, ready } = useTranslation();
   const [method, setMethod] = useState('cashu');
@@ -148,6 +153,13 @@ export const App = () => {
               {!loading && !error && method === 'lightning' && <Lightning tollgateDetails={tollgateDetails.value} />}
             </div>
 
+            {/* Gateway objective picker, pre-purchase: the buyer states how
+                their traffic should leave the internet BEFORE paying, because
+                the router derives the mix at session start. The component
+                renders nothing at all (not even a wrapper) unless the backend
+                serves the objectives endpoint, so no dead block is left here. */}
+            {!loading && !error && <GatewayObjectivePicker />}
+
           </div>
         </div>
 
@@ -159,11 +171,19 @@ export const App = () => {
 }
 
 // header component showing tollgate logo above container
+//
+// Two assets, swapped by the palette: the wordmark is white, so on the light
+// palette it disappears (white on a near-white ground). A <picture> swaps the
+// dark-ink wordmark in under `prefers-color-scheme: light` without JS, keeping
+// one code path and no flash.
 export const Header = () => {
   const { t } = useTranslation();
 
   return <div className="tollgate-captive-portal-header">
-    <img src={logoWhite} alt={t('header_image_alt')}></img>
+    <picture>
+      <source srcSet={logoBlack} media="(prefers-color-scheme: light)" />
+      <img src={THEME_LOGO_WHITE} alt={t('header_image_alt')}></img>
+    </picture>
   </div>
 }
 
