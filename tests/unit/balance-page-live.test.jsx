@@ -3,8 +3,10 @@
 // CHARACTERIZATION, with justification (gate 1 of the card): this page already
 // exists and ships. The task is coverage backfill, not new behaviour, so the
 // tests below were written against the shipped code and then proved
-// load-bearing by MUTATION (see the PR body: 8 mutations of this file, 8
-// killed, 0 survivors) rather than by being observed red first.
+// load-bearing by MUTATION (see the PR body) rather than by being observed red
+// first. The mutation run is 8 mutations of this file; 6 die, and the 2 that
+// survive are INERT mutations named in the tests that own them — this header
+// deliberately does not claim "0 survivors".
 //
 // Why this file matters beyond the percentage: it is the LIVE balance page.
 // balance.html loads src/balance.jsx, which renders THIS component — while
@@ -205,11 +207,21 @@ describe('BalancePage (balance.html) — failure branch', () => {
   });
 
   it('a failed refresh replaces the figures with the error panel', async () => {
-    // Shipped behaviour, pinned deliberately: a poll that fails AFTER a
-    // successful reading does not keep the last-good figures on screen — it
-    // swaps the whole panel for the error. That is a judgement call the code
-    // makes, and it is the one users actually see on a flaky link, so it is
-    // asserted rather than left to drift.
+    // PINNED AS A FINDING, not as an endorsement — but unlike the three
+    // `it.fails` conversions in the sibling files, this one is NOT obviously a
+    // bug, so it is asserted positively with the reasoning stated.
+    //
+    // The choice the code makes: a poll that fails AFTER a successful reading
+    // does not keep the last-good figures — it swaps the panel for the error.
+    // Whether that is right is a product judgement (a captive portal whose
+    // backend just dropped arguably should say so rather than show figures
+    // going stale), and no operator decision recording it exists either way.
+    // What this test does is make the judgement VISIBLE: changing it to
+    // "keep last-good and show a stale badge" is a deliberate act that has to
+    // change this assertion.
+    //
+    // Reported to the PR as a product question rather than fixed here (this
+    // card is tests-only).
     vi.useFakeTimers();
     fetchBalanceData.mockResolvedValueOnce(ACTIVE).mockResolvedValue(NETWORK_ERROR);
     render(<BalancePage />);
@@ -270,25 +282,36 @@ describe('BalancePage (balance.html) — the poll loop', () => {
     expect(fetchBalanceData).toHaveBeenCalledTimes(4);
   });
 
-  it('does not paint a refresh that resolves after unmount', async () => {
-    // The `active` flag exists so a slow poll cannot setState on a dead
-    // component. This assertion is deliberately NARROW: measured against the
-    // shipped code, deleting the guard produces no observable difference on
-    // React 18 (it silently ignores an update after unmount, and no longer
-    // warns), so this test is a non-regression pin on "unmounting during an
-    // in-flight poll must not throw", not a mutation proof of the guard
-    // itself. Stated plainly rather than claimed as load-bearing.
+  it('stops painting once unmounted, even if a poll is still in flight', async () => {
+    // The `active` flag guards a setState after unmount. Deleting it is an
+    // INERT mutation on React 18 — the update is silently ignored and no
+    // warning is emitted — so this cannot be proved by mutation, and an
+    // earlier revision of this file papered over that with
+    // `expect(true).toBe(true)`, which is not a test.
+    //
+    // What IS observable, and does change if the teardown is broken: the
+    // interval must be cleared, so a poll in flight is the LAST one. Asserting
+    // the call count after unmount is a real assertion with a real failure
+    // mode, and it is what the guard exists to make safe.
+    vi.useFakeTimers();
     let release;
     fetchBalanceData.mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
     const { unmount } = render(<BalancePage />);
+    expect(fetchBalanceData).toHaveBeenCalledTimes(1);
+
     unmount();
 
     await act(async () => {
       release(ACTIVE);
     });
-    // nothing to assert on a detached DOM; the point is that this line is
-    // reached without throwing
-    expect(true).toBe(true);
+
+    // no NEW poll was scheduled by the late resolve, and the interval is gone
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(fetchBalanceData).toHaveBeenCalledTimes(1);
+    // and the detached tree never received the figures
+    expect(document.querySelector('.tollgate-captive-portal-balance-grid')).toBeNull();
   });
 
   it('hands the translation function to the balance loader', async () => {

@@ -28,30 +28,27 @@ export default defineConfig({
         'src/**/*.{js,jsx}',
         'admin/src/lib/**/*.{ts,tsx}',
       ],
-      // Only the two page BOOTSTRAP entry points are excluded, and they are
-      // excluded because of what they ARE, not because of their score: each
-      // mounts a root component and nothing else (26 and 17 lines). This is a
-      // unit-suite metric; those files' only job is to build the page the
-      // Playwright suite drives, so counting them here measures the wrong
-      // thing. Both are 100% covered anyway by the page suites, so this
-      // exclusion buys the headline number exactly nothing.
+      // NOTHING is excluded except test scaffolding. The two page entry points
+      // (src/index.jsx, src/balance.jsx) used to be here as "bare mounts with no
+      // logic of their own"; removing that exclusion was measured at 0.64 points
+      // (84.30% -> 83.66% statements), so the claim was not quite true and the
+      // exclusion had to go. Both entries are now tested instead by
+      // tests/unit/entries.test.jsx (8 tests) — they decide the theme class and
+      // place the app inside the crash boundary, which is real behaviour.
       //
       // NOTE: an earlier revision of this change also excluded BalancePage.jsx,
       // Background.jsx and ErrorBoundary.jsx as "thin mount points". A cold
       // review flagged that as inaccurate, and re-measurement agreed: they are
       // 139/89/57 lines and carry real logic (state, effects, error handling).
-      // They are all in scope now and all covered — BalancePage.jsx 98.21%,
+      // They are all in scope and all covered — BalancePage.jsx 98.21%,
       // Background.jsx 100%, ErrorBoundary.jsx 100%. Excluding genuinely
       // uncovered files to lift the headline number would be gate-gaming; the
-      // list is two entry points and nothing else, and it is unchanged from
-      // W0.5's.
+      // exclude list is now test scaffolding only, and every file the metric
+      // counts has been exercised.
       exclude: [
         '**/*.test.{js,jsx}',
         '**/__tests__/**',
         'src/test/**',
-        // bare page-mount entry points (no logic of their own)
-        'src/index.jsx',
-        'src/balance.jsx',
       ],
       // Gate 3 of t_796966be asks for ">= .coverage-threshold (default 80%)
       // once the suite can REPORT it". W0.5 only supplied the precondition
