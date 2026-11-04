@@ -90,6 +90,13 @@ jobs:
         # again (fail open) when :8443 never came up.
         run: sh packaging/tests/test-92-admin-board-tls.sh
       - run: npm test
+      - name: Coverage floors (ratchet)
+        # The four thresholds in vitest.config.js only execute when coverage is
+        # collected, so `npm test` alone never enforces them — the ratchet would
+        # have existed on paper only. This step makes it bite in CI: coverage
+        # cannot silently regress below the measured baseline. These are the
+        # MEASURED floors, not the card's 80% target; see vitest.config.js.
+        run: npm run test:coverage
       - name: Packaging guard (foreign-skin cleanup)
         run: sh tests/packaging/foreign-skins-guard.sh .
       - run: npm run build
