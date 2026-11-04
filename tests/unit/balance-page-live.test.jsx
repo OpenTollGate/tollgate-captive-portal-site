@@ -282,17 +282,21 @@ describe('BalancePage (balance.html) — the poll loop', () => {
     expect(fetchBalanceData).toHaveBeenCalledTimes(4);
   });
 
-  it('stops painting once unmounted, even if a poll is still in flight', async () => {
+  it('cancels the poll interval on unmount, so a late resolve is the last one', async () => {
     // The `active` flag guards a setState after unmount. Deleting it is an
     // INERT mutation on React 18 — the update is silently ignored and no
-    // warning is emitted — so this cannot be proved by mutation, and an
+    // warning is emitted — so this CANNOT be proved by mutation, and an
     // earlier revision of this file papered over that with
-    // `expect(true).toBe(true)`, which is not a test.
+    // `expect(true).toBe(true)`, which is not a test. The title used to claim
+    // "stops painting once unmounted", which overstated what is asserted here.
     //
     // What IS observable, and does change if the teardown is broken: the
     // interval must be cleared, so a poll in flight is the LAST one. Asserting
     // the call count after unmount is a real assertion with a real failure
-    // mode, and it is what the guard exists to make safe.
+    // mode (delete the clearInterval and it retries forever), and clearing the
+    // interval is what the guard exists alongside. The null check on the grid
+    // is auxiliary: it confirms the detached tree rendered no figures, which no
+    // amount of state-setting could change on an unmounted root.
     vi.useFakeTimers();
     let release;
     fetchBalanceData.mockReturnValueOnce(new Promise((resolve) => (release = resolve)));

@@ -85,6 +85,16 @@ const mountRoot = () => {
   return root;
 };
 
+// The element the entry handed to createRoot(). A helper rather than
+// `renderMock.mock.calls[0][0]` at each call site: taking call 0 assumes the
+// entry renders EXACTLY once, and that assumption would silently mask a change
+// (StrictMode, a second render pass) by rendering a stale element. Asserting it
+// names the reason instead of hiding it.
+const mountedElement = () => {
+  expect(renderMock).toHaveBeenCalledTimes(1);
+  return renderMock.mock.calls[0][0];
+};
+
 beforeEach(() => {
   vi.resetModules();
   renderMock.mockReset();
@@ -147,7 +157,7 @@ describe('src/index.jsx — the portal entry', () => {
     mountRoot();
     await import('../../src/index.jsx');
 
-    render(renderMock.mock.calls[0][0]);
+    render(mountedElement());
     expect(screen.getByTestId('boundary-ok')).toBeTruthy();
     expect(screen.getByTestId('app-mounted')).toBeTruthy();
   });
@@ -170,7 +180,7 @@ describe('src/balance.jsx — the standalone balance entry', () => {
     mountRoot();
     await import('../../src/balance.jsx');
 
-    render(renderMock.mock.calls[0][0]);
+    render(mountedElement());
     expect(screen.getByTestId('boundary-ok')).toBeTruthy();
     expect(screen.getByTestId('balance-mounted')).toBeTruthy();
   });
@@ -182,7 +192,7 @@ describe('src/balance.jsx — the standalone balance entry', () => {
     mountRoot();
     await import('../../src/balance.jsx');
 
-    render(renderMock.mock.calls[0][0]);
+    render(mountedElement());
     expect(screen.getByTestId('balance-mounted')).toBeTruthy();
     expect(screen.queryByTestId('app-mounted')).toBeNull();
   });

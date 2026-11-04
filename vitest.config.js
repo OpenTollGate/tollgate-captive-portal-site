@@ -28,13 +28,27 @@ export default defineConfig({
         'src/**/*.{js,jsx}',
         'admin/src/lib/**/*.{ts,tsx}',
       ],
-      // NOTHING is excluded except test scaffolding. The two page entry points
-      // (src/index.jsx, src/balance.jsx) used to be here as "bare mounts with no
-      // logic of their own"; removing that exclusion was measured at 0.64 points
-      // (84.30% -> 83.66% statements), so the claim was not quite true and the
-      // exclusion had to go. Both entries are now tested instead by
-      // tests/unit/entries.test.jsx (8 tests) — they decide the theme class and
-      // place the app inside the crash boundary, which is real behaviour.
+      // The `exclude` list is test scaffolding only — no product file is
+      // hidden from the metric here. The two page entry points
+      // (src/index.jsx, src/balance.jsx) used to be excluded as "bare mounts
+      // with no logic of their own"; removing that exclusion was measured at
+      // 0.64 points (84.30% -> 83.66% statements), so the claim was not quite
+      // true and the exclusion had to go. Both entries are now tested instead
+      // by tests/unit/entries.test.jsx (8 tests) — they decide the theme class
+      // and place the app inside the crash boundary, which is real behaviour.
+      //
+      // Note the two claims are distinct, and this comment used to conflate
+      // them: "the exclude list hides no product file" is true, but it does NOT
+      // follow that `include` spans every product source. It deliberately spans
+      // `src/**` plus ONLY `admin/src/lib/**`, and the rest of the admin board
+      // (admin/src/{routes,components}/*.tsx, brand*.ts, main.tsx — ~3.8k lines)
+      // is outside the unit metric on purpose: it is covered by the admin
+      // Playwright suite (admin-settings-network, admin-credential-guard,
+      // admin-peering, admin-wallet-wifi, admin-i18n, ...), which is a different
+      // gate. Widening `include` to pull it in would add uncovered files and
+      // LOWER this headline — dilution in the exact sense the card forbids, not
+      // a more honest scope. So the scope stands as-is and the comment says
+      // what it actually covers.
       //
       // NOTE: an earlier revision of this change also excluded BalancePage.jsx,
       // Background.jsx and ErrorBoundary.jsx as "thin mount points". A cold
