@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "probe:walle": "node scripts/probe-walle-objective.mjs",
+    "probe:walle:log": "node scripts/probe-walle-objective.mjs --write docs/analysis/walle-objective-history.jsonl",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:visual": "playwright test --update-snapshots",
