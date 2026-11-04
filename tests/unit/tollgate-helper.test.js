@@ -493,17 +493,6 @@ describe('formatting helpers', () => {
   });
 
   it('formats kibibytes and mebibytes by magnitude', () => {
-    // PRODUCT BUG, characterised not endorsed: the KiB branch computes
-    //   unit: i18n("KiB").toFixed(1)
-    // i.e. it calls .toFixed on the translated UNIT STRING instead of on the
-    // byte value, so formatDataSize throws a TypeError for any size in
-    // [1024, 1048576). getStepSizeValues/calculateAllocation route byte-metric
-    // gateways straight into it, so a tollgate whose step_size lands in that
-    // window crashes the render. Asserting the throw keeps the suite honest
-    // about current behaviour; the fix is a one-line change tracked separately
-    // (a coverage card must not change product code).
-    expect(() => formatDataSize(2048, i18n)).toThrow(TypeError);
-
     expect(formatDataSize(5 * 1048576, i18n)).toEqual({
       value: '5.00',
       unit: 'MiB',
@@ -512,6 +501,26 @@ describe('formatting helpers', () => {
       value: '3.000',
       unit: 'GiB',
     });
+  });
+
+  it.fails('formats a kibibyte-range size instead of throwing', () => {
+    // PRODUCT BUG, asserted as a FAILING expectation rather than pinned as
+    // correct. src/helpers/tollgate.js:286 computes
+    //     unit: i18n("KiB").toFixed(1)
+    // i.e. it calls .toFixed on the translated UNIT STRING instead of on the
+    // byte value, so formatDataSize throws a TypeError for any size in
+    // [1024, 1048576). getStepSizeValues/calculateAllocation route byte-metric
+    // gateways straight into it, so a tollgate whose step_size lands in that
+    // window crashes the render.
+    //
+    // `it.fails` is deliberate and is the reviewer's point taken: a plain
+    // `expect(...).toThrow()` would make today's crash the CONTRACT and turn
+    // the one-line fix into a test failure. Here the suite expects the correct
+    // behaviour and documents that it currently does not hold — so fixing the
+    // bug makes this test fail-to-fail, i.e. it goes red and demands to be
+    // promoted to `it`. Fixing product code is out of scope for this card.
+    expect(() => formatDataSize(2048, i18n)).not.toThrow();
+    expect(formatDataSize(2048, i18n)).toEqual({ value: '2.0', unit: 'KiB' });
   });
 
   it('formats the step size according to the event metric', () => {
@@ -526,10 +535,18 @@ describe('formatting helpers', () => {
       unit: 'MiB',
     });
     expect(getStepSizeValues({ metric: 'parsecs', step_size: 1 }, i18n)).toBe(false);
-    // The byte path throws in [1024, 1048576) for the reason documented above.
-    expect(() => getStepSizeValues({ metric: 'bytes', step_size: 4096 }, i18n)).toThrow(
-      TypeError
-    );
+  });
+
+  it.fails('returns a KiB step size instead of throwing', () => {
+    // Same product bug, reached through the step-size door: a byte-metric
+    // gateway whose step_size lands in [1024, 1048576) crashes the render.
+    // `it.fails` for the same reason as above — the CORRECT behaviour is
+    // asserted, and the current throw is recorded as a known failure so a fix
+    // turns this red instead of silently breaking it.
+    expect(getStepSizeValues({ metric: 'bytes', step_size: 4096 }, i18n)).toEqual({
+      value: '4.0',
+      unit: 'KiB',
+    });
   });
 });
 

@@ -129,14 +129,20 @@ describe('Lightning — access options', () => {
     expect(input.value).toBe('210');
   });
 
-  it('offers no purchase path when the pricing event carries no usable option', () => {
-    // Characterisation, not endorsement: getAccessOptions() answers an ERROR
-    // OBJECT (TG004) rather than [] here, so the component's `options.length`
-    // check is undefined and it does set its LN001 error — which the amount
-    // effect then clears, because there is no amount and no mint to validate.
-    // What the operator is left with is a permanently DISABLED purchase button
-    // and no error at all. Pinned so a fix to that error path is a visible test
-    // change; reported as a finding rather than fixed (this card is tests-only).
+  it.fails('offers no purchase path when the pricing event carries no usable option', () => {
+    // Characterisation, not endorsement — and now expressed as a FAILING
+    // expectation so it is not a contract against the fix.
+    //
+    // getAccessOptions() answers an ERROR OBJECT (TG004) rather than [] here,
+    // so the component's `options.length` check is undefined and it does set
+    // its LN001 error — which the amount effect then clears, because there is
+    // no amount and no mint to validate. What the operator is left with is a
+    // permanently DISABLED purchase button and no error at all: a dead end
+    // with no explanation.
+    //
+    // The assertion below is therefore the CORRECT behaviour (an explanation is
+    // shown). It fails today; a fix makes it pass and the `.fails` can be
+    // dropped. Fixing product code is out of scope for this card.
     renderLightning({
       detailsEvent: { kind: 10021, tags: [['metric', 'milliseconds']] },
       deviceInfo: { type: 'mac', value: 'aa' },
@@ -144,7 +150,8 @@ describe('Lightning — access options', () => {
     expect(screen.queryByTestId('access-options')).toBeNull();
     const cta = screen.getByRole('button', { name: /purchase/ });
     expect(cta.disabled).toBe(true);
-    expect(screen.queryByTestId('status-error')).toBeNull();
+    // the point: the user is TOLD why there is nothing to buy
+    expect(screen.getByTestId('status-error')).toBeTruthy();
   });
 
   it('shows the purchase CTA once an amount is valid', () => {

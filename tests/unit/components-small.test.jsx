@@ -373,8 +373,16 @@ describe('DeviceInfo', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('falls back to placeholders for an unknown identifier type', () => {
+  it.fails('renders the identifier type instead of an unlabelled placeholder', () => {
+    // PRODUCT BUG, asserted as a failing expectation. DeviceInfo.jsx:22
+    // hard-codes the typo'd default `'unkonw_type'` and only maps `mac`, so a
+    // gateway that identifies the client by IP renders the literal string
+    // "unkonw_type: 10.0.0.5" to the customer. The intended behaviour is a
+    // translated type label; a fix should make THIS pass and can then drop the
+    // `.fails`. Asserting the buggy string would instead turn the typo into a
+    // contract. Fixing product code is out of scope for this card.
     render(<DeviceInfo tollgateDetails={{ deviceInfo: { type: 'ip', value: '10.0.0.5' } }} />);
-    expect(screen.getByText(/unkonw_type: 10\.0\.0\.5/)).toBeTruthy();
+    expect(screen.queryByText(/unkonw_type/)).toBeNull();
+    expect(screen.getByText(/unknown_type|device_ip/)).toBeTruthy();
   });
 });
