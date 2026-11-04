@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isPrivateRadioIface,
   PRIVATE_RADIO_SECTION_PREFIX,
+  PRIVATE_RADIO_SECTIONS,
   PRIVATE_NETWORK_NAME,
 } from '../../admin/src/lib/private-radio';
 
@@ -19,6 +20,7 @@ describe('isPrivateRadioIface (the module-owned section contract)', () => {
     expect(isPrivateRadioIface('private_radio0')).toBe(true);
     expect(isPrivateRadioIface('private_radio1')).toBe(true);
     expect(PRIVATE_RADIO_SECTION_PREFIX).toBe('private_radio');
+    expect(PRIVATE_RADIO_SECTIONS).toEqual(['private_radio0', 'private_radio1']);
     expect(PRIVATE_NETWORK_NAME).toBe('private');
   });
 
@@ -49,6 +51,24 @@ describe('isPrivateRadioIface (the module-owned section contract)', () => {
         config: { mode: 'ap', network: 'lan' },
       }),
     ).toBe(false);
+  });
+
+  // The name fast path is exact-match only. `priv_radio0` (the old near-miss)
+  // does not cover the unbounded-suffix family: a startsWith('private_radio')
+  // test accepts ANY suffix, so an unrelated section named `private_radioN`
+  // would have its SSID edit routed through `tollgate config_set private_ssid`
+  // and silently rewritten on BOTH of the module's radios.
+  it('rejects unbounded private_radio suffixes', () => {
+    expect(isPrivateRadioIface('private_radio2')).toBe(false);
+    expect(isPrivateRadioIface('private_radioevil')).toBe(false);
+    expect(isPrivateRadioIface('private_radio99')).toBe(false);
+    expect(isPrivateRadioIface('private_radio')).toBe(false);
+    expect(isPrivateRadioIface('private_radio0x')).toBe(false);
+    // ...but the structural net still catches one of them when it really is
+    // an AP on the private network (the fallback must keep its teeth).
+    expect(
+      isPrivateRadioIface('private_radio2', { mode: 'ap', network: ['private'] }),
+    ).toBe(true);
   });
 
   it('rejects guest radios, non-AP ifaces, and near-miss names', () => {
