@@ -3,6 +3,7 @@ import { ubusCall } from '../lib/ubus';
 import { navigate } from '../lib/router';
 import { isPrivateRadioIface } from '../lib/private-radio';
 import { refusalInApplied } from '../lib/module-reply';
+import GuestWifiCard from '../components/guest-wifi-card';
 
 interface WifiIface {
   ifname: string;
@@ -276,6 +277,8 @@ export default function Wifi() {
           Refresh
         </button>
       </div>
+
+      <GuestWifiCard />
 
       {radioEntries.length === 0 && (
         <div className="card animate-in-delay-1">

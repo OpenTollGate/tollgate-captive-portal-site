@@ -410,6 +410,10 @@ export function mockUbusCall(
     'wireless.reload': () => ({}),
     'dhcp.ipv4leases': () => dhcpLeases,
     'uci.get': () => {
+      if (_params?.config === 'wireless' && ['tollgate_2g_open', 'tollgate_5g_open'].includes(String(_params?.section))) {
+        const fixture = window.sessionStorage.getItem('tg.mock.guest_wifi');
+        return { values: fixture ? JSON.parse(fixture) : { '.type': 'wifi-iface', mode: 'ap', network: 'lan', ssid: 'Restaurant Guest', encryption: 'none' } };
+      }
       if (_params?.config === 'tollgate' && _params?.section === 'lnurl') {
         return { value: { lnurl: `lnurlp://pay.${BRAND.id}.com/.well-known/lnurlp/root` } };
       }
