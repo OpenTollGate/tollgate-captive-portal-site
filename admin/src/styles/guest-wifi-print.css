@@ -1,0 +1,5 @@
+@media print {
+  body * { visibility: hidden !important; }
+  #guest-wifi-print-card, #guest-wifi-print-card * { visibility: visible !important; }
+  #guest-wifi-print-card { position: absolute; left: 0; top: 0; width: 100%; box-sizing: border-box; break-inside: avoid; }
+}
