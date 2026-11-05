@@ -38,6 +38,12 @@ cross-link appears once signed in.
 
 The React guest portal and balance page are unchanged and build separately.
 
+## Saved upstream reconnect
+
+Peering lists the router's saved upstream Wi-Fi profiles. A Reconnect action appears only when `upstream_list` returns `can_reconnect: true` for that profile. Older backends omit the field and keep the existing credential-entry flow. The native backend contract is proposed in [backend PR1202](https://github.com/OpenTollGate/tollgate-module-basic-go/pull/1202); deploy that support before expecting this action to appear.
+
+The operator reviews a warning about interrupting connected devices, then confirms. The request uses the existing authenticated `upstream_connect` RPC with only `{ssid}`. The router resolves its saved credential; this form never reads or sends it. Cancel sends nothing, pending upstream mutations are serialized, and a failed or uncertain response remains visible without automatic retry. The action does not promise internet reachability or change automatic failover policy.
+
 ## Brand
 
 One build ships **one** skin. Branding is resolved from the **brand slot**
