@@ -512,11 +512,30 @@ export function mockUbusCall(
         { ssid: 'OpenNet', signal: -80, encryption: 'none', bssid: '77:88:99:AA:BB:CC', radio: 'radio1' },
       ],
     }),
-    'tollgate.upstream_connect': () => ({ success: true, message: `Connected to '${_params.ssid}'` }),
+    'tollgate.upstream_connect': () => {
+      const mode = new URLSearchParams(window.location.search).get('mockSavedReconnect');
+      const calls = JSON.parse(sessionStorage.getItem('tg.mock.upstream_connect') || '[]');
+      // Record parameter names, never a supplied passphrase value.
+      calls.push({ ssid: _params.ssid, keys: Object.keys(_params).sort() });
+      sessionStorage.setItem('tg.mock.upstream_connect', JSON.stringify(calls));
+      if (mode === 'failure') return { success: false, error: 'fixture reconnect failure' };
+      if (mode === 'transport') return Promise.reject(new Error('fixture reconnect failure'));
+      const result = { success: true, message: `Connected to '${_params.ssid}'` };
+      if (mode === 'slow') return new Promise((resolve) => setTimeout(() => resolve(result), 600));
+      return result;
+    },
     'tollgate.upstream_list': () => ({
       success: true,
       message: '1 upstream STA(s) configured',
-      data: [{ ssid: 'UpstreamWiFi', status: 'ACTIVE', radio: 'radio0', encryption: 'WPA2' }],
+      data: [{ ssid: 'UpstreamWiFi', status: 'ACTIVE', radio: 'radio0', encryption: 'WPA2',
+        ...(() => {
+          const mode = new URLSearchParams(window.location.search).get('mockSavedReconnect');
+          if (mode === 'legacy') return {};
+          if (mode === 'unsupported') return { can_reconnect: false };
+          if (mode === 'string') return { can_reconnect: 'true' };
+          return { can_reconnect: true };
+        })(),
+      }],
     }),
     'tollgate.upstream_remove': () => ({ success: true, message: `Removed upstream '${_params.ssid}'` }),
     'tollgate.upstream_disconnect': () => ({ success: true, message: "Stopped peering; fell back to 'HomeWiFi'" }),

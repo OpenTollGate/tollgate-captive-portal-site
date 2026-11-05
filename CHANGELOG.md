@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 ### Added
+- **Saved upstream reconnect.** Peering can reconnect a saved Wi-Fi profile after an interruption warning, without requesting its key in the browser. The action requires an explicit backend capability and submits only the SSID; legacy backends retain credential entry.
 - **Peering page.** The admin board now has a dedicated Peering route where
   Cobradors can discover nearby TollGate peers, see advertised reseller/mint
   metadata, peer with an open gateway, watch the live peer session and SAT

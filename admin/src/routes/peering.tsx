@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'preact/hooks';
+import { useEffect, useState, useCallback, useRef } from 'preact/hooks';
 import { ubusCall } from '../lib/ubus';
 import { navigate } from '../lib/router';
 
@@ -24,6 +24,7 @@ interface ConfiguredUpstream {
   status: string;
   radio: string;
   encryption: string;
+  can_reconnect?: boolean;
 }
 
 interface KnownPeer {
@@ -103,6 +104,8 @@ export default function Peering() {
   const [stopConfirm, setStopConfirm] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [reconnectTarget, setReconnectTarget] = useState<ConfiguredUpstream | null>(null);
+  const upstreamMutation = useRef(false);
 
   const fetchOwnSSIDs = useCallback(async () => {
     try {
@@ -190,7 +193,8 @@ export default function Peering() {
   }, [fetchOwnSSIDs, fetchConfig, fetchUpstreams, fetchKnown, fetchSessions, doScan]);
 
   async function doConnect() {
-    if (!connectTarget) return;
+    if (!connectTarget || upstreamMutation.current) return;
+    upstreamMutation.current = true;
     setConnecting(true);
     setMsg('');
     setError('');
@@ -210,11 +214,38 @@ export default function Peering() {
     } catch (err: any) {
       setError(err.message || 'Connection failed');
     } finally {
+      upstreamMutation.current = false;
+      setConnecting(false);
+    }
+  }
+
+  async function reconnectSaved() {
+    if (!reconnectTarget || reconnectTarget.can_reconnect !== true || upstreamMutation.current) return;
+    upstreamMutation.current = true;
+    setConnecting(true);
+    setError('');
+    setMsg('');
+    try {
+      const data = await ubusCall('tollgate', 'upstream_connect', { ssid: reconnectTarget.ssid });
+      if (data?.success) {
+        setMsg(`Reconnected to ${reconnectTarget.ssid}`);
+        setReconnectTarget(null);
+        await fetchUpstreams();
+        await fetchSessions();
+      } else {
+        setError(data?.error || 'Reconnect was not confirmed. Check the current peer before trying again.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Reconnect was not confirmed. Check the current peer before trying again.');
+    } finally {
+      upstreamMutation.current = false;
       setConnecting(false);
     }
   }
 
   async function stopPeering() {
+    if (upstreamMutation.current) return;
+    upstreamMutation.current = true;
     setStopping(true);
     setError('');
     setMsg('');
@@ -231,6 +262,7 @@ export default function Peering() {
     } catch (err: any) {
       setError(err.message || 'Could not stop peering');
     } finally {
+      upstreamMutation.current = false;
       setStopping(false);
     }
   }
@@ -269,7 +301,7 @@ export default function Peering() {
         <button
           className={net.is_tollgate ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
           onClick={() => { setConnectTarget(net); setConnectPass(''); setMsg(''); setError(''); }}
-          disabled={scanning || connecting}
+          disabled={scanning || connecting || stopping}
         >
           {net.is_tollgate ? 'Peer with this gateway' : 'Use as upstream'}
         </button>
@@ -288,7 +320,7 @@ export default function Peering() {
           />
         )}
         <div className="connect-form-row">
-          <button className="btn btn-primary btn-sm" onClick={doConnect} disabled={Boolean(connecting || (encrypted && !connectPass))}>
+          <button className="btn btn-primary btn-sm" onClick={doConnect} disabled={Boolean(connecting || stopping || (encrypted && !connectPass))}>
             {connecting ? 'Connecting...' : 'Connect'}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={() => { setConnectTarget(null); setConnectPass(''); }} disabled={connecting}>
@@ -341,7 +373,7 @@ export default function Peering() {
               )}
               <div className="flex gap-sm">
                 {!stopConfirm && (
-                  <button className="btn btn-danger btn-sm" onClick={() => setStopConfirm(true)} disabled={stopping}>
+                  <button className="btn btn-danger btn-sm" onClick={() => setStopConfirm(true)} disabled={stopping || connecting}>
                     Stop peering
                   </button>
                 )}
@@ -349,7 +381,7 @@ export default function Peering() {
                   <div className="remove-confirm-inline">
                     <span className="text-dim">Stop peering and fall back to the best known non-TollGate upstream. If none works, this peer stays active.</span>
                     <div className="flex gap-xs">
-                      <button className="btn btn-danger btn-sm" onClick={stopPeering} disabled={stopping}>
+                      <button className="btn btn-danger btn-sm" onClick={stopPeering} disabled={stopping || connecting}>
                         {stopping ? 'Stopping...' : 'Stop and fall back'}
                       </button>
                       <button className="btn btn-secondary btn-sm" onClick={() => setStopConfirm(false)} disabled={stopping}>Cancel</button>
@@ -417,6 +449,43 @@ export default function Peering() {
           })}
         </div>
       </div>
+
+      {upstreams.length > 0 && (
+        <div className="card">
+          <div className="card-header"><div className="card-title">Saved upstream WiFi</div></div>
+          <div className="card-body">
+            {upstreams.map((upstream) => (
+              <div key={upstream.ssid + upstream.radio} className="peer-row">
+                <div className="peer-main">
+                  <div className="peer-title"><span className="scan-item-ssid">{upstream.ssid}</span>
+                    <span className="badge badge-muted">{upstream.status}</span>
+                  </div>
+                </div>
+                {upstream.can_reconnect === true && (
+                  <div className="peer-action">
+                    {reconnectTarget?.ssid !== upstream.ssid ? (
+                      <button className="btn btn-secondary btn-sm" disabled={connecting || stopping}
+                        onClick={() => { setReconnectTarget(upstream); setMsg(''); setError(''); }}>
+                        Reconnect
+                      </button>
+                    ) : (
+                      <div className="remove-confirm-inline">
+                        <span className="text-dim">Reconnect to {upstream.ssid} using the saved credentials on this router. This may briefly interrupt internet for connected devices.</span>
+                        <div className="flex gap-xs">
+                          <button className="btn btn-primary btn-sm" onClick={reconnectSaved} disabled={connecting || stopping}>
+                            {connecting ? 'Reconnecting...' : 'Reconnect now'}
+                          </button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => setReconnectTarget(null)} disabled={connecting || stopping}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-header"><div className="card-title">Other upstream WiFi</div></div>
