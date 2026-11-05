@@ -1,5 +1,37 @@
 @media print {
+  @page { margin: 12mm; }
+
+  /* Visibility alone retains the dashboard's layout and creates blank pages.
+     Remove unrelated boxes, but keep ancestor text nodes invisible too. */
   body * { visibility: hidden !important; }
+  body *:not(:has(#guest-wifi-print-card)):not(#guest-wifi-print-card):not(#guest-wifi-print-card *) {
+    display: none !important;
+  }
+  html, body, body *:has(#guest-wifi-print-card) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    font-size: 0 !important;
+    visibility: hidden !important;
+  }
   #guest-wifi-print-card, #guest-wifi-print-card * { visibility: visible !important; }
-  #guest-wifi-print-card { position: absolute; left: 0; top: 0; width: 100%; box-sizing: border-box; break-inside: avoid; }
+  #guest-wifi-print-card {
+    position: static;
+    width: 100%;
+    max-width: 160mm;
+    margin: 0 auto;
+    box-sizing: border-box;
+    font-size: 12pt;
+    break-inside: avoid;
+    overflow-wrap: anywhere;
+  }
+  #guest-wifi-print-card img { max-width: 100%; height: auto; }
 }

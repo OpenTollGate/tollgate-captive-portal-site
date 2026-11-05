@@ -73,6 +73,44 @@ test('guest QR roundtrip and print-only card', async ({ page }) => {
   await page.getByRole('button', { name: 'Hide guest card' }).click();
   await expect(image).toHaveCount(0);
 });
+for (const format of ['A4', 'Letter']) test(`Unicode card prints one ${format} page`, async ({ page }, testInfo) => {
+  await page.addInitScript(() => sessionStorage.setItem('tg.mock.guest_wifi', JSON.stringify({ '.type':'wifi-iface',mode:'ap',network:'lan',ssid:'Café;餐厅',encryption:'psk2',key:'guest;password',hidden:'1' })));
+  await page.goto('./#/wifi');
+  await page.getByRole('button', {name:'Prepare guest card'}).click();
+  const image = page.getByAltText('Scan to join guest Wi-Fi');
+  await expect(image).toBeVisible();
+  const expected = await image.evaluate(async (img, url) => (await import(url)).default.scanImage(img, {returnDetailedScanResult:true}), scannerUrl);
+  expect(expected.data).toBe('WIFI:T:WPA;S:Café\\;餐厅;P:guest\\;password;H:true;;');
+  await page.evaluate(() => {
+    document.body.append('OUTSIDE-SENTINEL');
+    document.querySelector('.guest-wifi-controls').prepend('CONTROL-SENTINEL');
+  });
+  await page.emulateMedia({media:'print'});
+  const pdf = testInfo.outputPath(`card-${format}.pdf`);
+  await page.pdf({path:pdf, format, printBackground:true});
+  const info = execFileSync('pdfinfo', [pdf], {encoding:'utf8'});
+  expect(info).toMatch(/Pages:\s+1\b/);
+  const dimensions = info.match(/Page size:\s+([\d.]+) x ([\d.]+)/).slice(1).map(Number);
+  const target = format === 'A4' ? [595.28, 841.89] : [612, 792];
+  dimensions.forEach((n, i) => expect(Math.abs(n - target[i])).toBeLessThan(1));
+  const text = execFileSync('pdftotext', ['-layout', pdf, '-'], {encoding:'utf8'});
+  expect(text).toContain('Guest Wi-Fi');
+  expect(text).toContain('Joining Wi-Fi does not include paid internet access.');
+  expect(text).not.toMatch(/SENTINEL|Guest radio|Prepare guest card|Refresh|Save|Printing publishes/);
+  const bbox = execFileSync('pdftotext', ['-bbox', pdf, '-'], {encoding:'utf8'});
+  for (const match of bbox.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)"/g)) {
+    const [x1,y1,x2,y2] = match.slice(1).map(Number);
+    expect(x1).toBeGreaterThanOrEqual(20); expect(y1).toBeGreaterThanOrEqual(20);
+    expect(x2).toBeLessThan(dimensions[0]-20); expect(y2).toBeLessThan(dimensions[1]-20);
+  }
+  const raster = testInfo.outputPath(`card-${format}`);
+  execFileSync('pdftoppm', ['-singlefile','-scale-to','1800','-png',pdf,raster]);
+  const printedImage = 'data:image/png;base64,' + readFileSync(raster+'.png').toString('base64');
+  const printed = await page.evaluate(async ({scannerUrl,printedImage}) => (await import(scannerUrl)).default.scanImage(printedImage,{returnDetailedScanResult:true}), {scannerUrl,printedImage});
+  expect(printed.data).toBe(expected.data);
+  const qr = await image.boundingBox();
+  expect(qr.width).toBeGreaterThanOrEqual(260); expect(qr.width).toBeLessThanOrEqual(340);
+});
 test('WPA special characters decode and changing radio clears credentials', async ({ page }) => {
   await page.addInitScript(() => sessionStorage.setItem('tg.mock.guest_wifi', JSON.stringify({ '.type':'wifi-iface', mode:'ap',network:'lan',ssid:'Café;:"',encryption:'psk2',key:'guest;password',hidden:'1' })));
   await page.goto('./#/wifi');
