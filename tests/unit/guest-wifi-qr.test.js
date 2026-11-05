@@ -14,9 +14,10 @@ describe('guest Wi-Fi QR', () => {
   it.each([{mode:'sta'}, {network:'private'}, {network:['lan','private']}, {network:''}, {'.type':'wifi-device'}, {ssid:''}, {ssid:'é'.repeat(17)}, {disabled:'1'}, {encryption:'sae'}, {encryption:'wep'}, {encryption:'wpa2'}, {encryption:'psk2',key:''}, {encryption:'psk2',key:'short'}, {hidden:'invalid'}])('fails closed for invalid configuration %j', patch => {
     expect(() => guestWifiPayload('tollgate_2g_open', {...guest,...patch})).toThrow();
   });
-  it.each([true, 1, 'yes', 'true', 2, null])('rejects disabled or ambiguous disabled flag %j', disabled => {
+  it.each([true, 1, 'yes', 'true', '2', [['1']], 2, null])('rejects disabled or ambiguous disabled flag %j', disabled => {
     expect(() => guestWifiPayload('tollgate_2g_open', { ...guest, disabled })).toThrow();
   });
+  it.each([{network:'lan guest'}, {network:['lan','guest']}, {network:['lan','lan']}])('rejects ambiguous attachment %j', patch => { expect(() => guestWifiPayload('tollgate_2g_open', {...guest, ...patch})).toThrow(); });
   it.each(['psk','psk2','psk-mixed','psk2+ccmp'])('supports personal encryption %s', encryption => {
     expect(guestWifiPayload('tollgate_2g_open', {...guest,encryption,key:'password',hidden:true})).toBe('WIFI:T:WPA;S:Cafe;P:password;H:true;;');
   });

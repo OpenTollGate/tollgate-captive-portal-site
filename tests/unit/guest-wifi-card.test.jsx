@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import GuestWifiCard from '../../admin/src/components/guest-wifi-card';
+import QRCode from 'qrcode';
 import { ubusCall } from '../../admin/src/lib/ubus';
 vi.mock('../../admin/src/lib/ubus', () => ({ ubusCall: vi.fn() }));
 const guest = { '.type': 'wifi-iface', mode: 'ap', network: 'guest', ssid: 'Cafe', encryption: 'none' };
@@ -10,8 +11,26 @@ let host;
 function button(text) { return [...host.querySelectorAll('button')].find(b => b.textContent === text); }
 async function mount() { host = document.createElement('div'); document.body.append(host); await act(() => render(h(GuestWifiCard), host)); }
 async function click(text) { await act(async () => { button(text).click(); await new Promise(r => setTimeout(r, 0)); }); }
-afterEach(() => { render(null, host); host.remove(); vi.resetAllMocks(); });
+afterEach(() => { render(null, host); host.remove(); vi.restoreAllMocks(); vi.resetAllMocks(); });
 describe('guest card component', () => {
+  it('redacts encoder failure', async () => {
+    vi.spyOn(QRCode, 'toString').mockRejectedValue(new Error('SECRET encoder'));
+    ubusCall.mockResolvedValue({values:guest}); await mount(); await click('Prepare guest card');
+    expect(host.querySelector('[role=alert]')).not.toBeNull();
+    expect(host.textContent).not.toContain('SECRET');
+  });
+  it.each(['fetch', 'encoder', 'error'])('discards pending %s on unmount', async stage => {
+    let settle;
+    const pending = new Promise((resolve, reject) => { settle = stage === 'error' ? reject : resolve; });
+    const encoder = vi.spyOn(QRCode, 'toString');
+    if (stage === 'encoder') { ubusCall.mockResolvedValue({values:guest}); encoder.mockReturnValue(pending); }
+    else ubusCall.mockReturnValue(pending);
+    await mount(); await act(async () => { button('Prepare guest card').click(); await Promise.resolve(); });
+    await act(() => render(null, host));
+    await act(async () => { settle(stage === 'error' ? new Error('SECRET') : stage === 'encoder' ? '<svg/>' : {values:guest}); await Promise.resolve(); });
+    expect(host.innerHTML).toBe('');
+    if (stage === 'fetch') expect(encoder).not.toHaveBeenCalled();
+  });
   it('reads only the selected guest and discards credentials on hide and selection', async () => {
     ubusCall.mockResolvedValue({ values: guest }); await mount(); await click('Prepare guest card');
     expect(ubusCall).toHaveBeenCalledExactlyOnceWith('uci', 'get', { config: 'wireless', section: 'tollgate_2g_open' });

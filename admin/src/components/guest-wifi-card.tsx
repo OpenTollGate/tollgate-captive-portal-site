@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useRef, useLayoutEffect } from 'preact/hooks';
 import QRCode from 'qrcode';
 import '../styles/guest-wifi-print.css';
 import { ubusCall } from '../lib/ubus';
@@ -9,20 +9,27 @@ export default function GuestWifiCard() {
   const [card, setCard] = useState<{ ssid: string; image: string } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const generation = useRef(0);
+  // Save/refresh removes this instance; obsolete fetch/encoder results die with it.
+  useLayoutEffect(() => () => { generation.current++; }, []);
   async function prepare() {
+    const request = ++generation.current;
     setCard(null); setError(''); setBusy(true);
     try {
       // Fetch only the selected guest section. Never fetch config.json/private_key.
       const result = await ubusCall('uci', 'get', { config: 'wireless', section });
+      if (request !== generation.current) return;
       const cfg = result?.values;
       if (!cfg) throw new Error('Guest configuration unavailable.');
       const payload = guestWifiPayload(section, cfg);
       const svg = await QRCode.toString(payload, { type: 'svg', margin: 4, width: 320, errorCorrectionLevel: 'M' });
+      if (request !== generation.current) return;
       setCard({ ssid: cfg.ssid, image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` });
     } catch (err) {
+      if (request !== generation.current) return;
       // Do not render RPC error text: a transport error could include credentials.
       setError('Cannot prepare guest card. Check that this is an enabled guest AP using open or WPA/WPA2-Personal authentication on lan/guest.');
-    } finally { setBusy(false); }
+    } finally { if (request === generation.current) setBusy(false); }
   }
   return <section className="card guest-wifi-controls">
     <h3>Guest Wi-Fi table card</h3>

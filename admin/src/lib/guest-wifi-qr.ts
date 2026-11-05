@@ -7,7 +7,7 @@ const escapeWifi = (value: string) => value.replace(/[\\;,:\"]/g, '\\$&');
 export function guestWifiPayload(section: string, cfg: Record<string, any>): string {
   const networks = Array.isArray(cfg.network) ? cfg.network : String(cfg.network || '').split(/\s+/).filter(Boolean);
   if (!GUEST_SECTIONS.includes(section) || cfg['.type'] !== 'wifi-iface' ||
-      cfg.mode !== 'ap' || ![undefined, false, '0', 0].includes(cfg.disabled) || !networks.length ||
+      cfg.mode !== 'ap' || ![undefined, false, '0', 0].includes(cfg.disabled) || networks.length !== 1 ||
       isPrivateRadioIface(section, cfg) || networks.some((n: string) => n !== 'lan' && n !== 'guest')) {
     throw new Error('Not a supported guest AP. Private, upstream and ambiguous networks cannot be printed.');
   }
