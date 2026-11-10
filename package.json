@@ -15,7 +15,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:visual": "playwright test --update-snapshots",
     "test:admin": "playwright test --config admin/playwright.config.mjs",
-    "rename-html": "node -e \"const fs = require('fs'); const path = require('path'); const buildDir = path.join(__dirname, 'build'); const indexHtml = path.join(buildDir, 'index.html'); const splashHtml = path.join(buildDir, 'splash.html'); const manifestPath = path.join(buildDir, 'asset-manifest.json'); fs.renameSync(indexHtml, splashHtml); if (fs.existsSync(manifestPath)) { const manifest = fs.readFileSync(manifestPath, 'utf8').replace(/index\\.html/g, 'splash.html'); fs.writeFileSync(manifestPath, manifest); }\""
+    "rename-html": "node -e \"const fs = require('fs'); const path = require('path'); const buildDir = path.join(__dirname, 'build'); const indexHtml = path.join(buildDir, 'index.html'); const splashHtml = path.join(buildDir, 'splash.html'); const manifestPath = path.join(buildDir, 'asset-manifest.json'); fs.renameSync(indexHtml, splashHtml); if (fs.existsSync(manifestPath)) { const manifest = fs.readFileSync(manifestPath, 'utf8').replace(/index\\.html/g, 'splash.html'); fs.writeFileSync(manifestPath, manifest); }\"",
+    "check:features": "node scripts/check-features.mjs build"
   },
   "dependencies": {
     "@cashu/cashu-ts": "2.9.0",

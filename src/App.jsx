@@ -24,6 +24,15 @@ import logoWhite from './assets/logo/TollGate_Logo-C-white.png';
 import logoBlack from './assets/logo/TollGate_Logo-C-black.png';
 import cobradorLogoWhite from './assets/brand/cobrador/logo-white.png';
 
+// Brand logo slot (optional): when a branded build installed a brand logo into
+// public/assets/brand/<id>/logo-white.png, prefer it at RUNTIME. The default
+// (unbranded) build has no such file and keeps the static import above —
+// byte-identical behaviour when no brand is selected.
+const BRAND_LOGO_ID = import.meta.env.VITE_BRAND || '';
+const brandLogoPath = BRAND_LOGO_ID
+  ? `${import.meta.env.BASE_URL}assets/brand/${BRAND_LOGO_ID}/logo-white.png`
+  : '';
+
 // main component
 const THEME_LOGO_WHITE = import.meta.env.VITE_THEME === 'cobrador-island' ? cobradorLogoWhite : logoWhite;
 
@@ -180,10 +189,18 @@ export const Header = () => {
   const { t } = useTranslation();
 
   return <div className="tollgate-captive-portal-header">
-    <picture>
-      <source srcSet={logoBlack} media="(prefers-color-scheme: light)" />
-      <img src={THEME_LOGO_WHITE} alt={t('header_image_alt')}></img>
-    </picture>
+    {brandLogoPath ? (
+      <img
+        src={brandLogoPath}
+        onError={(e) => { e.currentTarget.src = logoWhite; }}
+        alt={t('header_image_alt')}
+      ></img>
+    ) : (
+      <picture>
+        <source srcSet={logoBlack} media="(prefers-color-scheme: light)" />
+        <img src={THEME_LOGO_WHITE} alt={t('header_image_alt')}></img>
+      </picture>
+    )}
   </div>
 }
 
