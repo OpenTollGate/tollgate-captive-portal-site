@@ -60,7 +60,7 @@
   "access_granted_subtitle": "您现在拥有 {{purchased}} 的互联网访问权限。您的连接处于活动状态。",
   "access_duration_label": "已购买访问权限",
   "view_balance": "💰 查看余额",
-  "balance_link_hint": "您可以随时查看剩余的互联网余额。",
+  "balance_link_hint": "收藏此页面，稍后查看您的剩余互联网余额：{{url}}",
   "session_expired_title": "会议结束",
   "session_expired_message": "您的互联网访问权限已过期。您可以在这里购买更多时间 - 无需断开连接。",
   "session_expired_buy_more": "购买更多时间",

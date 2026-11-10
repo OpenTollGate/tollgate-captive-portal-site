@@ -60,7 +60,7 @@
   "access_granted_subtitle": "You now have {{purchased}} of internet access. Your connection is active.",
   "access_duration_label": "Access purchased",
   "view_balance": "💰 View Balance",
-  "balance_link_hint": "You can check your remaining internet balance at any time.",
+  "balance_link_hint": "Bookmark this page to check your remaining internet balance later: {{url}}",
   "session_expired_title": "Session ended",
   "session_expired_message": "Your internet access has expired. You can buy more time right here — no need to disconnect.",
   "session_expired_buy_more": "Buy more time",
@@ -162,4 +162,5 @@
   "gateway.unavailable": "Gateway choice is not available on this router.",
   "gateway.choice_locked": "Locked by this router",
   "gateway.use_for_next_session": "Use for next session"
+
 }

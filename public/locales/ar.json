@@ -60,7 +60,7 @@
   "access_granted_subtitle": "لديك الآن {{purchased}} إمكانية الوصول إلى الإنترنت. اتصالك نشط.",
   "access_duration_label": "تم شراء الوصول",
   "view_balance": "💰 عرض الرصيد",
-  "balance_link_hint": "يمكنك التحقق من رصيد الإنترنت المتبقي لديك في أي وقت.",
+  "balance_link_hint": "احفظ هذه الصفحة للتحقق من رصيد الإنترنت المتبقي لاحقًا: {{url}}",
   "session_expired_title": "انتهت الجلسة",
   "session_expired_message": "انتهت صلاحية الوصول إلى الإنترنت الخاص بك. يمكنك شراء المزيد من الوقت هنا - لا داعي لقطع الاتصال.",
   "session_expired_buy_more": "شراء المزيد من الوقت",

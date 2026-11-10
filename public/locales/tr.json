@@ -60,7 +60,7 @@
   "access_granted_subtitle": "Artık {{purchased}} internet erişiminiz var. Bağlantınız aktif.",
   "access_duration_label": "Erişim satın alındı",
   "view_balance": "💰 Bakiyeyi Görüntüle",
-  "balance_link_hint": "Kalan internet bakiyenizi istediğiniz zaman kontrol edebilirsiniz.",
+  "balance_link_hint": "Kalan internet bakiyenizi daha sonra kontrol etmek için bu sayfayı yer imlerine ekleyin: {{url}}",
   "session_expired_title": "Oturum sona erdi",
   "session_expired_message": "İnternet erişiminizin süresi doldu. Buradan daha fazla zaman satın alabilirsiniz; bağlantıyı kesmenize gerek yok.",
   "session_expired_buy_more": "Daha fazla zaman satın alın",

@@ -60,7 +60,7 @@
   "access_granted_subtitle": "Anda sekarang memiliki {{purchased}} akses internet. Koneksi Anda aktif.",
   "access_duration_label": "Akses dibeli",
   "view_balance": "💰 Lihat Saldo",
-  "balance_link_hint": "Anda dapat memeriksa sisa saldo internet Anda kapan saja.",
+  "balance_link_hint": "Tandai halaman ini untuk memeriksa sisa saldo internet Anda nanti: {{url}}",
   "session_expired_title": "Sesi berakhir",
   "session_expired_message": "Akses internet Anda telah kedaluwarsa. Anda dapat mengulur lebih banyak waktu di sini — tidak perlu memutuskan sambungan.",
   "session_expired_buy_more": "Beli lebih banyak waktu",

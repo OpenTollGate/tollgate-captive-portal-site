@@ -60,7 +60,7 @@
   "access_granted_subtitle": "Bây giờ bạn có {{purchased}} quyền truy cập Internet. Kết nối của bạn đang hoạt động.",
   "access_duration_label": "Đã mua quyền truy cập",
   "view_balance": "💰 Xem số dư",
-  "balance_link_hint": "You can check your remaining internet balance at any time.",
+  "balance_link_hint": "Đánh dấu trang này để kiểm tra số dư Internet còn lại của bạn sau này: {{url}}",
   "session_expired_title": "Phiên đã kết thúc",
   "session_expired_message": "Truy cập internet của bạn đã hết hạn. You can buy more time right here — no need to disconnect.",
   "session_expired_buy_more": "Mua thêm thời gian",

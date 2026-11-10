@@ -60,7 +60,7 @@
   "access_granted_subtitle": "これで、{{purchased}} のインターネット アクセスが可能になりました。接続はアクティブです。",
   "access_duration_label": "購入したアクセス",
   "view_balance": "💰 残高を表示",
-  "balance_link_hint": "インターネット残高はいつでも確認できます。",
+  "balance_link_hint": "残りのインターネット残高を後で確認するには、このページをブックマークしてください：{{url}}",
   "session_expired_title": "セッションが終了しました",
   "session_expired_message": "インターネット アクセスの有効期限が切れました。ここでさらに時間を稼ぐことができます。接続を切断する必要はありません。",
   "session_expired_buy_more": "もっと時間を稼ぎます",

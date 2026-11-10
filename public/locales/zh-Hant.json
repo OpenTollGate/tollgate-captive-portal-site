@@ -60,7 +60,7 @@
   "access_granted_subtitle": "您現在擁有 {{purchased}} 的網路存取權限。您的連線處於活動狀態。",
   "access_duration_label": "已購買存取權限",
   "view_balance": "💰 看餘額",
-  "balance_link_hint": "您可以隨時查看剩餘的網路餘額。",
+  "balance_link_hint": "收藏此頁面，稍後查看您的剩餘網路餘額：{{url}}",
   "session_expired_title": "會議結束",
   "session_expired_message": "您的網路存取權限已過期。您可以在這裡購買更多時間 - 無需斷開連接。",
   "session_expired_buy_more": "爭取更多時間",

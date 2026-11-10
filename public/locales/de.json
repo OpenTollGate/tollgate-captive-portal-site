@@ -60,7 +60,7 @@
   "access_granted_subtitle": "Sie haben jetzt {{purchased}} Internetzugang. Ihre Verbindung ist aktiv.",
   "access_duration_label": "Zugang erworben",
   "view_balance": "💰 Kontostand anzeigen",
-  "balance_link_hint": "Sie können Ihr verbleibendes Internetguthaben jederzeit überprüfen.",
+  "balance_link_hint": "Lesezeichen Sie diese Seite, um Ihr verbleibendes Internetguthaben später zu prüfen: {{url}}",
   "session_expired_title": "Sitzung beendet",
   "session_expired_message": "Ihr Internetzugang ist abgelaufen. Hier können Sie mehr Zeit gewinnen – ohne dass Sie die Verbindung trennen müssen.",
   "session_expired_buy_more": "Kaufen Sie mehr Zeit",

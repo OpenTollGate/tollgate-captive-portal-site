@@ -60,7 +60,7 @@
   "access_granted_subtitle": "Vous disposez désormais de {{purchased}} d'accès à Internet. Votre connexion est active.",
   "access_duration_label": "Accès acheté",
   "view_balance": "💰 Afficher le solde",
-  "balance_link_hint": "Vous pouvez vérifier votre solde Internet restant à tout moment.",
+  "balance_link_hint": "Marquez cette page pour consulter votre solde Internet restant plus tard : {{url}}",
   "session_expired_title": "Séance terminée",
   "session_expired_message": "Votre accès Internet a expiré. Vous pouvez gagner plus de temps ici – pas besoin de vous déconnecter.",
   "session_expired_buy_more": "Gagnez plus de temps",
