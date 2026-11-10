@@ -61,7 +61,9 @@ describe('credential state probe (pre-auth)', () => {
 
     // A router that does not answer the marker question is not a provisional
     // one: `provisional` defaults to false and is only true on an explicit
-    // answer (see tests/unit/admin-provisional-credential.test.js).
+    // answer (see tests/unit/admin-provisional-credential.test.js). The same
+    // holds for the companion `privateWifiProvisional` fact the WiFi marker
+    // added, so both flags are present and false on a silent router.
     expect(status).toEqual({
       state: 'set',
       passwordSet: true,
@@ -160,6 +162,7 @@ describe('credential state probe (pre-auth)', () => {
     // `provisional` and `privateWifiProvisional` are the two install-time
     // marker states (generated credentials the owner must replace); they are
     // facts about the credential, still never values.
+
     expect(Object.keys(status).sort()).toEqual([
       'passwordSet',
       'privateWifiProvisional',

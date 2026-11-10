@@ -34,6 +34,7 @@ import {
   PROVISIONAL_MARKER_PATH,
   requiresPasswordChoice,
   validatePasswordChoice,
+  validateWifiPassphrase,
 } from '../../admin/src/lib/provisional';
 
 function ubusReply(result) {
@@ -163,6 +164,35 @@ describe('the new password policy', () => {
   it('checks the password before the confirmation', () => {
     // An empty pair must read as "enter a new password", never as "mismatch".
     expect(validatePasswordChoice('', 'x')).toMatch(/enter a new password/i);
+  });
+});
+
+// The private-WiFi passphrase. The router enforces WPA2-PSK bounds and used to
+// drop an out-of-bounds value SILENTLY while reporting success; the client half
+// of the same policy means the owner is told before the round trip.
+describe('the management WiFi passphrase policy', () => {
+  it('accepts a blank value — "keep the installed key"', () => {
+    expect(validateWifiPassphrase('')).toBe('');
+  });
+
+  it('accepts exactly the WPA2-PSK minimum', () => {
+    expect(validateWifiPassphrase('x'.repeat(8))).toBe('');
+  });
+
+  it('accepts exactly the WPA2-PSK maximum', () => {
+    expect(validateWifiPassphrase('x'.repeat(63))).toBe('');
+  });
+
+  it('refuses one character short of the minimum', () => {
+    expect(validateWifiPassphrase('x'.repeat(7))).toMatch(/at least 8/i);
+  });
+
+  it('refuses one character past the maximum', () => {
+    expect(validateWifiPassphrase('x'.repeat(64))).toMatch(/at most 63/i);
+  });
+
+  it('does not refuse a passphrase with spaces (they are legal WPA2-PSK)', () => {
+    expect(validateWifiPassphrase('a b c d e f')).toBe('');
   });
 });
 
