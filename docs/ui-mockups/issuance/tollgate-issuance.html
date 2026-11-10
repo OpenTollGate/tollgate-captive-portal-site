@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TollGate admin — issuance + settings redesign</title>
+<style>
+:root{
+  --bg:#111; --card:#1a1a1a; --card-hover:#222; --border:#2a2a2a;
+  --text:#fff; --text-muted:rgba(255,255,255,.45); --text-dim:rgba(255,255,255,.25);
+  --accent:#f60; --accent-hover:#e55a00; --accent-dim:rgba(255,102,0,.15);
+  --success:#32d74b; --error:#ff453a;
+  --radius:14px; --radius-sm:8px;
+  --font-size:.9rem; --font-size-small:.8rem; --font-size-xsmall:.72rem; --font-size-large:1.4rem;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --nav-h:64px; --content-max:520px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--font);font-size:var(--font-size);color:var(--text);background:var(--bg);line-height:1.5;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.screen{display:none;min-height:100vh}
+.screen.on{display:block}
+/* ---------- chrome ---------- */
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:.75rem;
+  height:54px;padding:0 1rem;background:rgba(17,17,17,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border)}
+.topbar h1{font-size:1rem;font-weight:600;letter-spacing:-.01em}
+.topbar .spacer{flex:1}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--success);flex:0 0 auto}
+.pill{font-size:var(--font-size-xsmall);color:var(--text-muted);border:1px solid var(--border);
+  border-radius:999px;padding:.15rem .55rem;white-space:nowrap}
+.wrap{max-width:1080px;margin:0 auto;padding:1.25rem 1rem 6rem}
+.phone .wrap{max-width:var(--content-max);padding:.85rem .85rem 5.5rem}
+/* ---------- cards ---------- */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:.85rem}
+.card h2{font-size:var(--font-size-small);font-weight:600;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:.85rem;display:flex;align-items:center;gap:.5rem}
+.card h2 .count{margin-left:auto;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-dim)}
+/* ---------- rows / collapsed disclosure ---------- */
+.row{display:flex;align-items:center;gap:.75rem;padding:.7rem .25rem;border-bottom:1px solid rgba(255,255,255,.045)}
+.row:last-child{border-bottom:0}
+.row .k{color:var(--text-muted);font-size:var(--font-size-small);flex:0 0 auto;min-width:7.5rem}
+.row .v{font-weight:500;font-size:var(--font-size-small);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .chev{color:var(--text-dim);font-size:1.1rem;line-height:1}
+.row.tap{cursor:pointer;border-radius:var(--radius-sm);margin:0 -.25rem;padding-left:.5rem;padding-right:.5rem}
+.row.tap:hover{background:var(--card-hover)}
+/* ---------- inputs ---------- */
+label.fl{display:block;font-size:var(--font-size-xsmall);color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}
+.in{width:100%;background:#0d0d0d;border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:.6rem .7rem;color:var(--text);font-size:var(--font-size-small)}
+.in:focus{outline:none;border-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.phone .grid2{grid-template-columns:1fr}
+/* ---------- segmented ---------- */
+.seg{display:inline-flex;background:#0d0d0d;border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;color:var(--text-muted);font-size:var(--font-size-small);
+  padding:.4rem .95rem;border-radius:999px;cursor:pointer;font-weight:500}
+.seg button.on{background:var(--accent);color:#111;font-weight:600}
+/* ---------- preset tiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem}
+.phone .tiles{grid-template-columns:1fr 1fr}
+.tile{background:#0d0d0d;border:1px solid var(--border);border-radius:var(--radius);padding:.9rem .8rem;
+  text-align:left;cursor:pointer;color:var(--text);transition:border-color .12s,background .12s}
+.tile:hover{border-color:#3a3a3a;background:#141414}
+.tile.on{border-color:var(--accent);background:var(--accent-dim)}
+.tile .t{font-size:1.05rem;font-weight:600;letter-spacing:-.01em;color:var(--text)}
+.tile .s{font-size:var(--font-size-xsmall);color:var(--text-muted);margin-top:.15rem}
+.tile .p{color:var(--accent)}
+.tile .p{font-size:var(--font-size-small);color:var(--accent);margin-top:.5rem;font-weight:600}
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;border:0;cursor:pointer;
+  border-radius:var(--radius-sm);font-size:var(--font-size-small);font-weight:600;padding:.7rem 1.1rem}
+.btn-primary{background:var(--accent);color:#111}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-primary:disabled{background:#2a2a2a;color:var(--text-dim);cursor:not-allowed}
+.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}
+button.btn-ghost{color:var(--text-muted)}
+.btn-secondary:hover{border-color:#3f3f3f}
+.btn-ghost{background:transparent;color:var(--text-muted);font-weight:500}
+.btn-block{width:100%}
+.btn-lg{padding:.95rem 1.2rem;font-size:1rem;border-radius:var(--radius)}
+/* ---------- preview ---------- */
+.preview{background:var(--accent-dim);border:1px solid rgba(255,102,0,.3);border-radius:var(--radius-sm);
+  padding:.7rem .8rem;font-size:var(--font-size-small);margin-top:.8rem}
+.preview b{color:var(--accent)}
+.preview .math{color:var(--text-muted);font-size:var(--font-size-xsmall);margin-top:.2rem}
+/* ---------- confirm strip ---------- */
+.confirm{background:rgba(255,69,58,.07);border:1px solid rgba(255,69,58,.35);border-radius:var(--radius-sm);padding:.85rem;margin-top:.8rem}
+.confirm p{font-size:var(--font-size-small);margin-bottom:.7rem}
+.confirm .acts{display:flex;gap:.5rem}
+/* ---------- token result ---------- */
+.qr{background:#fff;border-radius:var(--radius);padding:.7rem;width:190px;height:190px;margin:0 auto .8rem;
+  display:grid;place-items:center}
+.tokenbox{background:#0d0d0d;border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:.6rem .7rem;font-size:var(--font-size-xsmall);color:var(--text-muted);
+  word-break:break-all;max-height:3.6rem;overflow:hidden;margin-bottom:.6rem}
+.linkrow{display:flex;gap:.5rem;margin-top:.5rem}
+.grantbig{text-align:center;margin-bottom:.9rem}
+.grantbig .n{font-size:2rem;font-weight:700;letter-spacing:-.02em}
+.grantbig .l{font-size:var(--font-size-small);color:var(--text-muted)}
+.note{font-size:var(--font-size-xsmall);color:var(--text-muted);margin-top:.6rem;text-align:center}
+/* ---------- savings annotation ---------- */
+.annot{display:flex;gap:.6rem;align-items:flex-start;background:rgba(50,215,75,.06);
+  border:1px solid rgba(50,215,75,.25);border-radius:var(--radius-sm);padding:.7rem .8rem;
+  font-size:var(--font-size-xsmall);color:var(--text-muted);margin-bottom:.85rem}
+.annot b{color:var(--success)}
+.warn{background:rgba(255,69,58,.07);border:1px solid rgba(255,69,58,.3);border-radius:var(--radius-sm);
+  padding:.7rem .8rem;font-size:var(--font-size-xsmall);color:#ffb4ae;margin-top:.7rem}
+/* ---------- nav (phone) ---------- */
+.nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);display:flex;
+  background:rgba(17,17,17,.95);backdrop-filter:blur(12px);border-top:1px solid var(--border)}
+.nav div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;
+  font-size:.62rem;color:var(--text-dim)}
+.nav div.on{color:var(--accent)}
+.nav .ic{font-size:1.05rem;line-height:1}
+/* ---------- portal (user) ---------- */
+.portal{background:#111;min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:1.25rem;text-align:center}
+.portal .brand{font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.4rem}
+.portal .sub{color:var(--text-muted);font-size:var(--font-size-small);margin-bottom:1.6rem}
+.portal .field{width:100%;max-width:380px}
+.portal .field input{background:#0d0d0d;border:1px solid var(--border);border-radius:var(--radius);
+  padding:.85rem;width:100%;color:var(--text);font-size:var(--font-size-small)}
+.portal .go{width:100%;max-width:380px;margin-top:.7rem}
+.legend{position:fixed;top:60px;right:.5rem;z-index:20;background:#000c;border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:.3rem .55rem;font-size:.62rem;color:var(--text-muted);font-family:monospace}
+</style>
+</head>
+<body>
+<div class="legend" id="lg"></div>
+
+<!-- ============ S1: SETTINGS — BEFORE (today) ============ -->
+<section class="screen" id="s1">
+  <div class="topbar"><h1>Settings</h1><span class="spacer"></span><span class="pill">before</span></div>
+  <div class="wrap">
+    <div class="annot"><span style="color:var(--error);font-weight:700">!</span><span><b>Today:</b> 6 cards, <b>35+ controls</b> on one scroll. Every mint row prints all 9 fields; every profit-share row prints 2. Field order is schema order, not decision order.</span></div>
+
+    <div class="card"><h2>General</h2>
+      <div class="grid2">
+        <div><label class="fl">Log level</label><div class="in">—</div></div>
+        <div><label class="fl">Metric</label><div class="in">bytes</div></div>
+        <div><label class="fl">Step size</label><div class="in">22020096</div></div>
+        <div><label class="fl">Margin</label><div class="in">0.1</div></div>
+        <div><label class="fl">Show setup</label><div class="in">false</div></div>
+        <div><label class="fl">Reseller mode</label><div class="in">false</div></div>
+        <div><label class="fl">Manual pause seconds</label><div class="in">120</div></div>
+      </div>
+    </div>
+
+    <div class="card"><h2>Accepted Mints</h2>
+      <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:.7rem;margin-bottom:.6rem">
+        <div class="row" style="border:0;padding-top:0"><span class="k">#1</span><span class="spacer"></span><span class="btn btn-secondary" style="padding:.15rem .5rem;font-size:var(--font-size-xsmall)">Remove</span></div>
+        <div class="grid2">
+          <div><label class="fl">Mint URL</label><div class="in">http://192.168.1.1:3398</div></div>
+          <div><label class="fl">Min balance</label><div class="in">64</div></div>
+          <div><label class="fl">Balance tolerance %</label><div class="in">10</div></div>
+          <div><label class="fl">Payout interval seconds</label><div class="in">60</div></div>
+          <div><label class="fl">Min payout amount</label><div class="in">128</div></div>
+          <div><label class="fl">Price per step</label><div class="in">1</div></div>
+          <div><label class="fl">Price unit</label><div class="in">sat</div></div>
+          <div><label class="fl">Unit</label><div class="in">mb</div></div>
+          <div><label class="fl">Min purchase steps</label><div class="in">1</div></div>
+        </div>
+      </div>
+      <div class="btn btn-secondary">+ Add mint</div>
+    </div>
+
+    <div class="card"><h2>Profit Share</h2>
+      <div class="grid2"><div><label class="fl">Factor</label><div class="in">0.79</div></div><div><label class="fl">Identity</label><div class="in">owner</div></div></div>
+      <div style="height:.6rem"></div>
+      <div class="grid2"><div><label class="fl">Factor</label><div class="in">0.07</div></div><div><label class="fl">Identity</label><div class="in">c08r4d0r</div></div></div>
+      <div style="height:.6rem"></div>
+      <div class="grid2"><div><label class="fl">Factor</label><div class="in">0.07</div></div><div><label class="fl">Identity</label><div class="in">amperstrand</div></div></div>
+      <div style="height:.6rem"></div>
+      <div class="grid2"><div><label class="fl">Factor</label><div class="in">0.07</div></div><div><label class="fl">Identity</label><div class="in">origami74</div></div></div>
+    </div>
+
+    <div class="card"><h2>Upstream Detector</h2>
+      <div class="grid2">
+        <div><label class="fl">Probe timeout</label><div class="in">0s</div></div>
+        <div><label class="fl">Probe retry count</label><div class="in">0</div></div>
+        <div><label class="fl">Probe retry delay</label><div class="in">0s</div></div>
+        <div><label class="fl">Require valid signature</label><div class="in">false</div></div>
+        <div><label class="fl">Ignore interfaces</label><div class="in">—</div></div>
+        <div><label class="fl">Only interfaces</label><div class="in">—</div></div>
+        <div><label class="fl">Discovery timeout</label><div class="in">0s</div></div>
+      </div>
+    </div>
+
+    <div class="card"><h2>Other <span class="count">upstream_wifi · 14 fields, + 20 more</span></h2>
+      <div class="row"><span class="k">Scan interval</span><span class="v">300</span></div>
+      <div class="row"><span class="k">Fast check</span><span class="v">30</span></div>
+      <div class="row"><span class="k">Lost threshold</span><span class="v">2</span></div>
+      <div class="row"><span class="k">Hysteresis dB</span><span class="v">12</span></div>
+      <div class="row"><span class="k">Signal floor</span><span class="v">-85</span></div>
+      <div class="row"><span class="k">…10 more wifi fields</span><span class="v" style="color:var(--text-dim)">scroll</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S2: SETTINGS — AFTER ============ -->
+<section class="screen" id="s2">
+  <div class="topbar"><h1>Settings</h1><span class="spacer"></span><span class="pill" style="border-color:var(--success);color:var(--success)">after · 10 visible</span></div>
+  <div class="wrap">
+    <div class="annot"><span style="color:var(--success);font-weight:700">&#10003;</span><span><b>Same 86 settings, 4 cards.</b> Only the decisions you make are visible. Each collapsed row opens the raw fields — <b>nothing was deleted</b>, including every caveat.</span></div>
+
+    <!-- 1. WHAT YOU SELL -->
+    <div class="card"><h2>What you sell</h2>
+      <div class="grid2">
+        <div>
+          <label class="fl">Sell access by</label>
+          <div class="seg"><button class="on">Data</button><button>Time</button></div>
+        </div>
+        <div>
+          <label class="fl">Smallest unit you sell</label>
+          <div class="in">1 MiB</div>
+        </div>
+      </div>
+      <div class="preview">
+        <div><b>1 step = 21 MiB</b> → a <b>100 mb</b> token buys <b>100 steps ≈ 2.1 GiB</b></div>
+        <div class="math">step_size 22020096 × price_per_step 1 · metric bytes · unit mb</div>
+      </div>
+      <div class="warn"><b style="color:var(--error)">!</b> Time and data need different step sizes. Switching to <b>Time</b> rewrites step_size to 60000 — the current 22020096 would grant <b>6.1 hours</b> for a 60-minute token.</div>
+    </div>
+
+    <!-- 2. MINTS — collapsed -->
+    <div class="card"><h2>Mints <span class="count">1</span></h2>
+      <div class="row tap"><span class="dot"></span><span class="v">192.168.1.1:3398</span><span class="pill">mb</span><span class="chev">›</span></div>
+      <div class="row" style="padding-left:1.5rem"><span class="k">Price</span><span class="v">1 sat / step</span></div>
+      <div class="row" style="padding-left:1.5rem"><span class="k">Payout</span><span class="v">≥ 128 sats, every 60 s</span></div>
+      <div class="btn btn-ghost" style="margin-top:.6rem;padding-left:0">+ Add mint</div>
+    </div>
+
+    <!-- 3. PROFIT SHARE — compact table -->
+    <div class="card"><h2>Profit share <span class="count">4 recipients</span></h2>
+      <div class="row"><span class="v">owner</span><span class="pill">79%</span></div>
+      <div class="row"><span class="v">c08r4d0r</span><span class="pill">7%</span></div>
+      <div class="row"><span class="v">amperstrand</span><span class="pill">7%</span></div>
+      <div class="row"><span class="v">origami74</span><span class="pill">7%</span></div>
+      <div class="note" style="text-align:left">Share of merchant profit routed to each identity.</div>
+    </div>
+
+    <!-- 4. ADVANCED — one disclosure -->
+    <div class="card"><h2>Advanced <span class="count">32 settings</span></h2>
+      <div class="row tap"><span class="v">Network &amp; WiFi</span><span class="chev">›</span></div>
+      <div class="row tap"><span class="v">Upstream detection</span><span class="chev">›</span></div>
+      <div class="row tap"><span class="v">Session limits</span><span class="chev">›</span></div>
+      <div class="row tap"><span class="v">Admin access &amp; logging</span><span class="chev">›</span></div>
+      <div class="row tap"><span class="v">Identities</span><span class="chev">›</span></div>
+    </div>
+
+    <div class="btn btn-primary btn-block" style="margin-top:1rem">Save changes</div>
+  </div>
+</section>
+
+<!-- ============ S3: SELL (new page, desktop) ============ -->
+<section class="screen" id="s3">
+  <div class="topbar"><h1>Sell access</h1><span class="spacer"></span><span class="pill" style="border-color:var(--success);color:var(--success)">mint ready</span></div>
+  <div class="wrap">
+    <div class="annot"><span style="color:var(--accent);font-weight:700">+</span><span><b>New.</b> This is the operator-issuance surface — a fourth Wallet card, or its own page once it grows. Presets only: no protocol terms, no unit picking at the counter.</span></div>
+
+    <div class="card"><h2>Pick a bundle</h2>
+      <div class="tiles">
+        <button class="tile"><div class="t">30 minutes</div><div class="s">Data + time</div><div class="p">1 000 sats</div></button>
+        <button class="tile on"><div class="t">1 hour</div><div class="s">Most popular</div><div class="p">1 800 sats</div></button>
+        <button class="tile"><div class="t">500 MB day pass</div><div class="s">Until midnight</div><div class="p">3 000 sats</div></button>
+      </div>
+      <div class="preview">
+        <div>Grants <b>1 hour</b> of access — <b>60 min</b> ecash at your mint</div>
+        <div class="math">60 × step_size 60000 · metric milliseconds · unit min</div>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-top:.8rem">
+        <button class="btn btn-ghost" style="flex:1">Edit prices</button>
+        <button class="btn btn-primary" style="flex:2">Issue 1 hour →</button>
+      </div>
+    </div>
+
+    <div class="card"><h2>Hand to the customer</h2>
+      <div class="grantbig"><div class="n">1 hour</div><div class="l">worth 1 800 sats · can be spent once</div></div>
+      <div class="qr">
+        <svg width="150" height="150" viewBox="0 0 21 21" shape-rendering="crispEdges">
+          <rect width="21" height="21" fill="#fff"/>
+          <g fill="#111">
+            <rect x="0" y="0" width="7" height="7"/><rect x="1" y="1" width="5" height="5" fill="#fff"/><rect x="2" y="2" width="3" height="3"/>
+            <rect x="14" y="0" width="7" height="7"/><rect x="15" y="1" width="5" height="5" fill="#fff"/><rect x="16" y="2" width="3" height="3"/>
+            <rect x="0" y="14" width="7" height="7"/><rect x="1" y="15" width="5" height="5" fill="#fff"/><rect x="2" y="16" width="3" height="3"/>
+            <rect x="9" y="1" width="1" height="1"/><rect x="11" y="2" width="1" height="1"/><rect x="9" y="4" width="1" height="1"/>
+            <rect x="12" y="5" width="1" height="1"/><rect x="10" y="7" width="1" height="1"/><rect x="2" y="9" width="1" height="1"/>
+            <rect x="4" y="10" width="1" height="1"/><rect x="6" y="9" width="1" height="1"/><rect x="8" y="10" width="1" height="1"/>
+            <rect x="10" y="9" width="1" height="1"/><rect x="12" y="10" width="1" height="1"/><rect x="14" y="9" width="1" height="1"/>
+            <rect x="16" y="10" width="1" height="1"/><rect x="18" y="9" width="1" height="1"/><rect x="20" y="10" width="1" height="1"/>
+            <rect x="9" y="12" width="1" height="1"/><rect x="11" y="13" width="1" height="1"/><rect x="13" y="12" width="1" height="1"/>
+            <rect x="15" y="13" width="1" height="1"/><rect x="17" y="12" width="1" height="1"/><rect x="19" y="13" width="1" height="1"/>
+            <rect x="9" y="15" width="1" height="1"/><rect x="11" y="16" width="1" height="1"/><rect x="13" y="15" width="1" height="1"/>
+            <rect x="15" y="16" width="1" height="1"/><rect x="17" y="15" width="1" height="1"/><rect x="19" y="16" width="1" height="1"/>
+            <rect x="10" y="18" width="1" height="1"/><rect x="12" y="19" width="1" height="1"/><rect x="14" y="18" width="1" height="1"/>
+            <rect x="16" y="19" width="1" height="1"/><rect x="18" y="18" width="1" height="1"/><rect x="20" y="19" width="1" height="1"/>
+          </g>
+        </svg>
+      </div>
+      <div class="linkrow"><button class="btn btn-secondary btn-block">Copy link</button><button class="btn btn-secondary btn-block">Copy code</button></div>
+      <div class="note">Scan · or open on the customer's phone · or paste at the portal</div>
+      <div class="note" style="color:var(--text-dim)">[mockup token placeholder — no real token in this file]</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ S4: SELL (phone, at the counter) ============ -->
+<section class="screen phone" id="s4">
+  <div class="topbar"><h1>Sell</h1><span class="spacer"></span><span class="pill" style="border-color:var(--success);color:var(--success)">ready</span></div>
+  <div class="wrap">
+    <div class="tiles" style="margin-bottom:.85rem">
+      <button class="tile"><div class="t">30 min</div><div class="p">1 000 sats</div></button>
+      <button class="tile on"><div class="t">1 hour</div><div class="p">1 800 sats</div></button>
+      <button class="tile"><div class="t">500 MB</div><div class="p">3 000 sats</div></button>
+      <button class="tile"><div class="t">Day</div><div class="p">3 000 sats</div></button>
+    </div>
+    <div class="preview" style="margin-bottom:.85rem"><div>Grants <b>1 hour</b></div><div class="math">60 min ecash · spend once</div></div>
+    <button class="btn btn-primary btn-lg btn-block">Issue 1 hour</button>
+    <div class="note">Next: QR appears — customer scans, done.</div>
+  </div>
+  <div class="nav">
+    <div><span class="ic">▤</span>Home</div>
+    <div class="on"><span class="ic">＋</span>Sell</div>
+    <div><span class="ic">◫</span>Devices</div>
+    <div><span class="ic">◐</span>Wallet</div>
+    <div><span class="ic">⚙</span>Settings</div>
+  </div>
+</section>
+
+<!-- ============ S5: CUSTOMER PORTAL ============ -->
+<section class="screen phone" id="s5">
+  <div class="portal">
+    <div class="brand">TollGate</div>
+    <div class="sub">You're almost online.<br>Scan your access code or paste it below.</div>
+
+    <div class="card" style="width:100%;max-width:380px;text-align:left">
+      <h2 style="margin-bottom:.65rem">Access code</h2>
+      <div class="in mono" style="color:var(--text-muted);font-size:var(--font-size-xsmall);overflow:hidden;text-overflow:ellipsis">cashuB… [mockup placeholder]</div>
+      <button class="btn btn-primary btn-block btn-lg" style="margin-top:.7rem">Get online</button>
+      <div style="display:flex;gap:.5rem;margin-top:.55rem">
+        <button class="btn btn-secondary btn-block">Scan QR</button>
+        <button class="btn btn-secondary btn-block">Paste</button>
+      </div>
+    </div>
+
+    <div class="note" style="max-width:380px;margin-top:1rem">
+      Or pick an amount and pay with your own wallet — 30 min · 1 h · day pass
+    </div>
+    <div class="note" style="margin-top:1.4rem;color:var(--text-dim)">
+      Portal unchanged from today: paste input + <span class="mono">?token=</span> auto-submit already work.
+    </div>
+  </div>
+</section>
+
+<script>
+const S={s1:'1/5 · Settings today (count the controls)',s2:'2/5 · Settings redesigned',s3:'3/5 · Sell access (new, desktop)',s4:'4/5 · Sell (phone, at the counter)',s5:'5/5 · Customer portal (unchanged)'};
+const id=(new URLSearchParams(location.search)).get('s')||'s1';
+document.getElementById(id).classList.add('on');
+document.getElementById('lg').textContent=S[id]||'';
+</script>
+</body>
+</html>
