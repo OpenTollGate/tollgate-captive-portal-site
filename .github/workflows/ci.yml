@@ -136,6 +136,16 @@ jobs:
         # instead of raw `uci set`, which the module's applier would revert.
         run: npx playwright test --config admin/playwright.config.mjs admin-settings-network
 
+      - name: Run admin board guest Wi-Fi QR card (print/PDF verified)
+        # Same rationale as the credential guard above: self-contained, own vite
+        # server on the admin config. Poppler is installed because the spec asserts
+        # against the actual Chromium PDF (page count, geometry, printed-raster QR
+        # decode); without it those three cases SKIP and the print-positive path
+        # would never be verified on a pull request.
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+          npx playwright test --config admin/playwright.config.mjs admin-guest-wifi
+
       - name: Run functional tests (mandatory)
         run: npx playwright test tests/e2e/functional.spec.mjs --project=desktop
 

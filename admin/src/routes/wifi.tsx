@@ -3,6 +3,7 @@ import { ubusCall } from '../lib/ubus';
 import { navigate } from '../lib/router';
 import { isPrivateRadioIface } from '../lib/private-radio';
 import { refusalInApplied } from '../lib/module-reply';
+import GuestWifiCard from '../components/guest-wifi-card';
 
 interface WifiIface {
   ifname: string;
@@ -57,6 +58,8 @@ function partialKeyAppliedMessage(reason: string): string {
 export default function Wifi() {
   const [radios, setRadios] = useState<Record<string, WifiRadio>>({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [cardRevision, setCardRevision] = useState(0);
   const [error, setError] = useState('');
   const [editSsid, setEditSsid] = useState<string | null>(null);
   const [editPassword, setEditPassword] = useState('');
@@ -72,6 +75,8 @@ export default function Wifi() {
   const [saveMsg, setSaveMsg] = useState('');
 
   const fetchStatus = useCallback(async () => {
+    setCardRevision(revision => revision + 1);
+    setRefreshing(true);
     try {
       let data = null;
       try {
@@ -121,6 +126,7 @@ export default function Wifi() {
       setError(err.message || 'Failed to load WiFi status');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -150,6 +156,7 @@ export default function Wifi() {
 
   async function saveEdit() {
     if (!editSsid) return;
+    setCardRevision(revision => revision + 1);
     // The message is bound to this interface now, while its name is still known.
     setSaveMsgSection(editSsid);
     setSaving(true);
@@ -276,6 +283,8 @@ export default function Wifi() {
           Refresh
         </button>
       </div>
+
+      {!saving && !refreshing && <GuestWifiCard key={cardRevision} />}
 
       {radioEntries.length === 0 && (
         <div className="card animate-in-delay-1">

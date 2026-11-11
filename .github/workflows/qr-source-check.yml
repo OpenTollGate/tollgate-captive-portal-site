@@ -1,0 +1,45 @@
+name: QR source checks
+
+# Deliberately separate from CI's PR-comment permissions and demo deployment.
+# Source evidence only: no router, package publication, secrets or deployment.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  guest-qr-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Install Poppler for print/PDF verification
+        # The guest-Wi-Fi spec asserts against the ACTUAL Chromium PDF (page count,
+        # sheet geometry, sentinel exclusion, printed-raster QR decode). ubuntu-24.04
+        # runners do not preinstall poppler-utils, so without this the three print
+        # tests SKIP and the print-positive path would never be verified in CI.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+      - run: npx playwright install --with-deps chromium
+      - name: Guest Wi-Fi QR and printable card (mock admin, no router)
+        run: npx playwright test --config admin/playwright.config.mjs admin-guest-wifi
