@@ -58,6 +58,24 @@ hash drift or overlapping packet-mark assignments block mutation. The rule/table
 check also runs before disable because stock mwan3 stop flushes tables 1–250 and
 rules 1000–3999; pre-existing routing owners must not be erased by cleanup.
 
+
+The controller requires `iptables` and `ip6tables` to report the `nf_tables`
+backend; legacy or unreadable backend identification is unsupported. The
+preflight also requires `nft` and reads `nft -nn list ruleset` before enable
+and disable. Native `meta mark set` and `ct mark set` statements are unsupported
+in every family and table, including iptables compatibility tables; they refuse
+mutation rather than guessing ownership of the reserved bits. A disjoint full
+constant assignment still clears those bits. Bitwise expressions, maps and
+packet/connection-mark copies also refuse, even when a particular expression
+could preserve the mask. Ordinary mark matches and quoted comments are allowed.
+Only `xt target` statements in `ip mangle` / `ip6 mangle` are delegated to the
+preceding successful iptables/ip6tables inspection; targets elsewhere refuse.
+An unreadable ruleset refuses before starting or stopping the engine. If a
+platform renders legacy mark targets as native assignments, this conservative
+candidate also refuses there; qualifying that rendering is a deployment check.
+This does not lock out concurrent edits by another administrator between the
+read and the action; stop conflicting routing controllers before ownership transfer.
+
 ## Persistence, failures and recovery
 
 The first enable preserves the exact original network file under the root-only

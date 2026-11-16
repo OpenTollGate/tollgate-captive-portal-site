@@ -20,9 +20,19 @@ bool() { case "$1" in 1|true) printf true ;; *) printf false ;; esac; }
 owned() { [ -f "$MWAN" ] && [ "$(head -n 1 "$MWAN")" = '# TollGate owner failover v1' ] && [ "$(uci_get mwan3.globals.tg_owned)" = 1 ] && [ "$(uci_get mwan3.globals.tg_version)" = 1 ]; }
 configured() { owned && [ "$(uci_get mwan3.globals.tg_enabled)" = 1 ]; }
 compatible() {
+    local tool version
     ERROR=''
-    for tool in uci ubus jsonfilter ip iptables ip6tables ipset sha256sum; do
+    for tool in uci ubus jsonfilter ip iptables ip6tables ipset sha256sum nft; do
         command -v "$tool" >/dev/null 2>&1 || { ERROR='Required failover tools are not installed'; return 1; }
+    done
+    # The nft xt-target exemption must inspect the same rule plane, not an
+    # iptables-legacy alternative that can succeed with a different ruleset.
+    for tool in iptables ip6tables; do
+        version=$("$tool" --version 2>/dev/null) || { ERROR='Cannot identify the iptables nft backend'; return 1; }
+        case "$version" in
+            *' (nf_tables)') ;;
+            *) ERROR='Failover requires both iptables and ip6tables to use the nft backend'; return 1 ;;
+        esac
     done
     [ -x "$INIT" ] && [ -f "$ROOT/lib/mwan3/mwan3.sh" ] || { ERROR='A compatible mwan3 engine is not installed'; return 1; }
     [ -x "$PROBE" ] && grep -q '^# TollGate bound DNS/HTTP tracker extension v1$' "$TRACKER" 2>/dev/null && grep -q 'tollgate-http' "$TRACKER" 2>/dev/null || { ERROR='The bound DNS/HTTP tracker integration is not installed'; return 1; }
@@ -148,6 +158,51 @@ EOF
     done
     return 1
 }
+nft_mark_conflicts() {
+    local rules
+    rules=$(nft -nn list ruleset 2>/dev/null) || { ERROR='Cannot inspect native nft packet mark ownership'; return 0; }
+    # Native mark expressions are intentionally unsupported, including disjoint
+    # constants (a full assignment also clears the reserved bits). Do not skip
+    # compatibility tables: a native rule can be injected into one too. Only xt
+    # targets in ip/ip6 mangle are covered by the prior successful legacy read.
+    if ! printf '%s\n' "$rules" | awk '
+        function token(t) {
+            if (phase==1) { family=t; phase=2 }
+            else if (phase==2) { table=t; phase=0 }
+            else if (t=="table" && depth==0) phase=1
+            if (previous=="mark" && t=="set") bad=1
+            if (previous=="xt" && t=="target" && !((family=="ip" || family=="ip6") && table=="mangle")) bad=1
+            if (t=="{") depth++
+            if (t=="}") { depth--; if (depth<0) bad=1; if (depth==0) { family=""; table="" } }
+            previous=t
+        }
+        function flush() { if (word!="") { token(word); word="" } }
+        {
+            # Remove quoted strings and comments lexically, not with a regex:
+            # escaped quotes and text such as comment "meta mark set" are data.
+            for (i=1;i<=length($0);i++) {
+                c=substr($0,i,1)
+                if (quoted) {
+                    if (escaped) escaped=0
+                    else if (c=="\\") escaped=1
+                    else if (c=="\"") { quoted=0; token("<quoted>") }
+                    continue
+                }
+                if (c=="#") break
+                if (c=="\"") { flush(); quoted=1; continue }
+                if (c ~ /[[:space:]]/) { flush(); continue }
+                if (c=="{" || c=="}" || c==";") { flush(); token(c); continue }
+                word=word c
+            }
+            flush()
+        }
+        END { exit (bad || depth!=0 || phase!=0 || quoted || escaped) }
+    '; then
+        ERROR='Unsupported native nft mark assignments or targets require review before changing failover'
+        return 0
+    fi
+    return 1
+}
 filter_native_rules() {
     local family="$1" line priority device ifindex source
     while IFS= read -r line; do
@@ -230,6 +285,7 @@ preflight() {
     fi
     if foreign_routes; then ERROR='Existing policy rules or routing tables conflict with the failover engine'; return 1; fi
     if mark_conflicts; then [ -n "$ERROR" ] || ERROR='Existing packet marks overlap the failover engine mask'; return 1; fi
+    if nft_mark_conflicts; then return 1; fi
     if [ -f "$STORE/profile.sha256" ]; then
         [ "$(sha256sum "$MWAN" | cut -d ' ' -f 1)" = "$(cat "$STORE/profile.sha256")" ] || { ERROR='Failover settings changed outside this dashboard; review them before changing ownership'; return 1; }
     fi

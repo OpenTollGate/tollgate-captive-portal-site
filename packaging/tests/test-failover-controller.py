@@ -62,6 +62,9 @@ elif name=='jsonfilter':
   print('[ ]' if d==[] and s.get('spaced_empty') else json.dumps(d,separators=(',',':')) if isinstance(d,(dict,list,bool)) or d is None else d)
  except (KeyError,IndexError,TypeError,ValueError):sys.exit(1)
 elif name in ('iptables','ip6tables'):
+ if a==['--version']:
+  if s.get('version_fail'):fail()
+  print(name+' v1.8.13 ('+('legacy' if s.get('legacy_backend')==name else 'nf_tables')+')');save();sys.exit(0)
  if s.get('iptables_fail'):fail()
  family='4' if name=='iptables' else '6'
  if a[-1:].pop().startswith('mwan3_policy_'):
@@ -77,6 +80,11 @@ elif name in ('iptables','ip6tables'):
   if s.get('running') and not s.get('missing_rule'):
    print('-A mwan3_rules -m mark --mark 0x0/0x3f00 -j mwan3_policy_tg_failover'+family)
   if a[-1:]!=['mwan3_rules']:print('-A ndsOUT -j MARK --set-xmark '+mark)
+
+elif name=='nft':
+ if a!=['-nn','list','ruleset']:fail('unsupported nft invocation')
+ if s.get('nft_fail'):fail()
+ print(s.get('nft_ruleset',''))
 
 elif name=='ip':
  if 'rule' in a:
@@ -107,7 +115,7 @@ class ControllerTests(unittest.TestCase):
   (self.root/'lib/mwan3/mwan3.sh').write_text('# stock compatible controller\n')
   (self.root/'usr/libexec/tollgate/uplink-probe').write_text('#!/bin/sh\nexit 0\n');(self.root/'usr/libexec/tollgate/uplink-probe').chmod(0o755)
   stub=self.root/'bin/stub';stub.write_text(STUB);stub.chmod(0o755)
-  for name in ['uci','ubus','jsonfilter','iptables','ip6tables','ip','ipset']:(self.root/'bin'/name).symlink_to(stub)
+  for name in ['uci','ubus','jsonfilter','iptables','ip6tables','ip','ipset','nft']:(self.root/'bin'/name).symlink_to(stub)
   (self.root/'etc/init.d/mwan3').symlink_to(stub)
   (self.root/'bin/mwan3-init').symlink_to(stub)
   self.env=dict(os.environ,TOLLGATE_FAILOVER_ROOT=str(self.root),PATH=str(self.root/'bin')+':'+os.environ['PATH'])
@@ -150,6 +158,73 @@ class ControllerTests(unittest.TestCase):
   (self.root/'var/lock/tollgate-failover.lock').mkdir();result=self.run_driver('enable');self.assertFalse(result['success']);self.assertIn('busy',result['error']);self.assertFalse(self.read_state()['running'])
  def test_missing_probe_disables_capability(self):
   (self.root/'usr/libexec/tollgate/uplink-probe').unlink();result=self.run_driver('status');self.assertFalse(result['supported']);self.assertFalse(self.run_driver('enable')['success'])
+
+ def assert_no_mutation(self):
+  state=self.read_state()
+  self.assertFalse(any(c[0]=='mwan3-init' or (c[0]=='uci' and any(x in c for x in ['set','delete','commit'])) for c in state['calls']))
+  self.assertEqual((self.root/'etc/config/mwan3').read_text(),DISABLED)
+  self.assertFalse((self.root/'etc/tollgate/failover/pending').exists())
+ def test_native_mark_writes_refuse_in_every_family_and_compatibility_table(self):
+  for family,table in [('inet','custom'),('ip','custom'),('ip6','custom'),('bridge','custom'),('netdev','custom'),('arp','custom'),('ip','mangle'),('ip6','mangle')]:
+   for assignment in ['meta mark set 0x00000200','meta mark set 512','ct mark set 0x00000200','meta mark set ct mark','ct mark set meta mark']:
+    with self.subTest(family=family,table=table,assignment=assignment):
+     self.state['nft_ruleset']=f'table {family} {table} {{\n chain c {{ {assignment} }}\n}}';self.write_state()
+     result=self.run_driver('enable');self.assertFalse(result['success'],result);self.assertIn('native nft',result['error']);self.assert_no_mutation()
+ def test_disjoint_full_assignment_and_unsupported_native_expressions_refuse(self):
+  for assignment in ['meta mark set 0x00020000','meta mark set meta mark | 0x20000','meta mark set ip saddr map { 192.0.2.1 : 512 }','meta mark set 0x20000 ct mark set 512']:
+   with self.subTest(assignment=assignment):
+    self.state['nft_ruleset']=f'table inet fw4 {{ chain c {{ {assignment} }} }}';self.write_state()
+    result=self.run_driver('enable');self.assertFalse(result['success'],result);self.assert_no_mutation()
+ def test_native_matches_and_quoted_mark_text_do_not_block_legacy_targets(self):
+  self.state['nft_ruleset']=r'''table inet fw4 {
+ chain c { meta mark & 0x20000 == 0x20000 accept comment "meta mark set 512; \"ct mark set 512" }
+ # meta mark set 512
+}
+table ip mangle {
+ chain ndsOUT { counter packets 0 bytes 0 xt target "MARK" }
+}
+table ip6 mangle { chain ndsOUT { xt target "CONNMARK" } }
+'''
+  self.write_state();result=self.run_driver('enable');self.assertTrue(result['success'],result)
+  self.assertIn(['nft','-nn','list','ruleset'],self.read_state()['calls']);self.assertTrue(self.run_driver('disable')['success'])
+ def test_native_xt_outside_legacy_tables_refuses(self):
+  self.state['nft_ruleset']='table inet custom { chain c { xt target "MARK" } }';self.write_state()
+  result=self.run_driver('enable');self.assertFalse(result['success'],result);self.assert_no_mutation()
+ def test_missing_nft_disables_capability_and_refuses_mutation(self):
+  (self.root/'bin/nft').unlink()
+  # Omit host PATH so a host-installed nft cannot satisfy the missing fixture.
+  for name in ['sh','python3','head','sed','tr','cat','cut','grep','awk','sha256sum','mkdir','rmdir']:
+   (self.root/'bin'/name).symlink_to(shutil.which(name))
+  self.env['PATH']=str(self.root/'bin')
+  result=self.run_driver('status');self.assertFalse(result['supported'])
+  result=self.run_driver('enable');self.assertFalse(result['success']);self.assert_no_mutation()
+ def assert_backend_refuses(self,key,value):
+  self.state['nft_ruleset']='table ip mangle { chain ndsOUT { xt target "MARK" } }'
+  self.state[key]=value;self.write_state();result=self.run_driver('enable')
+  self.assertFalse(result['success'],result);self.assert_no_mutation()
+ def test_legacy_iptables_backend_cannot_cover_nft_xt_targets(self):
+  self.assert_backend_refuses('legacy_backend','iptables')
+ def test_legacy_ip6tables_backend_cannot_cover_nft_xt_targets(self):
+  self.assert_backend_refuses('legacy_backend','ip6tables')
+ def test_unreadable_iptables_backend_cannot_cover_nft_xt_targets(self):
+  self.assert_backend_refuses('version_fail',True)
+
+ def test_native_status_reads_no_ruleset_and_never_mutates(self):
+  self.state['nft_fail']=True;self.write_state();self.run_driver('status')
+  self.assertFalse(any(c[0]=='nft' for c in self.read_state()['calls']));self.assert_no_mutation()
+
+ def test_unreadable_nft_ruleset_refuses_before_mutation(self):
+  self.state['nft_fail']=True;self.write_state();result=self.run_driver('enable')
+  self.assertFalse(result['success'],result);self.assertIn('Cannot inspect native nft',result['error']);self.assert_no_mutation()
+ def test_native_mark_conflict_blocks_disable_before_fw4_cleanup(self):
+  self.assertTrue(self.run_driver('enable')['success']);self.read_state();self.state['calls']=[]
+  self.state['nft_ruleset']='table inet fw4 { chain c { meta mark set 512 } }';self.write_state()
+  result=self.run_driver('disable');self.assertFalse(result['success'],result);self.assertTrue(self.read_state()['running'])
+  self.assertFalse(any(c[0]=='mwan3-init' for c in self.state['calls']))
+  self.assertTrue(result['enabled'])
+  self.state['nft_fail']=True;self.write_state();result=self.run_driver('disable')
+  self.assertFalse(result['success']);self.assertIn('Cannot inspect native nft',result['error'])
+  self.assertTrue(self.read_state()['running']);self.assertFalse(any(c[0]=='mwan3-init' for c in self.state['calls']))
 
  def test_new_enable_cycle_never_changes_operator_metrics(self):
   self.assertTrue(self.run_driver('enable')['success']);self.assertTrue(self.run_driver('disable')['success']);self.read_state();self.state['network']['wan']['metric']='77';self.write_state()
