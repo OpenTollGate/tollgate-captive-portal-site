@@ -16,22 +16,22 @@ const amountToNumber = (amount) => {
   return Number(amount);
 };
 
-// getDecodedToken(token, keysets) expects MintKeyset OBJECTS as its second
-// argument, not an array of id strings: cashu-ts maps a v2 SHORT keyset id by
-// doing `a.id.slice(0, proof.id.length)` over that array. Passing ids used to
-// make that read `undefined.slice` and throw
-//   TypeError: Cannot read properties of undefined (reading 'slice')
-// on every real v4 short-keyset note (coinos.io, minibits), which the catch
-// below then turned into a silent { status: 0 } "no pre-check".
-const decodeProofs = (token, mintKeysets) => {
-  // Pass the mint's keysets so short ids resolve; retry without them so the
+// getDecodedToken(token, keysetIds) — in cashu-ts v4 the second argument is the
+// mint's array of FULL keyset ID STRINGS (in v2 it was MintKeyset objects). Short
+// (v2) ids carried in a token are mapped onto those full ids by prefix. Omitting
+// the argument, or passing objects, throws
+//   CTSError: getDecodedToken requires keysetIds ...
+// which the catch below would turn into a silent { status: 0 } "no pre-check" —
+// the same class of bug that hid the CU110 regression.
+const decodeProofs = (token, keysetIds) => {
+  // Pass the mint's keyset ids so short ids resolve; retry without them so the
   // decode also covers tokens whose keyset ids need no mapping (v0 long ids).
-  const attempts = [mintKeysets, undefined];
+  const attempts = [keysetIds, []];
   let lastError;
 
-  for (const keysets of attempts) {
+  for (const ids of attempts) {
     try {
-      const decoded = keysets ? getDecodedToken(token, keysets) : getDecodedToken(token);
+      const decoded = getDecodedToken(token, ids);
       if (Array.isArray(decoded?.proofs)) return { proofs: decoded.proofs };
     } catch (error) {
       lastError = error;
@@ -78,7 +78,7 @@ export const getMintSwapFee = async (token) => {
       const fullId = String(keyset.id).toLowerCase();
       const ppk = Number(keyset.input_fee_ppk || 0);
       feeByFullId[fullId] = ppk;
-      mintKeysets.push({ id: String(keyset.id), unit: keyset.unit, input_fee_ppk: ppk });
+      mintKeysets.push(String(keyset.id));
     }
     if (!mintKeysets.length) return { status: 0 };
 

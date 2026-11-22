@@ -202,9 +202,12 @@ export const validateToken = (token = "", mint, i18n) => {
     // (merchant) re-decodes authoritatively on submit.
     //
     // FALLBACK PATH — getDecodedToken: getTokenMetadata throws on multi-entry
-    // (multi-mint) V3 tokens, which getDecodedToken-with-keysets handled. Keep
-    // it so multi-mint tokens (which cashu-ts 2.9.0 requires MintKeyset objects
-    // for) can still fall through to this decoder when it can decode them.
+    // (multi-mint) V3 tokens, which getDecodedToken-with-keysets handled. In
+    // cashu-ts v4 that call REQUIRES the mint's full keyset-id list as its second
+    // argument and throws without it (`getDecodedToken requires keysetIds ...`),
+    // so an empty list is passed here: the fallback still decodes tokens whose
+    // proofs carry full-length keyset ids, and simply cannot map the short (v2)
+    // ids that the primary path above already resolves.
     const trimmedToken = token.trim();
     let decodedToken = null;
     try {
@@ -212,7 +215,7 @@ export const validateToken = (token = "", mint, i18n) => {
     } catch (errMeta) {
       console.error("getTokenMetadata failed for token:", errMeta);
       try {
-        decodedToken = getDecodedToken(trimmedToken);
+        decodedToken = getDecodedToken(trimmedToken, []);
       } catch (errDecode) {
         console.error("getDecodedToken fallback failed for token:", errDecode);
         decodedToken = null;
