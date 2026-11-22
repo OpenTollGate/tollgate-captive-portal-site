@@ -1,0 +1,160 @@
+// The install / first-run panel.
+//
+// Tokens only — every colour here is one of the measured `--color-*` values in
+// src/index.scss, because `tools/contrast.py` scores that palette and is the
+// gate. A literal colour introduced here would be scored by nothing.
+//
+// Contrast notes for the pairs actually used:
+//   title   --color (#eef1f7) on --color-surface-raised (#232733)  = high
+//   body    --color-negative (#b3bccd) on --color-surface-raised   = >= 4.5:1
+//   note    --color-dim (#8e99ad) on --color-surface-raised       = >= 4.5:1
+//   cta     --color-on-accent (#1a1114) on --color-cta (#ff6961)  = dark on light
+// The warn block uses --color-red on --color-red-transparent, the pair App.scss
+// already uses for errors.
+.install-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  margin: 0 0 1.6rem;
+  padding: 1.4rem 1.6rem;
+  background-color: var(--color-surface-raised);
+  border: .1rem solid var(--color-border);
+  border-radius: .8rem;
+
+  // The signpost is not an advert — it is an explanation of a limitation. It is
+  // deliberately quieter than the manual/prompt variants so it never competes
+  // with the payment UI for attention on a page where paying is the job.
+  &--signpost {
+    background-color: var(--color-surface);
+    border-style: dashed;
+  }
+
+  &__body {
+    flex: 1 1 auto;
+    // `min-width: 0` is what lets this flex item shrink below its content's
+    // min-content width; without it a long unbroken word inflates the column.
+    min-width: 0;
+  }
+
+  &__title {
+    margin: 0 0 .6rem;
+    font-size: var(--font-size-medium);
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--color);
+  }
+
+  &__text {
+    margin: 0 0 .6rem;
+    font-size: var(--font-size-small);
+    line-height: 1.5;
+    color: var(--color-negative);
+
+    &--muted {
+      color: var(--color-dim);
+    }
+  }
+
+  &__steps {
+    margin: 0 0 .8rem;
+    padding-left: 1.8rem;
+    font-size: var(--font-size-small);
+    line-height: 1.5;
+    color: var(--color-negative);
+  }
+
+  &__note {
+    margin: .8rem 0 0;
+    font-size: var(--font-size-xsmall);
+    line-height: 1.45;
+    color: var(--color-dim);
+
+    &--warn {
+      padding: .8rem 1rem;
+      background-color: var(--color-red-transparent);
+      border-radius: .5rem;
+      color: var(--color-red);
+
+      strong {
+        color: var(--color-red);
+      }
+    }
+  }
+
+  &__cta,
+  &__link {
+    display: inline-block;
+    margin-top: .4rem;
+    padding: .8rem 1.4rem;
+    background-color: var(--color-cta);
+    color: var(--color-on-accent);
+    border: none;
+    border-radius: .5rem;
+    font-family: inherit;
+    font-size: var(--font-size-small);
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+
+    &:hover {
+      background-color: var(--color-cta-hover);
+    }
+
+    &:focus-visible {
+      outline: .2rem solid var(--color-focus-ring);
+      outline-offset: .2rem;
+    }
+  }
+
+  // NOTE: the stylesheet in src/index.scss ships
+  //   `button:not([id*=tab]) { width: 100%; ... }`
+  // at specificity (0,1,1). A bare `.install-panel__dismiss` is (0,1,0) and
+  // therefore LOSES: the dismiss button claimed the full row width, and
+  // `flex: 0 0 auto` then refused to shrink, collapsing `&__body` to 0px and
+  // wrapping the copy one word per line. Qualifying with the element name
+  // raises this to (0,2,0) — above the global rule — and `width: auto` makes
+  // the button size to its label as a flex item should.
+  button#{&}__dismiss,
+  &__dismiss {
+    flex: 0 0 auto;
+    width: auto;
+    padding: .5rem .8rem;
+    background: none;
+    border: .1rem solid var(--color-border-control);
+    border-radius: .4rem;
+    color: var(--color-negative);
+    font-family: inherit;
+    font-size: var(--font-size-xsmall);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color);
+    }
+
+    &:focus-visible {
+      outline: .2rem solid var(--color-focus-ring);
+      outline-offset: .2rem;
+    }
+  }
+
+  // The CTA and the link are also <a>/<button>, so they hit the same global
+  // rule. They want to size to content, not stretch like a form button.
+  button#{&}__cta,
+  &__cta,
+  &__link {
+    width: auto;
+  }
+
+  // At phone width a side-by-side dismiss steals too much of the text column
+  // for copy that has to explain a security limitation. Stack instead, and put
+  // the dismiss last so the explanation is read before it is dismissed.
+  @media (max-width: 30rem) {
+    flex-direction: column;
+    align-items: stretch;
+
+    button#{&}__dismiss,
+    &__dismiss {
+      align-self: flex-start;
+    }
+  }
+}

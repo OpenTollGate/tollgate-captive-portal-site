@@ -160,5 +160,17 @@
   "gateway.current": "Puerta de enlace actual",
   "gateway.unavailable": "La opción de puerta de enlace no está disponible en este enrutador.",
   "gateway.choice_locked": "Bloqueado por este enrutador",
-  "gateway.use_for_next_session": "Usar para la próxima sesión"
+  "gateway.use_for_next_session": "Usar para la próxima sesión",
+  "install_signpost_title": "Guarda este portal en tu pantalla de inicio",
+  "install_signpost_unavailable": "Tu navegador no puede instalar esta página directamente: se sirve por una conexión sin cifrar, y los navegadores solo permiten instalar aplicaciones por HTTPS. Sigue los pasos de abajo para añadirla a la pantalla de inicio.",
+  "install_signpost_manual_ios": "Toca Compartir y elige «Añadir a pantalla de inicio».",
+  "install_signpost_manual_android": "Abre el menú del navegador (⋮) y elige «Añadir a pantalla de inicio».",
+  "install_signpost_manual_desktop": "Usa el menú del navegador para fijar o instalar esta página como aplicación.",
+  "install_app_title": "Tu acceso a internet a un toque",
+  "install_app_body": "Añade TollGate a tu pantalla de inicio. Se abre directamente en tu saldo y recarga, sin tener que buscar el portal cada vez que te conectas.",
+  "install_app_cta": "Añadir a pantalla de inicio",
+  "install_app_later": "Ahora no",
+  "install_app_note_no_custody": "Tu monedero permanece en este dispositivo. La aplicación es un acceso directo al portal de esta red, no un lugar donde se guarde tu saldo.",
+  "low_security_notice_title": "Esta conexión no está cifrada",
+  "low_security_notice_body": "Este portal no se sirve por HTTPS, así que no introduzcas aquí ninguna frase semilla ni contraseña."
 }

@@ -28,6 +28,39 @@ export const validateToken = (token, mint, i18n) => {
 };
 export const submitToken = async () => ({ status: 1, label: 'ok', message: 'ok' });
 export const extractProofsFromToken = () => [];
+
+// ── The rest of the module's public surface ─────────────────────────────────
+//
+// This stub REPLACES src/helpers/cashu.js at module-load time, so it must
+// export EVERY name the real module exports that application code imports.
+// It previously carried only the three above, and Cashu.jsx imports five:
+//
+//     import { validateToken, submitToken, canSubmitAnyway,
+//              mintUrlFromToken, findMintOption } from '../helpers/cashu';
+//
+// So on ANY spec that called setupMockBackend() the module graph failed to
+// link ("does not provide an export named 'canSubmitAnyway'"), App never
+// hydrated, and every selector timed out at HYDRATE_TIMEOUT. That is a defect
+// in the TEST FIXTURE, not in the app: it first appeared when PR #55 added
+// canSubmitAnyway, and it reproduces identically on origin/main (18 failures
+// there, the same 18 here).
+//
+// Stubbed to the real contract where the semantics matter to a test:
+//   canSubmitAnyway  — mirrors the real CU102-only rule (src/helpers/cashu.js),
+//                      so a test cannot pass by virtue of a laxer stub;
+//   findMintOption   — normalised-URL match, same rule as the real one;
+//   mintUrlFromToken — returns null (these specs paste a fixed token and do
+//                      not exercise mint resolution);
+//   normalizeMintUrl — identity; only intermediate to the two above.
+export const normalizeMintUrl = (url) => String(url || '').replace(/\\/+$/, '').toLowerCase();
+export const mintUrlFromToken = () => null;
+export const findMintOption = (mintUrl, options) => {
+  const wanted = normalizeMintUrl(mintUrl);
+  if (!wanted || !Array.isArray(options)) return null;
+  return options.find((option) => normalizeMintUrl(option?.url) === wanted) || null;
+};
+export const canSubmitAnyway = (validation) =>
+  !!validation && validation.status !== 1 && validation.code === 'CU102';
 `;
 
 export const TEST_TOKEN = 'cashuBtest123MockTokenForE2E';

@@ -160,5 +160,17 @@
   "gateway.current": "Geçerli ağ geçidi",
   "gateway.unavailable": "Bu yönlendiricide ağ geçidi seçimi mevcut değil.",
   "gateway.choice_locked": "Bu yönlendirici tarafından kilitlendi",
-  "gateway.use_for_next_session": "Sonraki oturum için kullanın"
+  "gateway.use_for_next_session": "Sonraki oturum için kullanın",
+  "install_signpost_title": "Bu portalı ana ekranınıza kaydedin",
+  "install_signpost_unavailable": "Tarayıcınız bu sayfayı doğrudan yükleyemiyor — sayfa şifrelenmemiş bir bağlantı üzerinden sunuluyor ve tarayıcılar yüklenebilir uygulamalara yalnızca HTTPS üzerinden izin verir. Ana ekranınıza eklemek için aşağıdaki adımları izleyin.",
+  "install_signpost_manual_ios": "Paylaş'a dokunun ve \"Ana Ekrana Ekle\"yi seçin.",
+  "install_signpost_manual_android": "Tarayıcı menüsünü (⋮) açın ve \"Ana ekrana ekle\"yi seçin.",
+  "install_signpost_manual_desktop": "Bu sayfayı uygulama olarak sabitlemek veya yüklemek için tarayıcı menüsünü kullanın.",
+  "install_app_title": "İnternet erişiminiz bir dokunuş uzağınızda",
+  "install_app_body": "TollGate'i ana ekranınıza ekleyin. Her bağlandığınızda portalı aramadan doğrudan bakiyenize ve yüklemenize açılır.",
+  "install_app_cta": "Ana ekrana ekle",
+  "install_app_later": "Şimdi değil",
+  "install_app_note_no_custody": "Cüzdanınız bu cihazda kalır. Uygulama bu ağın portalına bir kısayoldur; bakiyenizin saklandığı bir yer değildir.",
+  "low_security_notice_title": "Bu bağlantı şifrelenmemiş",
+  "low_security_notice_body": "Bu portal HTTPS üzerinden sunulmuyor; buraya kurtarma ifadesi veya şifre girmeyin."
 }

@@ -160,5 +160,17 @@
   "gateway.current": "Cổng hiện tại",
   "gateway.unavailable": "Lựa chọn cổng không có sẵn trên bộ định tuyến này.",
   "gateway.choice_locked": "Bị khóa bởi bộ định tuyến này",
-  "gateway.use_for_next_session": "Sử dụng cho phiên tiếp theo"
+  "gateway.use_for_next_session": "Sử dụng cho phiên tiếp theo",
+  "install_signpost_title": "Lưu cổng này vào màn hình chính",
+  "install_signpost_unavailable": "Trình duyệt của bạn không thể cài đặt trực tiếp trang này — trang được phục vụ qua kết nối không mã hóa, và trình duyệt chỉ cho phép cài đặt ứng dụng qua HTTPS. Hãy làm theo các bước bên dưới để thêm trang vào màn hình chính.",
+  "install_signpost_manual_ios": "Nhấn Chia sẻ, rồi chọn \"Thêm vào MH chính\".",
+  "install_signpost_manual_android": "Mở menu trình duyệt (⋮) và chọn \"Thêm vào màn hình chính\".",
+  "install_signpost_manual_desktop": "Dùng menu trình duyệt để ghim hoặc cài đặt trang này như một ứng dụng.",
+  "install_app_title": "Truy cập internet của bạn chỉ cách một lần chạm",
+  "install_app_body": "Thêm TollGate vào màn hình chính. Ứng dụng mở thẳng vào số dư và nạp tiền của bạn, không cần tìm lại cổng mỗi lần kết nối.",
+  "install_app_cta": "Thêm vào màn hình chính",
+  "install_app_later": "Để sau",
+  "install_app_note_no_custody": "Ví của bạn vẫn ở trên thiết bị này. Ứng dụng chỉ là lối tắt đến cổng của mạng này, không phải nơi lưu giữ tiền của bạn.",
+  "low_security_notice_title": "Kết nối này không được mã hóa",
+  "low_security_notice_body": "Cổng này không được phục vụ qua HTTPS, vì vậy đừng nhập cụm từ khôi phục hay mật khẩu nào ở đây."
 }

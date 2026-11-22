@@ -160,5 +160,17 @@
   "gateway.current": "Passerelle actuelle",
   "gateway.unavailable": "Le choix de la passerelle n'est pas disponible sur ce routeur.",
   "gateway.choice_locked": "Verrouillé par ce routeur",
-  "gateway.use_for_next_session": "A utiliser pour la prochaine session"
+  "gateway.use_for_next_session": "A utiliser pour la prochaine session",
+  "install_signpost_title": "Enregistrez ce portail sur votre écran d’accueil",
+  "install_signpost_unavailable": "Votre navigateur ne peut pas installer cette page directement : elle est servie sur une connexion non chiffrée, et les navigateurs ne permettent d’installer des applications qu’en HTTPS. Suivez les étapes ci-dessous pour l’ajouter à votre écran d’accueil.",
+  "install_signpost_manual_ios": "Touchez Partager, puis « Sur l’écran d’accueil ».",
+  "install_signpost_manual_android": "Ouvrez le menu du navigateur (⋮) et choisissez « Ajouter à l’écran d’accueil ».",
+  "install_signpost_manual_desktop": "Utilisez le menu du navigateur pour épingler ou installer cette page comme application.",
+  "install_app_title": "Votre accès internet à portée de main",
+  "install_app_body": "Ajoutez TollGate à votre écran d’accueil. L’application ouvre directement votre solde et votre recharge, sans devoir chercher le portail à chaque connexion.",
+  "install_app_cta": "Ajouter à l’écran d’accueil",
+  "install_app_later": "Plus tard",
+  "install_app_note_no_custody": "Votre portefeuille reste sur cet appareil. L’application est un raccourci vers le portail de ce réseau, pas un endroit où vos fonds sont conservés.",
+  "low_security_notice_title": "Cette connexion n’est pas chiffrée",
+  "low_security_notice_body": "Ce portail n’est pas servi en HTTPS : ne saisissez ici ni phrase de récupération ni mot de passe."
 }

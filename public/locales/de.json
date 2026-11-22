@@ -160,5 +160,17 @@
   "gateway.current": "Aktuelles Gateway",
   "gateway.unavailable": "Die Gateway-Auswahl ist auf diesem Router nicht verfügbar.",
   "gateway.choice_locked": "Von diesem Router gesperrt",
-  "gateway.use_for_next_session": "Für die nächste Sitzung verwenden"
+  "gateway.use_for_next_session": "Für die nächste Sitzung verwenden",
+  "install_signpost_title": "Speichern Sie dieses Portal auf Ihrem Startbildschirm",
+  "install_signpost_unavailable": "Ihr Browser kann diese Seite nicht direkt installieren – sie wird über eine unverschlüsselte Verbindung ausgeliefert, und Browser erlauben installierbare Apps nur über HTTPS. Fügen Sie sie stattdessen wie unten beschrieben zum Startbildschirm hinzu.",
+  "install_signpost_manual_ios": "Tippen Sie auf „Teilen“ und wählen Sie „Zum Home-Bildschirm“.",
+  "install_signpost_manual_android": "Öffnen Sie das Browsermenü (⋮) und wählen Sie „Zum Startbildschirm hinzufügen“.",
+  "install_signpost_manual_desktop": "Nutzen Sie das Browsermenü, um diese Seite als App anzuheften oder zu installieren.",
+  "install_app_title": "Ihr Internetzugang mit einem Tippen entfernt",
+  "install_app_body": "Fügen Sie TollGate Ihrem Startbildschirm hinzu. Die App öffnet direkt Ihr Guthaben und die Aufladung, ohne dass Sie das Portal bei jeder Verbindung suchen müssen.",
+  "install_app_cta": "Zum Startbildschirm hinzufügen",
+  "install_app_later": "Nicht jetzt",
+  "install_app_note_no_custody": "Ihr Wallet bleibt auf diesem Gerät. Die App ist eine Verknüpfung zum Portal dieses Netzwerks – kein Ort, an dem Ihr Guthaben verwahrt wird.",
+  "low_security_notice_title": "Diese Verbindung ist nicht verschlüsselt",
+  "low_security_notice_body": "Dieses Portal wird nicht über HTTPS ausgeliefert. Geben Sie hier keine Seed-Phrase und kein Passwort ein."
 }

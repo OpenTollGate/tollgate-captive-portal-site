@@ -160,5 +160,17 @@
   "gateway.current": "Portal atual",
   "gateway.unavailable": "A escolha do gateway não está disponível neste roteador.",
   "gateway.choice_locked": "Bloqueado por este roteador",
-  "gateway.use_for_next_session": "Usar na próxima sessão"
+  "gateway.use_for_next_session": "Usar na próxima sessão",
+  "install_signpost_title": "Guarde este portal no ecrã inicial",
+  "install_signpost_unavailable": "O seu navegador não consegue instalar esta página diretamente — é servida por uma ligação não encriptada, e os navegadores só permitem instalar aplicações por HTTPS. Siga os passos abaixo para a adicionar ao ecrã inicial.",
+  "install_signpost_manual_ios": "Toque em Partilhar e escolha «Adicionar ao ecrã inicial».",
+  "install_signpost_manual_android": "Abra o menu do navegador (⋮) e escolha «Adicionar ao ecrã inicial».",
+  "install_signpost_manual_desktop": "Use o menu do navegador para fixar ou instalar esta página como aplicação.",
+  "install_app_title": "O seu acesso à internet a um toque",
+  "install_app_body": "Adicione o TollGate ao ecrã inicial. Abre diretamente no seu saldo e carregamento, sem ter de procurar o portal sempre que se liga.",
+  "install_app_cta": "Adicionar ao ecrã inicial",
+  "install_app_later": "Agora não",
+  "install_app_note_no_custody": "A sua carteira fica neste dispositivo. A aplicação é um atalho para o portal desta rede, não um local onde os seus fundos são guardados.",
+  "low_security_notice_title": "Esta ligação não está encriptada",
+  "low_security_notice_body": "Este portal não é servido por HTTPS, por isso não introduza aqui frases de recuperação nem palavras-passe."
 }

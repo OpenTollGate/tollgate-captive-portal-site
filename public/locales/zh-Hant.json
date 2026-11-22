@@ -160,5 +160,17 @@
   "gateway.current": "目前網關",
   "gateway.unavailable": "網關選擇在此路由器上不可用。",
   "gateway.choice_locked": "被該路由器鎖定",
-  "gateway.use_for_next_session": "用於下一次會話"
+  "gateway.use_for_next_session": "用於下一次會話",
+  "install_signpost_title": "將此入口網站儲存到主畫面",
+  "install_signpost_unavailable": "您的瀏覽器無法直接安裝此頁面——它透過未加密的連線提供，而瀏覽器僅允許透過 HTTPS 安裝應用程式。請依照下列步驟將其加入主畫面。",
+  "install_signpost_manual_ios": "點一下「分享」，然後選擇「加入主畫面」。",
+  "install_signpost_manual_android": "開啟瀏覽器選單（⋮），然後選擇「加入主畫面」。",
+  "install_signpost_manual_desktop": "使用瀏覽器選單將此頁面釘選或安裝為應用程式。",
+  "install_app_title": "一鍵直達您的網路存取",
+  "install_app_body": "將 TollGate 加入主畫面。它會直接開啟您的餘額與儲值頁面，每次連線時不必再尋找入口網站。",
+  "install_app_cta": "加入主畫面",
+  "install_app_later": "暫時不要",
+  "install_app_note_no_custody": "您的錢包保留在本裝置上。此應用程式只是通往此網路入口網站的捷徑，並非存放您資金的地方。",
+  "low_security_notice_title": "此連線未加密",
+  "low_security_notice_body": "此入口網站未透過 HTTPS 提供，請勿在此輸入助記詞或任何密碼。"
 }

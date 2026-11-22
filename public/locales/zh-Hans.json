@@ -160,5 +160,17 @@
   "gateway.current": "当前网关",
   "gateway.unavailable": "网关选择在此路由器上不可用。",
   "gateway.choice_locked": "被该路由器锁定",
-  "gateway.use_for_next_session": "用于下一次会话"
+  "gateway.use_for_next_session": "用于下一次会话",
+  "install_signpost_title": "将此门户保存到主屏幕",
+  "install_signpost_unavailable": "您的浏览器无法直接安装此页面——它通过未加密的连接提供，而浏览器仅允许通过 HTTPS 安装应用。请按照以下步骤将其添加到主屏幕。",
+  "install_signpost_manual_ios": "轻点“共享”，然后选择“添加到主屏幕”。",
+  "install_signpost_manual_android": "打开浏览器菜单（⋮），然后选择“添加到主屏幕”。",
+  "install_signpost_manual_desktop": "使用浏览器菜单将此页面固定或安装为应用。",
+  "install_app_title": "一键直达您的网络接入",
+  "install_app_body": "将 TollGate 添加到主屏幕。它将直接打开您的余额和充值页面，每次连接时无需再寻找门户。",
+  "install_app_cta": "添加到主屏幕",
+  "install_app_later": "暂不",
+  "install_app_note_no_custody": "您的钱包保留在本设备上。此应用只是通往该网络门户的快捷方式，并非存放您资金的地方。",
+  "low_security_notice_title": "此连接未加密",
+  "low_security_notice_body": "此门户未通过 HTTPS 提供，请勿在此输入助记词或任何密码。"
 }
